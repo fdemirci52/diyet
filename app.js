@@ -144,16 +144,16 @@ function isLate(meal, k) {
    fazlada protein kalemlerine dokunulmaz, yağ ve ekmek azaltılır. */
 const CUTS = { salata: ['Bol salata, yağsız', 45, 0], kabak: ['½ avuç kabak çekirdeği', 57, 3], yag: ['¼ avokado veya 1 ceviz', 55, 1], ekmek: ['1 dilim tam buğday ekmeği', 62, 2.5] };
 function balance(k) {
-  const d = peek(k), open = []; let gk = 0, gp = 0, tk = 0, tp = 0, any = false;
+  const d = peek(k), open = []; let gk = 0, gp = 0, tk = 0, tp = 0, rk = 0, rp = 0, any = false;
   MEALS.forEach(m => itemsOf(m, k).forEach(it => {
     if (it.optional) return; tk += it.k; tp += it.p;
     const st = stOf(d, m, it);
     if (!st) return open.push({ m, it, key: m.id + '.' + it.id });
-    any = true;
+    any = true; rk += it.k; rp += it.p;
     const skip = st.s === 'skip'; gk += it.k - (skip ? 0 : st.k ?? it.k); gp += it.p - (skip ? 0 : st.p ?? it.p);
   }));
   (d.extras || []).forEach(e => { gk -= e.k; gp -= e.p; any = true; });
-  return { gk, gp, tk, tp, open, any };
+  return { gk, gp, tk, tp, open, any, ek: rk - gk, ep: rp - gp };
 }
 function adjust(k) {
   const b = balance(k), out = { over: {}, adds: [], why: '', note: '' };
@@ -206,12 +206,25 @@ function rowHTML(meal, it, d, ov) {
     <span class="body"><span class="name">${esc(name)}</span>${meta ? `<span class="meta">${esc(meta)}</span>` : ''}${chips}</span>
     <button class="more" data-act="sheet" data-id="${id}" aria-label="Seçenekler">${DOTS}</button></div>`;
 }
+const MICON = {
+  sabah: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.600 5.600l1.400 1.400M17 17l1.400 1.400M5.600 18.400L7 17M17 7l1.400-1.400"/>',
+  kahvalti: '<path d="M5 9h11v5a4 4 0 01-4 4H9a4 4 0 01-4-4zM16 10h1.500a2.500 2.500 0 010 5H16M8 3v2M12 3v2"/>',
+  ogle: '<path d="M7 3v18M5 3v4a2 2 0 004 0V3M16.500 3c-1.700 1.500-2.500 4-2.500 7h2.500zM16.500 10v11"/>',
+  ikindi: '<path d="M12 8c-1.500-1.500-5-1.600-6 1.500-1 3 .8 8.500 3.500 9.500 1 .4 1.700-.2 2.500-.2s1.500.6 2.500.2c2.700-1 4.500-6.500 3.500-9.500-1-3.100-4.500-3-6-1.500zM12 8c0-2 1-3.500 2.500-4"/>',
+  aksam: '<path d="M4 12h16a8 8 0 01-16 0zM9 21h6M9 8c0-1 1-1 1-2s-1-1-1-2M14 8c0-1 1-1 1-2s-1-1-1-2"/>',
+  gece: '<path d="M20 14.500A8 8 0 019.500 4a8 8 0 1010.500 10.500z"/>',
+  gym: '<path d="M6.500 6.500v11M3.500 9v6M17.500 6.500v11M20.500 9v6M6.500 12h11"/>',
+};
+const svg = p => `<svg viewBox="0 0 24 24">${p}</svg>`;
 function mealHTML(meal, k, A, isNext) {
-  const d = peek(k), st = mealStat(meal, k), t = timeOf(meal, k);
-  const folded = st.resolved && !opened[k + meal.id];
-  const label = st.resolved ? (st.skip === st.total ? 'Atlandı' : st.skip ? `${st.ok}/${st.total}` : 'Tamam') : (t || '');
-  let h = `<section class="card ${folded ? 'folded' : ''} ${isNext ? 'now' : ''}"><header data-act="fold" data-meal="${meal.id}">
-    <h2>${meal.title}<span class="${isLate(meal, k) ? 'late' : ''}">${label}</span></h2>`;
+  const d = peek(k), st = mealStat(meal, k), t = timeOf(meal, k), W = WORKOUTS[parse(k).getDay()];
+  const folded = st.resolved && !opened[k + meal.id], allSkip = st.skip === st.total;
+  const tag = W && meal.id === 'ikindi' ? ' · antrenman öncesi' : W && meal.id === 'aksam' ? ' · antrenman sonrası' : '';
+  const late = isLate(meal, k);
+  const sub = st.resolved ? (allSkip ? 'Atlandı' : st.skip ? `${st.ok} / ${st.total} kalem` : 'Tamam') : (t ? t + tag : 'Güne başlarken') + (late ? ' · gecikti' : '');
+  let h = `<section class="card ${folded ? 'folded' : ''} ${folded && allSkip ? 'skipped' : ''} ${isNext ? 'now' : ''}"><header data-act="fold" data-meal="${meal.id}">
+    <span class="ico">${folded ? (allSkip ? DASH : CHECK) : svg(MICON[meal.id])}</span>
+    <div class="ttl"><h2>${meal.title}</h2><span class="sub ${late ? 'late' : ''}">${sub}</span></div>`;
   if (folded) return h + `<span class="link quiet">Göster</span></header></section>`;
   h += st.resolved ? `<button class="link quiet" data-act="clear" data-meal="${meal.id}">Sıfırla</button>` : `<button class="link quiet" data-act="skipmeal" data-meal="${meal.id}">Atla</button>`;
   h += '</header>';
@@ -220,8 +233,7 @@ function mealHTML(meal, k, A, isNext) {
     h += `<div class="pick chips">${MAINS.map(m => { const [, q] = QUOTA[m.g], u = quotaUsed(k, meal.id, m.g);
       return `<button class="chip ${cur === m.id ? 'on' : ''} ${u >= q ? 'full' : ''}" data-act="main" data-meal="${meal.id}" data-m="${m.id}">${m.chip}<em>${u}/${q}</em></button>`; }).join('')}</div>`; }
   h += itemsOf(meal, k).map(it => rowHTML(meal, it, d, A.over[meal.id + '.' + it.id])).join('');
-  const adds = A.adds.filter(a => a.meal === meal.id);
-  h += adds.map((a, i) => `<div class="row" data-act="add" data-meal="${meal.id}" data-i="${A.adds.indexOf(a)}"><span class="chk">${CHECK}</span><span class="body"><span class="name">${esc(a.name)}</span><span class="meta">${A.why}</span></span></div>`).join('');
+  h += A.adds.filter(a => a.meal === meal.id).map(a => `<div class="row plus" data-act="add" data-meal="${meal.id}" data-i="${A.adds.indexOf(a)}"><span class="chk">${CHECK}</span><span class="body"><span class="name">${esc(a.name)}</span><span class="meta">${A.why}</span></span></div>`).join('');
   h += (d.extras || []).map((e, i) => e.meal !== meal.id ? '' : `<div class="row done" data-act="unextra" data-i="${i}"><span class="chk">${CHECK}</span><span class="body"><span class="name">${esc(e.name)}</span><span class="meta">Plan dışı · yaklaşık ${num(e.k)} kcal</span></span></div>`).join('');
   if (!st.resolved && meal.time) h += `<div class="acts"><button data-act="all" data-meal="${meal.id}">${CHECK.replace('<svg', '<svg style="stroke-width:2.4"')}Yedim</button><button data-act="photo" data-meal="${meal.id}">${CAM}Fotoğraf</button><button data-act="write" data-meal="${meal.id}">${PEN}Yaz</button></div>`;
   else if (!st.resolved) h += '<div style="height:4px"></div>';
@@ -231,32 +243,41 @@ function counterHTML(act, title, val, over, barPct) {
   return `<div class="counter"><span class="body">${title}<span class="val ${over ? 'over' : ''}">${val}</span>${barPct != null ? `<span class="bar"><u style="width:${barPct}%"></u></span>` : ''}</span>
     <button class="step" data-act="${act}" data-n="-1" aria-label="Azalt">−</button><button class="step" data-act="${act}" data-n="1" aria-label="Artır">+</button></div>`;
 }
+const ringSVG = (pct, color) => { const C = 2 * Math.PI * 18;
+  return `<svg class="ring" viewBox="0 0 44 44" style="--c:${color}"><circle class="t" cx="22" cy="22" r="18"/><circle class="p" cx="22" cy="22" r="18" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - Math.min(1, pct))}"/></svg>`; };
+const nextMeal = () => MEALS.find(m => m.time && !mealStat(m, today).resolved);
 function todayView() {
-  const d = peek(sel), st = dayStat(sel), C = 2 * Math.PI * 20, A = adjust(sel);
+  const d = peek(sel), st = dayStat(sel), A = adjust(sel), B = balance(sel);
   const walks = weekOf(sel).filter(x => peek(x).walk).length;
   const strip = weekOf(sel).map(k => { const p = dayStat(k).pct, dt = parse(k);
-    return `<button class="day ${k === sel ? 'sel' : ''} ${k === today ? 'today' : ''}" data-act="day" data-k="${k}"><small>${DOW[dt.getDay()]}</small><b>${dt.getDate()}</b><i><u style="width:${p}%"></u></i></button>`; }).join('');
-  const next = sel === today ? MEALS.find(m => m.time && !mealStat(m, sel).resolved) : null;
-  let nextLine = '';
-  if (sel === today) {
-    if (next) { const mt = minsTo(next, sel), rel = mt > 0 ? (mt >= 60 ? `${Math.floor(mt / 60)} sa ${mt % 60} dk sonra` : `${mt} dk sonra`) : mt > -90 ? 'şimdi' : 'gecikti';
-      nextLine = `<div class="next"><span>Sıradaki <b>${next.title}</b> · ${timeOf(next, sel)}</span><span class="${rel === 'gecikti' ? 'late' : ''}">${rel}</span></div>`; }
-    else nextLine = `<div class="next"><span>Bugünün öğünleri tamam</span></div>`;
-  }
+    return `<button class="day ${k === sel ? 'sel' : ''} ${k === today ? 'today' : ''}" data-act="day" data-k="${k}"><small>${DOW[dt.getDay()]}</small><span class="disc" style="--p:${p}"><b>${dt.getDate()}</b></span></button>`; }).join('');
+  const next = sel === today ? nextMeal() : null;
+  const litres = d.water * WATER_ML / 1000;
+  let top, big, what;
+  if (next) { const mt = minsTo(next, sel), rel = mt > 0 ? (mt >= 60 ? `${Math.floor(mt / 60)} sa ${mt % 60} dk sonra` : `${mt} dk sonra`) : mt > -90 ? 'Şimdi' : 'Gecikti';
+    top = `<span class="eyebrow">Sıradaki öğün</span><span class="pill ${rel === 'Gecikti' ? 'late' : mt <= 30 ? 'hot' : ''}">${rel}</span>`;
+    big = `${next.title}<small>${timeOf(next, sel)}</small>`;
+    what = itemsOf(next, sel).filter(i => !i.optional).map(i => (A.over[next.id + '.' + i.id] || i).name).concat(A.adds.filter(a => a.meal === next.id).map(a => a.name)).join(' · '); }
+  else { top = `<span class="eyebrow">${sel === today ? 'Bugün' : 'Günün özeti'}</span><span class="pill">${st.ok} / ${st.total} kalem</span>`;
+    big = `%${st.pct}<small>uyum</small>`; what = sel === today ? 'Bugünün öğünleri tamam.' : st.skipped ? `${st.skipped} öğün atlandı.` : ''; }
+  const hero = `<section class="hero"><div class="hero-top">${top}</div><div class="big">${big}</div>${what ? `<div class="what">${esc(what)}</div>` : ''}
+    <div class="tiles">
+      <div class="tile"><div><span>Kalori</span><strong>${num(B.ek)}</strong><span>/ ${num(B.tk)}</span></div>${ringSVG(B.ek / B.tk, 'var(--fg)')}</div>
+      <div class="tile"><div><span>Protein</span><strong>${num(B.ep)} g</strong><span>/ ${num(B.tp)} g</span></div>${ringSVG(B.ep / B.tp, 'var(--accent)')}</div>
+      <div class="tile"><div><span>Su</span><strong>${litres.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} L</strong><span>/ 2,5 L</span></div>${ringSVG(d.water / WATER_GOAL, 'var(--blue)')}</div>
+    </div></section>`;
   const W = WORKOUTS[parse(sel).getDay()], gyms = weekOf(sel).filter(x => peek(x).gym).length;
   const gymRow = `<div class="row ${d.gym ? 'done' : ''}" data-act="gym"><span class="chk">${CHECK}</span><span class="body"><span class="name">${W ? W.name + ' antrenmanı' : 'Ağırlık antrenmanı'}</span><span class="meta">${W ? '' : 'Bugün planlı değil · '}Bu hafta ${gyms} / ${GYM_GOAL}</span></span></div>`;
-  const gymCard = !W ? '' : `<section class="card"><header data-act="foldgym"><h2>Antrenman<span>${W.name}</span></h2><span class="link">${opened.gym ? 'Gizle' : 'Hareketler'}</span></header>
+  const gymCard = !W ? '' : `<section class="card"><header data-act="foldgym"><span class="ico">${svg(MICON.gym)}</span><div class="ttl"><h2>Antrenman</h2><span class="sub">${W.name} · 18:00-19:00</span></div><span class="link quiet">${opened.gym ? 'Gizle' : 'Hareketler'}</span></header>
     ${opened.gym ? `<div class="prose"><p>Öncesi<small>${W.pre}</small></p></div>${W.ex.map(([n, x]) => `<div class="kv"><span>${n}</span><span>${x}</span></div>`).join('')}<div class="prose"><p>Sonrası<small>${W.post}</small></p></div>` : ''}
     ${gymRow}<div class="row ${d.z2 ? 'done' : ''}" data-act="z2"><span class="chk">${CHECK}</span><span class="body"><span class="name">Antrenman sonrası kardiyo</span><span class="meta">İsteğe bağlı</span></span></div></section>`;
-  const l = (d.water * WATER_ML / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
   return `<div class="head"><div><div class="sub">${fmtLong(sel)}</div><h1>${sel === today ? 'Bugün' : DOW[parse(sel).getDay()] + ' ' + parse(sel).getDate()}</h1></div>
-      <div style="display:flex;align-items:center;gap:14px">${sel !== today ? `<button class="link" data-act="gotoday">Bugün</button>` : ''}
-      <div class="mini"><svg viewBox="0 0 48 48"><circle class="t" cx="24" cy="24" r="20"/><circle class="p" cx="24" cy="24" r="20" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - st.pct / 100)}"/></svg><b>%${st.pct}</b></div></div></div>
-    <div class="strip">${strip}</div>${nextLine}
+      ${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : ''}</div>
+    <div class="strip">${strip}</div>${hero}
     ${A.note ? `<p class="note">${A.note}</p>` : ''}
-    ${MEALS.map(m => mealHTML(m, sel, A, m === next)).join('')}
-    ${gymCard}<section class="card">
-      ${counterHTML('water', 'Su', `${l} / 2,5 L · ${d.water} bardak`, false, Math.min(100, d.water / WATER_GOAL * 100))}
+    ${MEALS.map(m => mealHTML(m, sel, A, m === next) + (m.id === 'ikindi' ? gymCard : '')).join('')}
+    <section class="card">
+      ${counterHTML('water', 'Su', `${d.water} bardak · her dokunuş 250 ml`, false, Math.min(100, d.water / WATER_GOAL * 100)).replace('class="bar"', 'class="bar" style="--c:var(--blue)"')}
       ${counterHTML('coffee', 'Kahve', d.coffee > COFFEE_MAX ? `${d.coffee} fincan · sınır ${COFFEE_MAX}` : `${d.coffee} / ${COFFEE_MAX} fincan`, d.coffee > COFFEE_MAX)}
       <div class="row ${d.walk ? 'done' : ''}" data-act="walk"><span class="chk">${CHECK}</span><span class="body"><span class="name">45 dk yürüyüş</span><span class="meta">Bu hafta ${walks} / ${WALK_GOAL}</span></span></div>${W ? '' : gymRow}
     </section>`;
@@ -307,8 +328,9 @@ function planView() {
 const ICON = { today: '<circle cx="13" cy="13" r="9"/><path d="M9 13.2l2.8 2.8 5.2-5.6"/>', week: '<path d="M5 20V12M10.5 20V6M16 20v-9M21.5 20V9"/>', plan: '<path d="M8 7h13M8 13h13M8 19h13"/><circle cx="4" cy="7" r=".6"/><circle cx="4" cy="13" r=".6"/><circle cx="4" cy="19" r=".6"/>' };
 function render() {
   document.getElementById('app').innerHTML = tab === 'today' ? todayView() : tab === 'week' ? weekView() : planView();
-  document.getElementById('nav').innerHTML = [['today', 'Bugün'], ['week', 'Hafta'], ['plan', 'Program']].map(([t, n]) =>
-    `<button class="${tab === t ? 'on' : ''}" data-act="tab" data-t="${t}"><svg viewBox="0 0 26 26">${ICON[t]}</svg>${n}</button>`).join('');
+  const b = ([t, n]) => `<button class="${tab === t ? 'on' : ''}" data-act="tab" data-t="${t}" aria-label="${n}"><svg viewBox="0 0 26 26">${ICON[t]}</svg><span>${n}</span></button>`;
+  document.getElementById('nav').innerHTML = b(['today', 'Bugün']) + b(['week', 'Hafta']) + b(['plan', 'Program'])
+    + `<button class="cam" data-act="quick" aria-label="Sıradaki öğünü fotoğrafla">${CAM.replace('viewBox="0 0 20 20"', 'viewBox="-2 -2 24 24"')}</button>`;
 }
 
 /* ---------- Alt sayfalar ---------- */
@@ -430,6 +452,7 @@ document.addEventListener('click', e => {
     case 'clear': setAll(meal, () => null); d.extras = d.extras.filter(x => x.meal !== meal.id); break;
     case 'mode': d.mode[meal.id] = +el.dataset.i; break;
     case 'main': d.main[meal.id] === el.dataset.m ? delete d.main[meal.id] : d.main[meal.id] = el.dataset.m; break;
+    case 'quick': { const m = nextMeal(); sel = today; tab = 'today'; if (!m) break; if (!aiKey()) { render(); return needKey(); } camMeal = m.id; render(); document.getElementById('cam').click(); return; }
     case 'photo': if (!aiKey()) return needKey(); camMeal = meal.id; document.getElementById('cam').click(); return;
     case 'write': if (!aiKey()) return needKey(); writeSheet(meal); return;
     case 'sendtext': { const v = document.getElementById('said').value.trim(); if (v) analyze(camMeal, { text: v }); return; }
