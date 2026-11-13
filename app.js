@@ -184,179 +184,204 @@ function adjust(k) {
 }
 
 /* ---------- Görünümler ---------- */
-const CHECK = '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 5"/></svg>';
-const DASH = '<svg viewBox="0 0 16 16"><path d="M4 8h8"/></svg>';
-const SWAPI = '<svg viewBox="0 0 16 16"><path d="M3 5.5h9l-2.5-2.5M13 10.5H4l2.5 2.5"/></svg>';
-const DOTS = '<svg viewBox="0 0 20 20"><circle cx="4" cy="10" r="1.7"/><circle cx="10" cy="10" r="1.7"/><circle cx="16" cy="10" r="1.7"/></svg>';
-const CAM = '<svg viewBox="0 0 20 20"><path d="M2.5 7a1.5 1.5 0 011.5-1.5h2l1.2-2h5.6l1.2 2h2A1.5 1.5 0 0117.5 7v7.5A1.5 1.5 0 0116 16H4a1.5 1.5 0 01-1.5-1.5z"/><circle cx="10" cy="10.5" r="3"/></svg>';
-const PEN = '<svg viewBox="0 0 20 20"><path d="M3.5 16.5l1-4 9-9 3 3-9 9zM12 5l3 3"/></svg>';
-
-function rowHTML(meal, it, d, ov) {
-  const id = meal.id + '.' + it.id, st = d.items[id], s = st ? st.s : '';
-  const alt = st && st.alt != null ? st.alt : 0;
-  let name = it.opts && s ? it.opts[alt] : it.name, meta = it.opts ? '' : it.meta || '';
-  if (!s && ov) { name = ov.name; meta = 'Güncellendi · ' + it.name + ' yerine'; }
-  if (s === 'done' && st.name) { name = st.name; meta = 'Güncellenmiş porsiyon'; }
-  if (s === 'swap') { name = st.sub; meta = 'Muadil · ' + it.name + ' yerine'; }
-  if (s === 'skip') { name = it.name; meta = 'Atlandı'; }
-  const chips = it.opts && !ov && s !== 'swap' && s !== 'skip' ? `<span class="chips">${it.opts.map((o, i) =>
-    `<button class="chip ${i === alt && s === 'done' ? 'on' : ''}" data-act="opt" data-id="${id}" data-i="${i}">${esc(o)}</button>`).join('')}</span>` : '';
-  return `<div class="row ${s}" data-act="toggle" data-id="${id}">
-    <span class="chk">${s === 'skip' ? DASH : s === 'swap' ? SWAPI : CHECK}</span>
-    <span class="body"><span class="name">${esc(name)}</span>${meta ? `<span class="meta">${esc(meta)}</span>` : ''}${chips}</span>
-    <button class="more" data-act="sheet" data-id="${id}" aria-label="Seçenekler">${DOTS}</button></div>`;
-}
-const MICON = {
-  sabah: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.600 5.600l1.400 1.400M17 17l1.400 1.400M5.600 18.400L7 17M17 7l1.400-1.400"/>',
+const P = {
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', dash: '<path d="M7 12h10"/>', swap: '<path d="M4 8h14l-3-3M20 16H6l3 3"/>',
+  plus: '<path d="M12 6v12M6 12h12"/>', minus: '<path d="M6 12h12"/>', right: '<path d="M9 6l6 6-6 6"/>', left: '<path d="M15 6l-6 6 6 6"/>',
+  dots: '<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>',
+  cam: '<path d="M4 8.5A1.5 1.5 0 015.5 7h2l1.300-2h6.400l1.300 2h2A1.5 1.5 0 0120 8.5v8a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 16.5z"/><circle cx="12" cy="12.5" r="3.200"/>',
+  pen: '<path d="M4.5 19.5l1-4.5L16 4.5 19.5 8 9 18.500zM14 6.5L17.5 10"/>',
+  today: '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.200l2.400 2.400 4.600-5"/>', week: '<path d="M6 19v-6M12 19V5M18 19v-9"/>',
+  list: '<path d="M9 7h10M9 12h10M9 17h10M5 7h.01M5 12h.01M5 17h.01"/>', clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.500V12l3 2"/>',
+  person: '<circle cx="12" cy="7.500" r="3"/><path d="M6 20c0-4 2.500-6.500 6-6.500s6 2.500 6 6.500"/>', down: '<path d="M12 4v10M8 10.500l4 4 4-4M5 19h14"/>',
+  target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6" fill="currentColor"/>',
+  sabah: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.600 5.600L7 7M17 17l1.400 1.400M5.600 18.400L7 17M17 7l1.400-1.400"/>',
   kahvalti: '<path d="M5 9h11v5a4 4 0 01-4 4H9a4 4 0 01-4-4zM16 10h1.500a2.500 2.500 0 010 5H16M8 3v2M12 3v2"/>',
-  ogle: '<path d="M7 3v18M5 3v4a2 2 0 004 0V3M16.500 3c-1.700 1.500-2.500 4-2.500 7h2.500zM16.500 10v11"/>',
+  ogle: '<path d="M7 3v18M5 3v4a2 2 0 004 0V3M16.500 3C14.800 4.500 14 7 14 10h2.500zM16.500 10v11"/>',
   ikindi: '<path d="M12 8c-1.500-1.500-5-1.600-6 1.500-1 3 .8 8.500 3.500 9.500 1 .4 1.700-.2 2.500-.2s1.500.6 2.500.2c2.700-1 4.500-6.500 3.500-9.500-1-3.100-4.500-3-6-1.500zM12 8c0-2 1-3.500 2.500-4"/>',
   aksam: '<path d="M4 12h16a8 8 0 01-16 0zM9 21h6M9 8c0-1 1-1 1-2s-1-1-1-2M14 8c0-1 1-1 1-2s-1-1-1-2"/>',
   gece: '<path d="M20 14.500A8 8 0 019.500 4a8 8 0 1010.500 10.500z"/>',
   gym: '<path d="M6.500 6.500v11M3.500 9v6M17.500 6.500v11M20.500 9v6M6.500 12h11"/>',
 };
-const svg = p => `<svg viewBox="0 0 24 24">${p}</svg>`;
-function mealHTML(meal, k, A, isNext) {
-  const d = peek(k), st = mealStat(meal, k), t = timeOf(meal, k), W = WORKOUTS[parse(k).getDay()];
-  const folded = st.resolved && !opened[k + meal.id], allSkip = st.skip === st.total;
-  const tag = W && meal.id === 'ikindi' ? ' · antrenman öncesi' : W && meal.id === 'aksam' ? ' · antrenman sonrası' : '';
-  const late = isLate(meal, k);
-  const sub = st.resolved ? (allSkip ? 'Atlandı' : st.skip ? `${st.ok} / ${st.total} kalem` : 'Tamam') : (t ? t + tag : 'Güne başlarken') + (late ? ' · gecikti' : '');
-  let h = `<section class="card ${folded ? 'folded' : ''} ${folded && allSkip ? 'skipped' : ''} ${isNext ? 'now' : ''}"><header data-act="fold" data-meal="${meal.id}">
-    <span class="ico">${folded ? (allSkip ? DASH : CHECK) : svg(MICON[meal.id])}</span>
-    <div class="ttl"><h2>${meal.title}</h2><span class="sub ${late ? 'late' : ''}">${sub}</span></div>`;
-  if (folded) return h + `<span class="link quiet">Göster</span></header></section>`;
-  h += st.resolved ? `<button class="link quiet" data-act="clear" data-meal="${meal.id}">Sıfırla</button>` : `<button class="link quiet" data-act="skipmeal" data-meal="${meal.id}">Atla</button>`;
-  h += '</header>';
-  if (meal.modes) h += `<div class="seg">${meal.modes.map((m, i) => `<button class="${(d.mode[meal.id] || 0) === i ? 'on' : ''}" data-act="mode" data-meal="${meal.id}" data-i="${i}">${m}</button>`).join('')}</div>`;
-  if (meal.main) { const cur = mainFor(k, meal.id).id;
-    h += `<div class="pick chips">${MAINS.map(m => { const [, q] = QUOTA[m.g], u = quotaUsed(k, meal.id, m.g);
-      return `<button class="chip ${cur === m.id ? 'on' : ''} ${u >= q ? 'full' : ''}" data-act="main" data-meal="${meal.id}" data-m="${m.id}">${m.chip}<em>${u}/${q}</em></button>`; }).join('')}</div>`; }
-  h += itemsOf(meal, k).map(it => rowHTML(meal, it, d, A.over[meal.id + '.' + it.id])).join('');
-  h += A.adds.filter(a => a.meal === meal.id).map(a => `<div class="row plus" data-act="add" data-meal="${meal.id}" data-i="${A.adds.indexOf(a)}"><span class="chk">${CHECK}</span><span class="body"><span class="name">${esc(a.name)}</span><span class="meta">${A.why}</span></span></div>`).join('');
-  h += (d.extras || []).map((e, i) => e.meal !== meal.id ? '' : `<div class="row done" data-act="unextra" data-i="${i}"><span class="chk">${CHECK}</span><span class="body"><span class="name">${esc(e.name)}</span><span class="meta">Plan dışı · yaklaşık ${num(e.k)} kcal</span></span></div>`).join('');
-  if (!st.resolved && meal.time) h += `<div class="acts"><button data-act="all" data-meal="${meal.id}">${CHECK.replace('<svg', '<svg style="stroke-width:2.4"')}Yedim</button><button data-act="photo" data-meal="${meal.id}">${CAM}Fotoğraf</button><button data-act="write" data-meal="${meal.id}">${PEN}Yaz</button></div>`;
-  else if (!st.resolved) h += '<div style="height:4px"></div>';
-  return h + '</section>';
-}
-function counterHTML(act, title, val, over, barPct) {
-  return `<div class="counter"><span class="body">${title}<span class="val ${over ? 'over' : ''}">${val}</span>${barPct != null ? `<span class="bar"><u style="width:${barPct}%"></u></span>` : ''}</span>
-    <button class="step" data-act="${act}" data-n="-1" aria-label="Azalt">−</button><button class="step" data-act="${act}" data-n="1" aria-label="Artır">+</button></div>`;
-}
-const ringSVG = (pct, color) => { const C = 2 * Math.PI * 18;
-  return `<svg class="ring" viewBox="0 0 44 44" style="--c:${color}"><circle class="t" cx="22" cy="22" r="18"/><circle class="p" cx="22" cy="22" r="18" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - Math.min(1, pct))}"/></svg>`; };
+const ic = n => `<svg class="i" viewBox="0 0 24 24">${P[n]}</svg>`;
+const ring = (pct, size, w, color) => { const r = (size - w) / 2, C = 2 * Math.PI * r, c = size / 2;
+  return `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="--c:${color}"><circle class="t" cx="${c}" cy="${c}" r="${r}" stroke-width="${w}"/><circle class="p" cx="${c}" cy="${c}" r="${r}" stroke-width="${w}" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - Math.max(0, Math.min(1, pct)))}"/></svg>`; };
+const SHORT = { limon: 'Ilık limonlu su', peynir: 'Peynir', yumurta: '2 yumurta', sebze: 'Söğüş', yag: 'Avokado ya da ceviz', ekmek: 'Ekmek', yogurt: 'Yoğurt', salata: 'Salata', galeta: 'Galeta', meyve: 'Meyve', bar: 'Protein bar', psut: 'Protein süt', kabak: 'Kabak çekirdeği' };
+const label = it => it.opts ? it.opts[0] : it.name;
+const hint = it => it.opts ? 'veya ' + it.opts.slice(1).join(' · ') : it.meta || '';
+const short = it => it.chip || SHORT[it.id] || it.name;
 const nextMeal = () => MEALS.find(m => m.time && !mealStat(m, today).resolved);
+const openEv = {};
+
+function rowHTML(meal, it, d, ov) {
+  const id = meal.id + '.' + it.id, st = d.items[id], s = st ? st.s : '';
+  let n = label(it), m = hint(it);
+  if (!s && ov) { n = ov.name; m = 'Bugün için azaltıldı'; }
+  if (s === 'done' && st.name) { n = st.name; m = 'Azaltılmış porsiyon'; }
+  if (s === 'swap') { n = st.sub; m = label(it) + ' yerine'; }
+  if (s === 'skip') m = 'Atlandı';
+  return `<div class="row ${s}" data-act="toggle" data-id="${id}"><span class="chk">${ic(s === 'skip' ? 'dash' : s === 'swap' ? 'swap' : 'check')}</span>
+    <span class="b"><span class="n">${esc(n)}</span>${m ? `<span class="m">${esc(m)}</span>` : ''}</span>
+    <button class="more" data-act="sheet" data-id="${id}" aria-label="Seçenekler">${ic('dots')}</button></div>`;
+}
+function mealPanel(meal, k, A, st) {
+  const d = peek(k), W = WORKOUTS[parse(k).getDay()];
+  const cap = W && meal.id === 'ikindi' ? 'Antrenmandan önce: galeta ve meyveyi seç, karbonhidrat işe yarar.' : W && meal.id === 'aksam' ? 'Antrenmandan sonra: bu öğünü ve ekmeğini atlama.' : '';
+  let h = cap ? `<p class="cap">${cap}</p>` : '';
+  if (meal.modes) h += `<div class="seg">${meal.modes.map((m, i) => `<button class="${(d.mode[meal.id] || 0) === i ? 'on' : ''}" data-act="mode" data-meal="${meal.id}" data-i="${i}">${m}</button>`).join('')}</div>`;
+  h += itemsOf(meal, k).map(it => rowHTML(meal, it, d, A.over[meal.id + '.' + it.id])).join('');
+  h += A.adds.filter(a => a.meal === meal.id).map(a => `<div class="row plus" data-act="add" data-i="${A.adds.indexOf(a)}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(a.name)}</span><span class="m">${A.why}</span></span></div>`).join('');
+  h += (d.extras || []).map((e, i) => e.meal !== meal.id ? '' : `<div class="row done" data-act="unextra" data-i="${i}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(e.name)}</span><span class="m">${e.adj ? 'Telafi' : 'Plan dışı'} · yaklaşık ${num(e.k)} kcal</span></span></div>`).join('');
+  if (st.resolved) return h + `<button class="textbtn" data-act="clear" data-meal="${meal.id}">İşaretleri sıfırla</button>`;
+  return h + `<div class="actions"><button class="primary" data-act="all" data-meal="${meal.id}">${ic('check')}${st.ok + st.skip ? 'Kalanını yedim' : 'Hepsini yedim'}</button>
+      <button class="sq" data-act="photo" data-meal="${meal.id}" aria-label="Fotoğrafla kaydet">${ic('cam')}</button>
+      <button class="sq" data-act="write" data-meal="${meal.id}" aria-label="Yazarak kaydet">${ic('pen')}</button></div>
+    <button class="textbtn" data-act="skipmeal" data-meal="${meal.id}">Bu öğünü atladım</button>`;
+}
+function eventHTML({ id, cls, node, title, sub, right, panel, act }) {
+  return `<div class="ev ${cls} ${panel ? 'open' : ''}"><span class="node">${ic(node)}</span><div>
+    <button class="evh" ${act}><div><h3>${title}</h3><p>${esc(sub)}</p></div>${right}</button></div>${panel ? `<div class="panel">${panel}</div>` : ''}</div>`;
+}
+function mealEvent(meal, k, A, next, open) {
+  const st = mealStat(meal, k), allSkip = st.skip === st.total, isNow = meal === next, d = peek(k);
+  const cls = st.resolved ? (allSkip ? 'skipd' : 'done') : isNow ? 'now' : '';
+  let sub = st.resolved ? (allSkip ? 'Atlandı' : st.skip ? `${st.ok} / ${st.total} kalem` : 'Tamam')
+    : itemsOf(meal, k).filter(i => !i.optional).map(short).join(' · ') + (A.adds.some(a => a.meal === meal.id) ? ' · + telafi' : '');
+  let right = meal.time ? `<span class="t">${timeOf(meal, k)}</span>` : '';
+  if (open === meal.id && !st.resolved) sub = itemsOf(meal, k).filter(i => !i.optional).length + ' kalem';
+  if (isNow) { const mt = minsTo(meal, k); sub = timeOf(meal, k) + ' · ' + sub;
+    right = `<span class="pill ${mt < -90 ? 'late' : mt <= 30 ? 'hot' : ''}">${mt > 0 ? (mt >= 60 ? `${Math.floor(mt / 60)} sa ${mt % 60} dk` : `${mt} dk`) : mt > -90 ? 'Şimdi' : 'Gecikti'}</span>`; }
+  else if (isLate(meal, k)) right = `<span class="pill late">Gecikti</span>`;
+  if (!meal.time) { const s = d.items['sabah.limon'];   /* tek kalem: satıra dokunmak yeter */
+    return eventHTML({ cls, node: s ? 'check' : 'sabah', title: meal.title, sub: s ? 'Tamam' : '2 bardak ılık su, içine 2-3 damla limon', right: '', act: 'data-act="toggle" data-id="sabah.limon"' }); }
+  return eventHTML({ cls, node: st.resolved ? (allSkip ? 'dash' : 'check') : meal.id, title: meal.title, sub, right,
+    act: `data-act="ev" data-id="${meal.id}"`, panel: open === meal.id ? mealPanel(meal, k, A, st) : '' });
+}
+function gymEvent(k, W, open) {
+  const d = peek(k);
+  const panel = open !== 'gym' ? '' : `<p class="cap">Öncesi · ${W.pre}</p>${W.ex.map(([n, x]) => `<div class="kv"><span>${n}</span><span>${x}</span></div>`).join('')}<p class="cap" style="padding-bottom:8px">Sonrası · ${W.post}</p>
+    <div class="row ${d.z2 ? 'done' : ''}" data-act="z2"><span class="chk">${ic('check')}</span><span class="b"><span class="n">Antrenman sonrası kardiyo</span><span class="m">İsteğe bağlı</span></span></div>
+    <div class="actions" style="grid-template-columns:1fr"><button class="primary ${d.gym ? 'is-done' : ''}" data-act="gym">${ic('check')}${d.gym ? 'Yapıldı' : 'Antrenmanı yaptım'}</button></div>`;
+  return eventHTML({ cls: d.gym ? 'done' : '', node: d.gym ? 'check' : 'gym', title: 'Antrenman', sub: d.gym ? 'Tamam' : `${W.name} · ${W.ex.length} hareket`, right: '<span class="t">18:00</span>', act: 'data-act="ev" data-id="gym"', panel });
+}
+function stepper(act, val, over) {
+  return `<span class="stepper"><button data-act="${act}" data-n="-1" aria-label="Azalt">${ic('minus')}</button><b class="${over ? 'over' : ''}">${val}</b><button data-act="${act}" data-n="1" aria-label="Artır">${ic('plus')}</button></span>`;
+}
 function todayView() {
-  const d = peek(sel), st = dayStat(sel), A = adjust(sel), B = balance(sel);
-  const walks = weekOf(sel).filter(x => peek(x).walk).length;
-  const strip = weekOf(sel).map(k => { const p = dayStat(k).pct, dt = parse(k);
-    return `<button class="day ${k === sel ? 'sel' : ''} ${k === today ? 'today' : ''}" data-act="day" data-k="${k}"><small>${DOW[dt.getDay()]}</small><span class="disc" style="--p:${p}"><b>${dt.getDate()}</b></span></button>`; }).join('');
-  const next = sel === today ? nextMeal() : null;
-  const litres = d.water * WATER_ML / 1000;
-  let top, big, what;
-  if (next) { const mt = minsTo(next, sel), rel = mt > 0 ? (mt >= 60 ? `${Math.floor(mt / 60)} sa ${mt % 60} dk sonra` : `${mt} dk sonra`) : mt > -90 ? 'Şimdi' : 'Gecikti';
-    top = `<span class="eyebrow">Sıradaki öğün</span><span class="pill ${rel === 'Gecikti' ? 'late' : mt <= 30 ? 'hot' : ''}">${rel}</span>`;
-    big = `${next.title}<small>${timeOf(next, sel)}</small>`;
-    what = itemsOf(next, sel).filter(i => !i.optional).map(i => (A.over[next.id + '.' + i.id] || i).name).concat(A.adds.filter(a => a.meal === next.id).map(a => a.name)).join(' · '); }
-  else { top = `<span class="eyebrow">${sel === today ? 'Bugün' : 'Günün özeti'}</span><span class="pill">${st.ok} / ${st.total} kalem</span>`;
-    big = `%${st.pct}<small>uyum</small>`; what = sel === today ? 'Bugünün öğünleri tamam.' : st.skipped ? `${st.skipped} öğün atlandı.` : ''; }
-  const hero = `<section class="hero"><div class="hero-top">${top}</div><div class="big">${big}</div>${what ? `<div class="what">${esc(what)}</div>` : ''}
-    <div class="tiles">
-      <div class="tile"><div><span>Kalori</span><strong>${num(B.ek)}</strong><span>/ ${num(B.tk)}</span></div>${ringSVG(B.ek / B.tk, 'var(--fg)')}</div>
-      <div class="tile"><div><span>Protein</span><strong>${num(B.ep)} g</strong><span>/ ${num(B.tp)} g</span></div>${ringSVG(B.ep / B.tp, 'var(--accent)')}</div>
-      <div class="tile"><div><span>Su</span><strong>${litres.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} L</strong><span>/ 2,5 L</span></div>${ringSVG(d.water / WATER_GOAL, 'var(--blue)')}</div>
-    </div></section>`;
-  const W = WORKOUTS[parse(sel).getDay()], gyms = weekOf(sel).filter(x => peek(x).gym).length;
-  const gymRow = `<div class="row ${d.gym ? 'done' : ''}" data-act="gym"><span class="chk">${CHECK}</span><span class="body"><span class="name">${W ? W.name + ' antrenmanı' : 'Ağırlık antrenmanı'}</span><span class="meta">${W ? '' : 'Bugün planlı değil · '}Bu hafta ${gyms} / ${GYM_GOAL}</span></span></div>`;
-  const gymCard = !W ? '' : `<section class="card"><header data-act="foldgym"><span class="ico">${svg(MICON.gym)}</span><div class="ttl"><h2>Antrenman</h2><span class="sub">${W.name} · 18:00-19:00</span></div><span class="link quiet">${opened.gym ? 'Gizle' : 'Hareketler'}</span></header>
-    ${opened.gym ? `<div class="prose"><p>Öncesi<small>${W.pre}</small></p></div>${W.ex.map(([n, x]) => `<div class="kv"><span>${n}</span><span>${x}</span></div>`).join('')}<div class="prose"><p>Sonrası<small>${W.post}</small></p></div>` : ''}
-    ${gymRow}<div class="row ${d.z2 ? 'done' : ''}" data-act="z2"><span class="chk">${CHECK}</span><span class="body"><span class="name">Antrenman sonrası kardiyo</span><span class="meta">İsteğe bağlı</span></span></div></section>`;
-  return `<div class="head"><div><div class="sub">${fmtLong(sel)}</div><h1>${sel === today ? 'Bugün' : DOW[parse(sel).getDay()] + ' ' + parse(sel).getDate()}</h1></div>
-      ${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : ''}</div>
-    <div class="strip">${strip}</div>${hero}
+  const d = peek(sel), st = dayStat(sel), A = adjust(sel), B = balance(sel), wk = weekOf(sel);
+  const next = sel === today ? nextMeal() : null, W = WORKOUTS[parse(sel).getDay()];
+  const open = openEv[sel] !== undefined ? openEv[sel] : next ? next.id : '';
+  const strip = wk.map(k => { const dt = parse(k);
+    return `<button class="day ${k === sel ? 'sel' : ''} ${k === today ? 'today' : ''}" data-act="day" data-k="${k}"><small>${DOW[dt.getDay()]}</small><span class="disc" style="--p:${dayStat(k).pct}"><b>${dt.getDate()}</b></span></button>`; }).join('');
+  const litres = (d.water * WATER_ML / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+  const tile = (name, val, unit, of, pct, color) => `<div class="tile"><div class="top"><span class="label">${name}</span>${ring(pct, 30, 4.5, color)}</div><strong>${val}${unit ? `<em>${unit}</em>` : ''}</strong><small>${of}</small></div>`;
+  const walks = wk.filter(x => peek(x).walk).length, gyms = wk.filter(x => peek(x).gym).length;
+  return `<header class="head"><div><p>${fmtLong(sel)}</p><h1>${sel === today ? 'Bugün' : parse(sel).toLocaleDateString('tr-TR', { weekday: 'long' })}</h1></div>
+      ${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : `<div class="dayring">${ring(st.pct / 100, 54, 5, 'var(--accent)')}<b>%${st.pct}</b></div>`}</header>
+    <div class="strip">${strip}</div>
+    <div class="tiles">${tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)')}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', '/ 2,5 L', d.water / WATER_GOAL, 'var(--blue)')}</div>
     ${A.note ? `<p class="note">${A.note}</p>` : ''}
-    ${MEALS.map(m => mealHTML(m, sel, A, m === next) + (m.id === 'ikindi' ? gymCard : '')).join('')}
+    <div class="tl">${MEALS.map(m => mealEvent(m, sel, A, next, open) + (m.id === 'ikindi' && W ? gymEvent(sel, W, open) : '')).join('')}</div>
+    <div class="sect">Gün boyu</div>
     <section class="card">
-      ${counterHTML('water', 'Su', `${d.water} bardak · her dokunuş 250 ml`, false, Math.min(100, d.water / WATER_GOAL * 100)).replace('class="bar"', 'class="bar" style="--c:var(--blue)"')}
-      ${counterHTML('coffee', 'Kahve', d.coffee > COFFEE_MAX ? `${d.coffee} fincan · sınır ${COFFEE_MAX}` : `${d.coffee} / ${COFFEE_MAX} fincan`, d.coffee > COFFEE_MAX)}
-      <div class="row ${d.walk ? 'done' : ''}" data-act="walk"><span class="chk">${CHECK}</span><span class="body"><span class="name">45 dk yürüyüş</span><span class="meta">Bu hafta ${walks} / ${WALK_GOAL}</span></span></div>${W ? '' : gymRow}
+      <div class="row"><span class="b"><span class="n">Su</span><span class="m">${d.water} bardak · ${litres} / 2,5 L</span></span>${stepper('water', d.water)}</div>
+      <div class="row"><span class="b"><span class="n">Kahve</span><span class="m ${d.coffee > COFFEE_MAX ? 'over' : ''}">${d.coffee > COFFEE_MAX ? 'Günlük sınır aşıldı' : 'En fazla 2 fincan, sade'}</span></span>${stepper('coffee', d.coffee, d.coffee > COFFEE_MAX)}</div>
+      <div class="row ${d.walk ? 'done' : ''}" data-act="walk"><span class="b"><span class="n">45 dk yürüyüş</span><span class="m">Bu hafta ${walks} / ${WALK_GOAL}</span></span><span class="chk">${ic('check')}</span></div>
+      ${W ? '' : `<div class="row ${d.gym ? 'done' : ''}" data-act="gym"><span class="b"><span class="n">Ağırlık antrenmanı</span><span class="m">Bugün planlı değil · bu hafta ${gyms} / ${GYM_GOAL}</span></span><span class="chk">${ic('check')}</span></div>`}
     </section>`;
 }
 function weekView() {
   const wk = weekOf(sel), stats = wk.map(dayStat), logged = stats.filter(s => s.ok > 0);
   const avg = logged.length ? Math.round(logged.reduce((a, s) => a + s.pct, 0) / logged.length) : 0;
-  const walks = wk.filter(k => peek(k).walk).length, skipped = stats.reduce((a, s, i) => a + (wk[i] <= today && s.ok + s.skipped > 0 ? s.skipped : 0), 0);
+  const skipped = stats.reduce((a, s, i) => a + (wk[i] <= today && s.ok + s.skipped > 0 ? s.skipped : 0), 0);
   const bal = wk.filter(k => k <= today).map(balance).filter(b => b.any);
   const gk = bal.reduce((a, b) => a + b.gk, 0), full = bal.filter(b => !b.open.length);
-  const pavg = full.length ? full.reduce((a, b) => a + b.tp - b.gp, 0) / full.length : 0;
-  const left = wk.filter(k => k >= today).length, needWalk = Math.max(0, WALK_GOAL - walks);
-  const ws = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1), last = ws[ws.length - 1];
+  const pavg = full.length ? full.reduce((a, b) => a + b.ep, 0) / full.length : 0;
+  const waters = wk.map(k => peek(k).water).filter(Boolean), wavg = waters.length ? waters.reduce((a, b) => a + b, 0) / waters.length * WATER_ML / 1000 : 0;
+  const walks = wk.filter(k => peek(k).walk).length, gyms = wk.filter(k => peek(k).gym).length;
+  const dots = n => `<span class="dots">${[0, 1, 2].map(i => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
+  const ws = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1), last = ws[ws.length - 1], first = ws[0];
   let spark = '';
   if (ws.length > 1) { const v = ws.map(w => w.kg), mn = Math.min(...v), mx = Math.max(...v), r = mx - mn || 1;
-    const pts = ws.map((w, i) => [8 + i * (284 / (ws.length - 1)), 8 + (1 - (w.kg - mn) / r) * 48]);
-    spark = `<svg class="spark" viewBox="0 0 300 64" preserveAspectRatio="none"><polyline points="${pts.map(p => p.join(',')).join(' ')}"/></svg>`; }
-  const dm = (k, id) => mainFor(k, id).chip;
-  return `<div class="head"><div><div class="sub">${parse(wk[0]).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })} – ${parse(wk[6]).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}</div><h1>Hafta</h1></div>
-      <div><button class="link" data-act="week" data-n="-1">‹ Önceki</button>${wk[6] < today ? ` &nbsp;<button class="link" data-act="week" data-n="1">Sonraki ›</button>` : ''}</div></div>
-    <div class="stats"><div class="stat"><strong>%${avg}</strong><span>Ortalama uyum</span></div><div class="stat"><strong>${skipped}</strong><span>Atlanan öğün</span></div>
-      <div class="stat"><strong>${Math.abs(gk) < 50 ? 'Dengede' : (gk > 0 ? '−' : '+') + num(Math.abs(gk))}</strong><span>${Math.abs(gk) < 50 ? 'Plana göre kalori' : gk > 0 ? 'kcal plandan eksik' : 'kcal plandan fazla'}</span></div>
-      <div class="stat"><strong>${pavg ? num(pavg) + ' g' : '—'}</strong><span>Günlük protein ort.</span></div></div>
-    <section class="card">${wk.map((k, i) => `<button class="wrow" data-act="day" data-k="${k}" data-go="1"><span class="d">${parse(k).toLocaleDateString('tr-TR', { weekday: 'long' })}<small>${dm(k, 'ogle')} · ${dm(k, 'aksam')}</small></span><span class="bar"><u style="width:${stats[i].pct}%"></u></span><span class="pct">%${stats[i].pct}</span></button>`).join('')}</section>
-    <p class="note">Gün adlarının altında öğle ve akşam ana yemeği yazar. Bir günü değiştirirsen haftanın kalanı kotaya göre yeniden dağıtılır.</p>
-    <section class="card"><div class="kv"><span>Ağırlık antrenmanı</span><span>${wk.filter(k => peek(k).gym).length} / ${GYM_GOAL} · Pzt üst, Çar alt, Cum full body</span></div><div class="kv"><span>Yürüyüş</span><span>${walks} / ${WALK_GOAL}${needWalk ? ` · kalan ${left} günde ${needWalk} kez` : ' · tamam'}</span></div>
-      ${Object.entries(QUOTA).map(([g, [n, q]]) => `<div class="kv"><span>${n}</span><span>öğle ${quotaUsed(sel, 'ogle', g)}/${q} · akşam ${quotaUsed(sel, 'aksam', g)}/${q}</span></div>`).join('')}</section>
-    <div class="sect">Kilo · haftada bir, aynı saatte</div>
-    <section class="card"><div class="kv"><span>Son ölçüm</span><span>${last ? last.kg.toLocaleString('tr-TR') + ' kg · ' + parse(last.d).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : '—'}</span></div>
-      ${spark}<div class="field"><input id="kg" type="text" inputmode="decimal" placeholder="Bugünkü kilo (kg)"><button class="btn" data-act="weight">Kaydet</button></div></section>`;
+    spark = `<svg class="spark" viewBox="0 0 300 56" preserveAspectRatio="none"><polyline points="${ws.map((w, i) => `${4 + i * (292 / (ws.length - 1))},${6 + (1 - (w.kg - mn) / r) * 44}`).join(' ')}"/></svg>`; }
+  const diff = last && first && last !== first ? last.kg - first.kg : 0;
+  const fmtD = k => parse(k).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+  const stat = (name, val, unit, sub) => `<div class="tile"><span class="label">${name}</span><strong style="margin-top:10px">${val}${unit ? `<em>${unit}</em>` : ''}</strong><small>${sub}</small></div>`;
+  return `<header class="head"><div><p>${fmtD(wk[0])} – ${fmtD(wk[6])}</p><h1>Hafta</h1></div>
+      <div style="display:flex;gap:8px"><button class="round" data-act="week" data-n="-1" aria-label="Önceki hafta">${ic('left')}</button><button class="round" data-act="week" data-n="1" aria-label="Sonraki hafta" ${wk[6] >= today ? 'disabled' : ''}>${ic('right')}</button></div></header>
+    <section class="card pad"><div class="between"><div><span class="label">Ortalama uyum</span><div class="num">%${avg}</div></div><span class="pill">${logged.length} gün kayıtlı</span></div>
+      <div class="bars">${wk.map((k, i) => `<button class="barcol ${k === today ? 'today' : ''}" data-act="day" data-k="${k}" data-go="1" aria-label="${fmtD(k)}"><span><u style="height:${stats[i].pct}%"></u></span><small>${DOW[parse(k).getDay()]}</small></button>`).join('')}</div></section>
+    <div class="tiles two">${stat('Kalori dengesi', Math.abs(gk) < 50 ? 'Dengede' : (gk > 0 ? '−' : '+') + num(Math.abs(gk)), Math.abs(gk) < 50 ? '' : 'kcal', Math.abs(gk) < 50 ? 'Plana göre' : gk > 0 ? 'Plandan eksik' : 'Plandan fazla')}
+      ${stat('Protein', pavg ? num(pavg) : '—', pavg ? 'g' : '', 'Günlük ortalama')}${stat('Atlanan öğün', skipped, '', 'Bu hafta')}${stat('Su', wavg ? wavg.toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : '—', wavg ? 'L' : '', 'Günlük ortalama')}</div>
+    <section class="card"><div class="kv"><span>Ağırlık antrenmanı</span><span style="display:flex;align-items:center;gap:10px">${gyms} / ${GYM_GOAL}${dots(gyms)}</span></div>
+      <div class="kv"><span>Yürüyüş</span><span style="display:flex;align-items:center;gap:10px">${walks} / ${WALK_GOAL}${dots(walks)}</span></div></section>
+    <div class="sect">Haftanın ana yemekleri</div>
+    <section class="card" style="padding:10px 8px"><div class="menu h"><span></span><span>Öğle</span><span>Akşam</span></div>
+      ${wk.map(k => `<button class="menu ${k === today ? 'today' : k < today ? 'past' : ''}" data-act="day" data-k="${k}" data-go="1"><b>${DOW[parse(k).getDay()]}</b><span>${mainFor(k, 'ogle').chip}</span><span>${mainFor(k, 'aksam').chip}</span></button>`).join('')}</section>
+    <p class="note">Bir gün farklı yersen kalan günler kotaya göre yeniden dağıtılır.</p>
+    <div class="sect">Kilo</div>
+    <section class="card pad"><div class="between"><div><span class="label">Son ölçüm · ${last ? parse(last.d).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }) : ''}</span><div class="num">${last ? last.kg.toLocaleString('tr-TR') : '—'}<em>kg</em></div></div>
+      ${diff ? `<span class="pill">${diff > 0 ? '+' : '−'}${Math.abs(diff).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} kg</span>` : ''}</div>
+      ${spark}<div class="field" style="padding-bottom:0"><input id="kg" type="text" inputmode="decimal" placeholder="Bugünkü kilo"><button class="btn" data-act="weight">Kaydet</button></div></section>
+    <p class="note">Haftada bir, aynı saatte tartıl.</p>`;
 }
+const PROG = [['kurallar', 'list', 'Kurallar', `${RULES.length} madde`], ['saatler', 'clock', 'Öğün saatleri', 'Hafta içi ve hafta sonu'], ['muadil', 'swap', 'Muadiller', 'Neyin yerine ne yenir'],
+  ['antrenman', 'gym', 'Antrenman', 'Pzt üst · Çar alt · Cum full body'], ['vucut', 'person', 'Vücut analizi', '13 Kasım ölçümü'], ['ai', 'cam', 'Fotoğrafla kayıt', ''], ['veri', 'down', 'Yedek', 'İndir ya da geri yükle']];
 function planView() {
-  const t = balance(today);
-  return `<div class="head"><div><div class="sub">13 Kasım 2026 · 1,2 g/kg protein</div><h1>Program</h1></div></div>
-    <div class="sect">Hedef</div><section class="card"><div class="kv"><span>Nihai hedef</span><span>85 kg · göbeksiz, kas ağırlıklı</span></div>
-      <div class="kv"><span>Bugünkü plan</span><span>≈ ${num(t.tk)} kcal · ${num(t.tp)} g protein</span></div></section>
-    <div class="sect">Kurallar</div><section class="card prose">${RULES.map(([a, b]) => `<p>${a}${b ? `<small>${b}</small>` : ''}</p>`).join('')}</section>
-    <div class="sect">Saatler</div><section class="card">${MEALS.filter(m => m.time).map(m => `<div class="kv"><span>${m.title}</span><span>${m.time} · hafta sonu ${m.wknd}</span></div>`).join('')}</section>
-    <div class="sect">Muadiller</div><section class="card prose">${SWAPS.map(([a, b]) => `<p>${a}<small>${b}</small></p>`).join('')}</section>
-    <p class="note">Muadiller ve kalori değerleri standart değişim listesine göre yaklaşık tahminlerdir; diyetisyenin onayladıklarını kullan.</p>
-    <div class="sect">Vücut analizi · 13 Kasım</div><section class="card">${BODY.map(([a, b]) => `<div class="kv"><span>${a}</span><span>${b}</span></div>`).join('')}</section>
-    <div class="sect">Fotoğraf ve yazıyla kayıt</div><section class="card"><div class="kv"><span>Anthropic API anahtarı</span><span>${aiKey() ? 'Kayıtlı' : 'Yok'}</span></div>
-      <div class="field"><input id="aikey" type="password" autocomplete="off" placeholder="sk-ant-…"><button class="btn" data-act="savekey">Kaydet</button></div></section>
-    <p class="note">Anahtar yalnızca bu cihazda saklanır, yedeğe girmez. Fotoğraflar analiz için doğrudan Anthropic'e gönderilir.${aiKey() ? ' <button class="link" data-act="delkey" style="font-size:13px;padding:0">Anahtarı sil</button>' : ''}</p>
-    <div class="sect">Veri</div><section class="card"><div class="kv"><button class="link" data-act="export">Yedeği indir</button><button class="link" data-act="import">Yedekten yükle</button></div></section>
-    <p class="note">Kayıtlar yalnızca bu cihazda tutulur.</p><input id="file" type="file" accept="application/json" hidden>`;
+  const t = balance(today), last = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1).pop();
+  return `<header class="head"><div><p>Diyetisyen programı · 13 Kasım</p><h1>Program</h1></div></header>
+    <section class="card pad"><span class="label">Hedef</span><div class="num">85<em>kg</em></div><p class="note" style="padding:8px 0 14px">Göbeksiz, kas ağırlıklı. Önce yağ ver, sonra kaloriyi artırıp tırman.</p>
+      <div class="tiles two" style="margin:0"><div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Şu an</span><strong style="margin-top:8px">${last.kg.toLocaleString('tr-TR')}<em>kg</em></strong><small>%14,5 yağ</small></div>
+        <div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Günlük plan</span><strong style="margin-top:8px">${num(t.tk)}<em>kcal</em></strong><small>${num(t.tp)} g protein</small></div></div></section>
+    <section class="card">${PROG.map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiKey() ? 'API anahtarı kayıtlı' : 'API anahtarı gerekli') : m}</span></span>${ic('right')}</button>`).join('')}</section>
+    <p class="note">Kayıtlar yalnızca bu cihazda tutulur. Kalori ve protein değerleri yaklaşık tahminlerdir.</p>`;
 }
-const ICON = { today: '<circle cx="13" cy="13" r="9"/><path d="M9 13.2l2.8 2.8 5.2-5.6"/>', week: '<path d="M5 20V12M10.5 20V6M16 20v-9M21.5 20V9"/>', plan: '<path d="M8 7h13M8 13h13M8 19h13"/><circle cx="4" cy="7" r=".6"/><circle cx="4" cy="13" r=".6"/><circle cx="4" cy="19" r=".6"/>' };
+function progSheet(p) {
+  const kv = rows => `<div class="group">${rows.map(([a, b]) => `<div class="kv"><span>${a}</span><span>${b}</span></div>`).join('')}</div>`;
+  const prose = rows => `<div class="group prose">${rows.map(([a, b]) => `<p>${a}${b ? `<small>${b}</small>` : ''}</p>`).join('')}</div>`;
+  const S2 = {
+    kurallar: () => `<h2>Kurallar</h2><p class="lead">Diyetisyenin notları.</p>${prose(RULES)}`,
+    saatler: () => `<h2>Öğün saatleri</h2><p class="lead">Hafta sonu saatleri kendiliğinden uygulanır.</p><div class="sect">Hafta içi</div>${kv(MEALS.filter(m => m.time).map(m => [m.title, m.time]))}<div class="sect">Hafta sonu</div>${kv(MEALS.filter(m => m.time).map(m => [m.title, m.wknd]))}`,
+    muadil: () => `<h2>Muadiller</h2><p class="lead">Aynı grup içinde değişim programı bozmaz. Yaklaşık eşdeğerlerdir; diyetisyenin onayladıklarını kullan.</p>${prose(SWAPS)}`,
+    antrenman: () => `<h2>Antrenman</h2><p class="lead">Haftada üç gün, akşam 18:00-19:00.</p>${[[1, 'Pazartesi'], [3, 'Çarşamba'], [5, 'Cuma']].map(([n, g]) => { const w = WORKOUTS[n];
+      return `<div class="sect">${g} · ${w.name}</div><div class="group"><p class="cap">Öncesi · ${w.pre}</p>${w.ex.map(([a, b]) => `<div class="kv"><span>${a}</span><span>${b}</span></div>`).join('')}<p class="cap" style="padding-bottom:12px">Sonrası · ${w.post}</p></div>`; }).join('')}`,
+    vucut: () => `<h2>Vücut analizi</h2><p class="lead">13 Kasım 2026 ölçümü.</p>${kv(BODY)}`,
+    ai: () => `<h2>Fotoğrafla kayıt</h2><p class="lead">Yediğinin fotoğrafını çek ya da yaz; plana göre işlenir. Bunun için bir Anthropic API anahtarı gerekir. Anahtar yalnızca bu cihazda saklanır, fotoğraflar analiz için doğrudan Anthropic'e gider.</p>
+      <div class="group"><div class="kv"><span>Durum</span><span>${aiKey() ? 'Anahtar kayıtlı' : 'Anahtar yok'}</span></div><div class="field"><input id="aikey" type="password" autocomplete="off" placeholder="sk-ant-…"><button class="btn" data-act="savekey">Kaydet</button></div></div>
+      ${aiKey() ? `<button class="textbtn" data-act="delkey">Anahtarı sil</button>` : ''}`,
+    veri: () => `<h2>Yedek</h2><p class="lead">Kayıtların bu cihazda durur. Telefon değiştirmeden önce yedek al.</p><div class="group"><button class="opt" data-act="export"><span>Yedeği indir</span>${ic('down')}</button><button class="opt" data-act="import"><span>Yedekten yükle</span>${ic('right')}</button></div>`,
+  };
+  showSheet(S2[p]());
+}
 function render() {
   document.getElementById('app').innerHTML = tab === 'today' ? todayView() : tab === 'week' ? weekView() : planView();
-  const b = ([t, n]) => `<button class="${tab === t ? 'on' : ''}" data-act="tab" data-t="${t}" aria-label="${n}"><svg viewBox="0 0 26 26">${ICON[t]}</svg><span>${n}</span></button>`;
-  document.getElementById('nav').innerHTML = b(['today', 'Bugün']) + b(['week', 'Hafta']) + b(['plan', 'Program'])
-    + `<button class="cam" data-act="quick" aria-label="Sıradaki öğünü fotoğrafla">${CAM.replace('viewBox="0 0 20 20"', 'viewBox="-2 -2 24 24"')}</button>`;
+  document.getElementById('dock').innerHTML = `<div class="tabs">${[['today', 'today', 'Bugün'], ['week', 'week', 'Hafta'], ['plan', 'list', 'Program']].map(([t, i, n]) =>
+    `<button class="${tab === t ? 'on' : ''}" data-act="tab" data-t="${t}">${ic(i)}${n}</button>`).join('')}</div><button class="fab" data-act="quick" aria-label="Sıradaki öğünü fotoğrafla">${ic('cam')}</button>`;
 }
 
 /* ---------- Alt sayfalar ---------- */
 const $sheet = () => document.getElementById('sheet');
-const showSheet = html => { $sheet().innerHTML = '<div class="grab"></div>' + html; document.body.classList.add('sheet-open'); };
+const showSheet = html => { $sheet().innerHTML = '<div class="grab"></div>' + html; $sheet().scrollTop = 0; document.body.classList.add('sheet-open'); };
 const closeSheet = () => { document.body.classList.remove('sheet-open'); sheet = null; pending = null; };
 function findItem(id) { const [mid, iid] = id.split('.'), meal = MEALS.find(m => m.id === mid); return [meal, itemsOf(meal, sel).find(i => i.id === iid)]; }
 function openSheet(id) {
-  const [meal, it] = findItem(id); sheet = id;
-  showSheet(`<h3>${esc(it.name)}</h3><div class="sub">${meal.title}${it.meta ? ' · ' + esc(it.meta) : ''}</div>
-    <div class="group"><button data-act="s-done"><span>Yedim</span></button><button data-act="s-skip"><span>Atladım</span></button><button class="accent" data-act="s-clear"><span>İşareti kaldır</span></button></div>
-    <div class="sect" style="padding-top:4px">Yerine bunu yedim</div>
-    <div class="group">${(it.subs || []).map((s, i) => `<button data-act="s-sub" data-i="${i}"><span>${esc(s)}</span></button>`).join('')}
-      <div class="field"><input id="custom" type="text" placeholder="Başka bir şey…" enterkeyhint="done"><button class="btn" data-act="s-custom">Ekle</button></div></div>`);
+  const [meal, it] = findItem(id), st = peek(sel).items[id], s = st ? st.s : ''; sheet = id;
+  const tick = on => on ? ic('check') : '';
+  const mains = it.id !== 'ana' ? '' : `<div class="sect">Ana yemeği değiştir</div><div class="group">${MAINS.map(m => { const [, q] = QUOTA[m.g], u = quotaUsed(sel, meal.id, m.g), cur = mainFor(sel, meal.id).id === m.id;
+    return `<button class="opt" data-act="main" data-meal="${meal.id}" data-m="${m.id}"><span>${m.name}<small>Bu hafta ${u} / ${q}</small></span>${tick(cur)}</button>`; }).join('')}</div>`;
+  showSheet(`<h2>${esc(label(it))}</h2><p class="lead">${meal.title}${hint(it) ? ' · ' + esc(hint(it)) : ''}</p>
+    <div class="group"><button class="opt" data-act="s-done"><span>Yedim</span>${tick(s === 'done')}</button><button class="opt" data-act="s-skip"><span>Atladım</span>${tick(s === 'skip')}</button></div>
+    ${mains}<div class="sect">Yerine bunu yedim</div>
+    <div class="group">${(it.subs || []).map((x, i) => `<button class="opt" data-act="s-sub" data-i="${i}"><span>${esc(x)}</span>${tick(s === 'swap' && st.sub === x)}</button>`).join('')}
+      <div class="field"><input id="custom" type="text" placeholder="Başka bir şey…" enterkeyhint="done"><button class="btn" data-act="s-custom">Ekle</button></div></div>
+    ${s ? `<button class="textbtn" data-act="s-clear">İşareti kaldır</button>` : ''}`);
 }
-function needKey() {
-  showSheet(`<h3>API anahtarı gerekli</h3><div class="sub">Fotoğraf ve yazıyla kayıt için bir Anthropic API anahtarı gir. Yalnızca bu cihazda saklanır.</div>
-    <div class="group"><div class="field"><input id="aikey" type="password" autocomplete="off" placeholder="sk-ant-…"><button class="btn" data-act="savekey">Kaydet</button></div></div>
-    <button class="cancel" data-act="close">Vazgeç</button>`);
-}
+function needKey() { progSheet('ai'); }
 function writeSheet(meal) {
   camMeal = meal.id;
-  showSheet(`<h3>${meal.title}'de ne yedin?</h3><div class="sub">Yaz, plana göre işleyeyim.</div>
+  showSheet(`<h2>${meal.title}: ne yedin?</h2><p class="lead">Yaz, plana göre işleyeyim.</p>
     <textarea id="said" placeholder="Örn. 2 yumurta, peynir, 1 dilim ekmek. Avokado yoktu, yerine 5 zeytin yedim."></textarea>
-    <button class="btn" data-act="sendtext">Gönder</button><button class="cancel" data-act="close">Vazgeç</button>`);
-  setTimeout(() => { const t = document.getElementById('said'); t && t.focus(); }, 300);
+    <button class="primary" data-act="sendtext">Gönder</button><button class="textbtn" data-act="close">Vazgeç</button>`);
+  setTimeout(() => { const t = document.getElementById('said'); t && t.focus(); }, 320);
 }
 
 /* ---------- Claude ile analiz ---------- */
@@ -398,31 +423,30 @@ Emin olamadığın bir şey varsa note alanında tek cümleyle söyle; yoksa bo�
     const j = await r.json();
     if (!r.ok) throw new Error(r.status === 401 ? 'API anahtarı geçersiz. Program sekmesinden yenisini gir.' : r.status === 429 ? 'Çok fazla istek; biraz sonra yeniden dene.' : (j.error && j.error.message) || 'İstek başarısız oldu.');
     if (j.stop_reason === 'refusal') throw new Error('Bu içerik analiz edilemedi.');
-    const block = (j.content || []).find(b => b.type === 'text');
-    const R = JSON.parse(block.text);
+    const R = JSON.parse((j.content || []).find(b => b.type === 'text').text);
     pending = { meal: mealId, R, its };
     resultSheet(meal);
   } catch (e) {
-    showSheet(`<h3>Olmadı</h3><p class="err">${esc(e.message || 'Bağlantı kurulamadı.')}</p><button class="cancel" data-act="close">Kapat</button>`);
+    showSheet(`<h2>Olmadı</h2><p class="err" style="padding-top:8px">${esc(e.message || 'Bağlantı kurulamadı.')}</p><button class="textbtn" data-act="close">Kapat</button>`);
   }
 }
 function resultSheet(meal) {
   const { R, its } = pending, lab = { done: 'Yedin', skip: 'Yok' };
   const rows = its.map(it => { const x = R.items.find(a => a.id === it.id) || { status: 'skip', kcal: 0 };
-    const nm = it.id === 'ana' && R.main ? mainById(R.main).name : it.name;
-    return `<div class="res"><span>${esc(x.status === 'swap' ? x.sub : nm)}<small>${x.status === 'swap' ? esc(it.name) + ' yerine' : lab[x.status]}</small></span><span>${x.status === 'skip' ? '—' : num(x.kcal) + ' kcal'}</span></div>`; }).join('');
-  const ex = R.extras.map(e => `<div class="res"><span>${esc(e.name)}<small>Plan dışı</small></span><span>${num(e.kcal)} kcal</span></div>`).join('');
-  showSheet(`<h3>${meal.title}</h3><div class="sub">Gördüklerim doğruysa kaydet; değilse kaydettikten sonra satırlardan düzeltebilirsin.</div>
+    const nm = it.id === 'ana' && R.main ? mainById(R.main).name : label(it);
+    return `<div class="opt"><span>${esc(x.status === 'swap' ? x.sub : nm)}<small>${x.status === 'swap' ? esc(label(it)) + ' yerine' : lab[x.status]}</small></span><small>${x.status === 'skip' ? '—' : num(x.kcal) + ' kcal'}</small></div>`; }).join('');
+  const ex = R.extras.map(e => `<div class="opt"><span>${esc(e.name)}<small>Plan dışı</small></span><small>${num(e.kcal)} kcal</small></div>`).join('');
+  showSheet(`<h2>${meal.title}</h2><p class="lead">Gördüklerim doğruysa kaydet; değilse kaydettikten sonra satırlardan düzeltebilirsin.</p>
     <div class="group">${rows}${ex}</div>${R.note ? `<p class="note">${esc(R.note)}</p>` : ''}
-    <button class="btn" data-act="applyai">Kaydet</button><button class="cancel" data-act="close">Vazgeç</button>`);
+    <button class="primary" data-act="applyai">${ic('check')}Kaydet</button><button class="textbtn" data-act="close">Vazgeç</button>`);
 }
 function applyAI() {
   const { meal: mealId, R, its } = pending, d = day(sel), meal = MEALS.find(m => m.id === mealId);
   if (meal.main) d.main[mealId] = R.main || mainFor(sel, mealId).id;
   its.forEach(it => { const x = R.items.find(a => a.id === it.id) || { status: 'skip' }, id = mealId + '.' + it.id;
-    d.items[id] = x.status === 'done' ? { s: 'done', alt: 0 } : x.status === 'skip' ? { s: 'skip' } : { s: 'swap', sub: x.sub || 'Farklı bir şey', k: x.kcal, p: x.protein }; });
+    d.items[id] = x.status === 'done' ? { s: 'done' } : x.status === 'skip' ? { s: 'skip' } : { s: 'swap', sub: x.sub || 'Farklı bir şey', k: x.kcal, p: x.protein }; });
   d.extras = d.extras.filter(e => e.meal !== mealId || e.adj).concat(R.extras.map(e => ({ meal: mealId, name: e.name, k: e.kcal, p: e.protein })));
-  delete opened[sel + mealId];
+  delete openEv[sel];
 }
 
 /* ---------- Etkileşim ---------- */
@@ -430,44 +454,43 @@ const buzz = () => { try { navigator.vibrate && navigator.vibrate(8); } catch (e
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const a = el.dataset.act, d = day(sel), meal = MEALS.find(m => m.id === el.dataset.meal), A = adjust(sel);
-  const eaten = id => { const o = A.over[id]; return o ? { s: 'done', alt: 0, name: o.name, k: o.k, p: o.p } : { s: 'done', alt: 0 }; };
+  const eaten = id => { const o = A.over[id]; return o ? { s: 'done', name: o.name, k: o.k, p: o.p } : { s: 'done' }; };
   const setAll = (m, fn) => itemsOf(m, sel).forEach(i => { const k = m.id + '.' + i.id, v = fn(d.items[k], i, k); v ? d.items[k] = v : delete d.items[k]; });
   switch (a) {
     case 'tab': tab = el.dataset.t; window.scrollTo(0, 0); break;
     case 'day': sel = el.dataset.k; if (el.dataset.go) { tab = 'today'; window.scrollTo(0, 0); } break;
     case 'week': sel = addDays(sel, 7 * +el.dataset.n); if (sel > today) sel = today; break;
     case 'gotoday': sel = today; break;
+    case 'ev': { const next = sel === today ? nextMeal() : null, cur = openEv[sel] !== undefined ? openEv[sel] : next ? next.id : ''; openEv[sel] = cur === el.dataset.id ? '' : el.dataset.id; break; }
     case 'toggle': { const id = el.dataset.id, m = MEALS.find(x => x.id === id.split('.')[0]);
-      if (d.items[id]) delete d.items[id]; else { lockMain(sel, m); d.items[id] = eaten(id); } buzz(); break; }
-    case 'opt': { const id = el.dataset.id, i = +el.dataset.i, c = d.items[id];
-      c && c.s === 'done' && c.alt === i ? delete d.items[id] : d.items[id] = { s: 'done', alt: i }; buzz(); break; }
-    case 'add': { const x = A.adds[+el.dataset.i]; d.extras.push({ ...x, adj: true }); buzz(); break; }
+      if (d.items[id]) delete d.items[id]; else { lockMain(sel, m); d.items[id] = eaten(id); }
+      if (mealStat(m, sel).resolved && m.time) delete openEv[sel]; buzz(); break; }
+    case 'add': d.extras.push({ ...A.adds[+el.dataset.i], adj: true }); buzz(); break;
     case 'unextra': d.extras.splice(+el.dataset.i, 1); break;
     case 'sheet': openSheet(el.dataset.id); return;
+    case 'prog': progSheet(el.dataset.p); return;
     case 'close': closeSheet(); return;
-    case 'fold': if (e.target.closest('button')) return; { const k = sel + el.dataset.meal; opened[k] = !opened[k]; break; }
     case 'all': lockMain(sel, meal); A.adds.filter(x => x.meal === meal.id).forEach(x => d.extras.push({ ...x, adj: true }));
-      setAll(meal, (c, i, k) => c || (i.optional ? null : eaten(k))); delete opened[sel + meal.id]; buzz(); break;
-    case 'skipmeal': lockMain(sel, meal); setAll(meal, (c, i) => i.optional ? null : { s: 'skip' }); delete opened[sel + meal.id]; break;
-    case 'clear': setAll(meal, () => null); d.extras = d.extras.filter(x => x.meal !== meal.id); break;
+      setAll(meal, (c, i, k) => c || (i.optional ? null : eaten(k))); delete openEv[sel]; buzz(); break;
+    case 'skipmeal': lockMain(sel, meal); setAll(meal, (c, i) => i.optional ? null : { s: 'skip' }); delete openEv[sel]; break;
+    case 'clear': setAll(meal, () => null); d.extras = d.extras.filter(x => x.meal !== meal.id); openEv[sel] = meal.id; break;
     case 'mode': d.mode[meal.id] = +el.dataset.i; break;
-    case 'main': d.main[meal.id] === el.dataset.m ? delete d.main[meal.id] : d.main[meal.id] = el.dataset.m; break;
-    case 'quick': { const m = nextMeal(); sel = today; tab = 'today'; if (!m) break; if (!aiKey()) { render(); return needKey(); } camMeal = m.id; render(); document.getElementById('cam').click(); return; }
+    case 'main': d.main[meal.id] = el.dataset.m; closeSheet(); break;
+    case 'quick': { const m = nextMeal(); sel = today; tab = 'today'; render(); if (!m) return; if (!aiKey()) return needKey(); camMeal = m.id; document.getElementById('cam').click(); return; }
     case 'photo': if (!aiKey()) return needKey(); camMeal = meal.id; document.getElementById('cam').click(); return;
     case 'write': if (!aiKey()) return needKey(); writeSheet(meal); return;
     case 'sendtext': { const v = document.getElementById('said').value.trim(); if (v) analyze(camMeal, { text: v }); return; }
     case 'applyai': applyAI(); closeSheet(); buzz(); break;
     case 'savekey': { const v = document.getElementById('aikey').value.trim(); if (!v) return; try { localStorage.setItem(AIKEY, v); } catch (x) {} closeSheet(); break; }
-    case 'delkey': try { localStorage.removeItem(AIKEY); } catch (x) {} break;
+    case 'delkey': try { localStorage.removeItem(AIKEY); } catch (x) {} closeSheet(); break;
     case 'water': d.water = Math.max(0, d.water + +el.dataset.n); buzz(); break;
     case 'coffee': d.coffee = Math.max(0, d.coffee + +el.dataset.n); break;
     case 'walk': d.walk = !d.walk; buzz(); break;
-    case 'gym': d.gym = !d.gym; buzz(); break;
+    case 'gym': d.gym = !d.gym; if (d.gym && openEv[sel] === 'gym') delete openEv[sel]; buzz(); break;
     case 'z2': d.z2 = !d.z2; break;
-    case 'foldgym': opened.gym = !opened.gym; break;
     case 'weight': { const v = parseFloat(document.getElementById('kg').value.replace(',', '.'));
       if (!(v > 30 && v < 300)) return; S.weights = S.weights.filter(w => w.d !== today).concat({ d: today, kg: v }); break; }
-    case 's-done': d.items[sheet] = { s: 'done', alt: (d.items[sheet] || {}).alt || 0 }; closeSheet(); break;
+    case 's-done': d.items[sheet] = { s: 'done' }; closeSheet(); break;
     case 's-skip': d.items[sheet] = { s: 'skip' }; closeSheet(); break;
     case 's-clear': delete d.items[sheet]; closeSheet(); break;
     case 's-sub': d.items[sheet] = { s: 'swap', sub: findItem(sheet)[1].subs[+el.dataset.i] }; closeSheet(); break;
@@ -481,12 +504,12 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const f = e.target.files && e.target.files[0]; if (!f) return;
   if (e.target.id === 'cam') { e.target.value = ''; shrink(f).then(image => analyze(camMeal, { image })).catch(() => {}); }
-  if (e.target.id === 'file') f.text().then(t => { const o = JSON.parse(t); if (o && o.days) { S = o; save(); render(); } }).catch(() => {});
+  if (e.target.id === 'file') f.text().then(t => { const o = JSON.parse(t); if (o && o.days) { S = o; save(); closeSheet(); render(); } }).catch(() => {});
 });
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'custom') document.querySelector('[data-act="s-custom"]').click(); });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return; const t = key(new Date());
-  if (t !== today) { if (sel === today) sel = t; today = t; } render();
+  if (t !== today) { if (sel === today) sel = t; today = t; } if (!document.body.classList.contains('sheet-open')) render();
 });
 setInterval(() => { if (!document.hidden && tab === 'today' && !document.body.classList.contains('sheet-open')) render(); }, 60000);
 render();
