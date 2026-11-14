@@ -10,7 +10,8 @@ Diyetisyen planını takip eden kişisel PWA. iPhone'da ana ekrana eklenip uygul
 | Dosya | İçerik |
 |---|---|
 | `index.html` | Tüm CSS + iskelet (`#app`, `#dock`, `.scrim`, `#sheet`, gizli `#cam` ve `#file` inputları) |
-| `app.js` | Veri, motor, görünümler, olay işleyiciler; tek dosya |
+| `plan.js` | Diyetisyen programı (`PLAN_DEFAULT`): saf JSON. Uygulama ile ileride yapılacak diyetisyen paneli arasındaki sözleşme |
+| `app.js` | Motor, görünümler, olay işleyiciler; plan verisini yalnızca okur |
 | `sw.js` | Service worker, önce ağ; önbellek yalnızca çevrimdışıyken |
 | `manifest.json`, `icon-*.png` | PWA kimliği |
 
@@ -23,12 +24,14 @@ Diyetisyen planını takip eden kişisel PWA. iPhone'da ana ekrana eklenip uygul
 
 ## app.js yapısı (yukarıdan aşağı)
 
-1. **Veri:** `MAINS` (ana yemekler; grup `g`, kcal `k`, protein `p`, muadiller `subs`), `QUOTA` (haftalık ana yemek kotası), `ROTA` (varsayılan haftalık dağılım), `MEALS` (sabah, kahvalti, ogle, ikindi, aksam, gece), `RULES`, `SWAPS`, `BODY`, `WORKOUTS` (1 = Pzt üst, 3 = Çar alt, 5 = Cum full body), hedef sabitleri, `AI_MODEL`.
+1. **Plandan türetilenler:** `PLAN` (`plan.js`), `MEALS` (kalem kimlikleri `PLAN.items` kataloğundan nesneye açılır), `MAINS`, `GROUPS` (haftalık kota), `ROTA`, `MAIN_MEALS`, `TRAIN`/`WORKOUTS`, gün boyu hedefler, `AI_MODEL`. Planda değişiklik `plan.js`'te yapılır; `app.js`'te öğün ya da kalem kimliği sabit yazılmaz.
 2. **Durum:** `localStorage['diyet-v1']` → `S = { days: { 'YYYY-MM-DD': { items, main, mode, extras, water, coffee, walk, gym, z2 } }, weights }`. Öğe anahtarı `'ogun.oge'`, durum `done | skip | swap`. API anahtarı ayrı tutulur (`diyet-ai-key`) ve yedeğe girmez.
-3. **Motor:** `mainFor` (kalan haftalık kotayı dağıtır, aynı gün iki öğüne aynı grubu vermez), `balance` (günün kalori/protein açığı), `adjust` (telafi önerileri: açıkta protein/ekmek/ara öğün ekler, fazlada salata-yağ-ekmekten kısar, proteinden asla kısmaz).
+3. **Motor:** `mainFor` (kalan haftalık kotayı dağıtır, aynı gün iki ana öğüne aynı grubu vermez), `balance` (günün kalori/protein açığı), `adjust` (telafi: eşikler kodda, ne önerileceği `PLAN.tune` içinde; açıkta protein/ekmek/ara öğün ekler, fazlada `tune.cuts` sırasıyla kısar, proteinden asla kısmaz).
 4. **Görünümler:** `todayView` (zaman çizelgesi), `weekView`, `planView` + `progSheet`; `render()` hepsini ve alt çubuğu basar.
 5. **Alt sayfalar ve yapay zekâ:** `openSheet`, `writeSheet`, `analyze` (fotoğraf veya yazıdan öğün kaydı), `resultSheet`, `applyAI`.
 6. **Olaylar:** tek bir delegeli `click` dinleyicisi, `data-act` üzerinden `switch`; sonunda `save(); render();`.
+
+Planı ya da motoru yeniden düzenlerken davranışın değişmediğini, aynı rastgele durumlar için eski ve yeni kodun tüm görünümlerini karşılaştırarak doğrula (vm içinde çalıştırılan bir anlık görüntü betiğiyle).
 
 Şema değişirse eski `diyet-v1` kayıtlarını bozma: kullanıcının telefonunda gerçek veri var. Yeni alanlara varsayılan değer ver.
 
@@ -36,7 +39,7 @@ Diyetisyen planını takip eden kişisel PWA. iPhone'da ana ekrana eklenip uygul
 
 Tarayıcıdan doğrudan `https://api.anthropic.com/v1/messages`; kullanıcı kendi anahtarını uygulamada girer. Model `claude-sonnet-5-5` (kullanıcının tercihi; fotoğraf ve yazı için aynı). Yapılandırılmış çıktı `output_config.format` + `SCHEMA` ile. Fotoğraf canvas'ta en çok 1280 px'e küçültülür.
 
-Bu çağrı gerçek anahtarla hiç denenmedi, yalnızca sahte `fetch` ile test edildi. İlk gerçek kullanımda hata çıkarsa istek biçimini güncel API belgelerinden doğrula.
+Yazıyla kayıt gerçek anahtarla çalıştı (14 Kasım 2026). Fotoğraf yolu gerçek anahtarla henüz doğrulanmadı.
 
 ## Tasarım kuralları
 

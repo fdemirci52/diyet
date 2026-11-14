@@ -1,67 +1,13 @@
-/* ---------- Program (k: tahmini kcal, p: tahmini protein g) ---------- */
-const BREAD_SUBS = ['4 yk yulaf ezmesi (40 g)', '6 yk bulgur pilavı', '6 yk tam buğday makarna / esmer pirinç', '1 orta boy haşlanmış patates (~180 g)', '1 küçük tam buğday lavaş (50 g)'];
-const YOG = { id: 'yogurt', k: 45, p: 3, name: 'Yoğurt veya ayran', opts: ['3-4 yk yoğurt + 1 çk keten tohumu', '1 bardak ayran'], subs: ['1 küçük kase cacık (yağsız)', '1 çay bardağı kefir'] };
-const BREAD = { id: 'ekmek', k: 125, p: 5, name: '2 dilim tam buğday ekmeği', meta: '50 g · eksik yeme', subs: BREAD_SUBS };
-const SALAD = { id: 'salata', k: 70, p: 1, name: 'Bol salata', meta: '1 tatlı kaşığı sıvıyağ', subs: ['Haşlama / ızgara sebze (1 tatlı kaşığı yağ)', 'Yağsız söğüş + 5 zeytin'] };
-const MAINS = [
-  { id: 'bakla', g: 'bakla', k: 250, p: 15, chip: 'Kurubaklagil', name: '8 yk kurubaklagil yemeği', meta: 'Susuz · kurufasulye, nohut, barbunya', subs: ['8 yk yeşil mercimek yemeği', '8 yk börülce / bakla'] },
-  { id: 'kofte', g: 'kofte', k: 330, p: 27, chip: 'Köfte', name: '5 ızgara köfte', meta: 'Izgara veya tost makinesinde', subs: ['150 g yağsız ızgara et (bonfile, antrikot)', '150 g hindi / tavuk köfte'] },
-  { id: 'tavuk', g: 'tb', k: 250, p: 35, chip: 'Tavuk', name: '150 g tavuk', meta: 'Izgara, haşlama veya fırın', subs: ['150 g hindi göğsü', '5 ızgara köfte'] },
-  { id: 'balik', g: 'tb', k: 330, p: 40, chip: 'Balık', name: '250 g balık', meta: 'Izgara, buğulama veya fırın', subs: ['150 g tavuk', '160 g ton balığı'] },
-  { id: 'ton', g: 'ton', k: 260, p: 35, chip: 'Ton balıklı', name: '160 g ton balıklı salata', meta: 'Salatası içinde', noSalad: true, subs: ['150 g tavuklu salata', '3 haşlanmış yumurtalı salata'] },
-];
-const QUOTA = { bakla: ['Kurubaklagil', 2], kofte: ['Köfte', 2], tb: ['Tavuk / balık', 2], ton: ['Ton balıklı salata', 1] };
-/* Pazartesi'den Pazar'a varsayılan dağılım: her öğün kendi kotasını tutturur. */
-const ROTA = { ogle: ['bakla', 'tavuk', 'kofte', 'bakla', 'balik', 'kofte', 'ton'], aksam: ['kofte', 'bakla', 'balik', 'ton', 'kofte', 'tavuk', 'bakla'] };
-const MEALS = [
-  { id: 'sabah', title: 'Uyanınca', items: [
-    { id: 'limon', k: 0, p: 0, name: '2 bardak ılık su', meta: 'İçine 2-3 damla limon' } ] },
-  { id: 'kahvalti', title: 'Kahvaltı', time: '11:00', wknd: '10:00', items: [
-    { id: 'peynir', k: 160, p: 10, name: 'Peynir', opts: ['2 dilim beyaz peynir (60 g)', '4 yk tuzsuz lor', '4 yk çökelek'], subs: ['60 g az tuzlu kaşar', '1 yumurta + 1 dilim peynir'] },
-    { id: 'yumurta', k: 150, p: 13, name: '2 haşlanmış yumurta', meta: 'Tuzsuz', subs: ['2 yumurtalı yağsız omlet', 'Yağsız menemen (2 yumurta)'] },
-    { id: 'sebze', k: 30, p: 1, name: 'Domates, salatalık, yeşillik', meta: 'Tuzsuz, yağsız' },
-    { id: 'yag', k: 110, p: 2, name: 'Avokado veya ceviz', opts: ['Yarım avokado', '2-3 tam ceviz'], subs: ['6-8 çiğ badem / fındık', '1 tatlı kaşığı zeytinyağı', '5-6 zeytin'] },
-    { ...BREAD },
-    { id: 'cay', k: 0, p: 0, name: '1 fincan açık şekersiz çay', meta: 'İsteğe bağlı', optional: true } ] },
-  { id: 'ogle', title: 'Öğle', time: '14:00', wknd: '14:00', main: true, items: [YOG, BREAD, SALAD] },
-  { id: 'ikindi', title: 'İkindi', time: '16:00', wknd: '16:30', modes: ['Galeta + meyve', 'Protein bar'], items: [
-    { id: 'galeta', k: 100, p: 3, name: 'Galeta veya leblebi', opts: ['5 karabuğdaylı-yulaflı galeta', '5-6 minik kepekli galeta', '2 kalın uzun kepekli galeta', '½ çay bardağı leblebi'], subs: ['1 dilim tam buğday ekmeği (25 g)', '2 yk yulaf ezmesi', '2 pirinç patlağı'] },
-    { id: 'meyve', k: 70, p: 1, name: '1 porsiyon meyve', meta: '1 küçük elma · 1 portakal · 2 mandalina · 1 küçük muz', subs: ['10-12 çilek', '3 kayısı / 2 kivi', '1 ince dilim kavun / karpuz', '15 üzüm'] } ],
-    alt: [{ id: 'bar', k: 200, p: 20, name: '1 protein bar' }] },
-  { id: 'aksam', title: 'Akşam', time: '20:00', wknd: '19:00', main: true, items: [YOG, BREAD, SALAD] },
-  { id: 'gece', title: 'Gece', time: '21:00', wknd: '21:00', items: [
-    { id: 'psut', k: 160, p: 22, name: 'Protein süt veya quark', opts: ['1 bardak protein süt', '1 kutu sek quark protein'], subs: ['200 g yüksek proteinli yoğurt (skyr)', '1 ölçü whey + su'] },
-    { id: 'kabak', k: 115, p: 6, name: '1 avuç içi çiğ kabak çekirdeği', subs: ['6-8 çiğ badem / fındık', '2 tam ceviz'] } ] },
-];
-const RULES = [
-  ['Çay açık ve şekersiz', 'Yemekten en az 40 dk sonra; demir emilimini bozmasın diye'],
-  ['Kahve günde en fazla 2 fincan', 'Sade; her fincanla birlikte 2 bardak su'],
-  ['Ara öğün atlama', ''], ['Ekmekleri eksik yeme', ''],
-  ['Bir öğün sebze, diğer öğün et ya da kurubaklagil', 'Öğle ve akşam haftada en çok 2 gün yer değiştirebilir'],
-  ['Her gün tartılma', ''], ['Günde 2-2,5 litre su', ''],
-  ['Haftada 3 gün 45 dk yürüyüş', 'veya 5K / 3 mil Leslie'],
-  ['Yazanları ne eksik ne fazla ye', ''],
-];
-const SWAPS = [
-  ['2 dilim tam buğday ekmeği (50 g)', BREAD_SUBS.join(' · ')],
-  ['30 g et / tavuk / balık', '1 köfte · 1 yumurta · 1 dilim (30 g) peynir · 2 yk lor'],
-  ['3-4 yk yoğurt', '1 bardak ayran · 1 çay bardağı kefir · 1 küçük kase cacık'],
-  ['1 tatlı kaşığı sıvıyağ', '5-6 zeytin · 2 ceviz içi · 6 badem / fındık'],
-  ['1 porsiyon meyve', '1 küçük elma · 1 portakal · 2 mandalina · 1 küçük muz · 10-12 çilek'],
-  ['1 bardak protein süt', '1 kutu quark · 200 g skyr · 1 ölçü whey'],
-];
-const BODY = [['Kilo', '83,9 kg'], ['Boy', '188 cm'], ['BMI', '23,7'], ['Yağ', '%14,5 · 12,2 kg'], ['Kas', '68,2 kg'], ['İç yağlanma', '3 (1-13)'], ['Bazal metabolizma', '2.093 kcal'], ['Metabolik yaş', '24'], ['Bel', '86 cm'], ['Fit puanı', '95 / 100']];
-/* Haftalık ağırlık programı: anahtar haftanın günü (1 Pzt, 3 Çar, 5 Cum). */
-const WORKOUTS = {
-  1: { name: 'Üst', pre: 'İp 6 dk: 60 sn rahat tempo, 30 sn dinlenme, 4 tur', post: '10-15 dk Zone 2 · bisiklet ya da %5-10 eğimli yürüyüş', ex: [
-    ['Bench', '3×5-8'], ['Ağırlıklı barfiks', '3×5-8'], ['OHP', '2×6-10'], ['Row', '3×8-10'], ['Peck Deck', '2×10-15'], ['Hammer Curl', '2×8-12'], ['Lateral Raise', '3×12-20']] },
-  3: { name: 'Alt', pre: 'İp yok; istersen 2 dk çok rahat ısınma', post: '8-10 dk çok hafif bisiklet · koşu yok', ex: [
-    ['Zercher Squat', '3×5-8'], ['RDL', '3×6-10'], ['Bulgarian Split Squat', '2×8-12'], ['Leg Curl', '2×10-15'], ['Calf Raise', '3×12-20'], ['Boyun 4 yön', '1×15-20'], ['Ab Roller', '2×8-15']] },
-  5: { name: 'Full body', pre: 'İp: 90 sn orta tempo, 60 sn dinlenme, 3 tur', post: '10-15 dk Zone 2 · tercihen bisiklet; sert koşu ya da interval yok', ex: [
-    ['Barbell Squat', '3×5'], ['Paused Bench', '2×6-8'], ['Weighted Dips', '3×6-10'], ['Lat Pulldown', '3×8-12'], ['Leg Curl', '2×10-15'], ['Face Pull', '2×15-20'], ['Lateral Raise', '2×12-20']] },
-};
-const GYM_GOAL = 3;
-const WATER_GOAL = 10, WATER_ML = 250, COFFEE_MAX = 2, WALK_GOAL = 3;
+/* ---------- Program ----------
+   Plan verisi plan.js içinde (PLAN_DEFAULT). Buradakiler yalnızca ondan türetilir. */
+const PLAN = PLAN_DEFAULT;
+const item = id => ({ id, ...PLAN.items[id] });
+const MAINS = PLAN.mains, GROUPS = PLAN.groups, ROTA = PLAN.rota, RULES = PLAN.rules, SWAPS = PLAN.swaps, BODY = PLAN.body.rows;
+const MEALS = PLAN.meals.map(m => ({ ...m, items: m.items.map(item), alt: m.alt && m.alt.map(item) }));
+const MAIN_MEALS = MEALS.filter(m => m.main);
+const TRAIN = PLAN.training, WORKOUTS = TRAIN.days, GYM_GOAL = TRAIN.perWeek;
+const WATER_GOAL = PLAN.daily.water.goal, WATER_ML = PLAN.daily.water.ml, COFFEE_MAX = PLAN.daily.coffee.max, WALK_GOAL = PLAN.daily.walk.perWeek;
+const WATER_L = (WATER_GOAL * WATER_ML / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
 const AI_MODEL = 'claude-sonnet-5-5';
 
 /* ---------- Durum ---------- */
@@ -77,7 +23,8 @@ const parse = k => { const [y, m, d] = k.split('-').map(Number); return new Date
 const addDays = (k, n) => { const d = parse(k); d.setDate(d.getDate() + n); return key(d); };
 const weekOf = k => { const d = parse(k); const off = (d.getDay() + 6) % 7; const mon = addDays(k, -off); return Array.from({ length: 7 }, (_, i) => addDays(mon, i)); };
 const isWknd = k => [0, 6].includes(parse(k).getDay());
-const DOW = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+const DOW = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'], DAYNAME = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+const fmtDM = k => parse(k).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
 const fmtLong = k => parse(k).toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const num = n => Math.round(n).toLocaleString('tr-TR');
@@ -91,16 +38,17 @@ const mainById = id => MAINS.find(m => m.id === id);
 /* Haftanın geri kalanı: seçilmemiş günlere, kalan kotaya göre ana yemek dağıtılır. */
 function mainFor(k, mealId) {
   const own = peek(k).main[mealId]; if (own) return mainById(own);
-  const wk = weekOf(k), pool = {}; Object.entries(QUOTA).forEach(([g, [, q]]) => pool[g] = q);
+  const wk = weekOf(k), pool = {}; Object.entries(GROUPS).forEach(([g, x]) => pool[g] = x.perWeek);
   wk.forEach(x => { const m = mainById(peek(x).main[mealId]); if (m) pool[m.g]--; });
   for (let i = 0; i < 7; i++) {
     if (peek(wk[i]).main[mealId]) continue;
     let m = mainById(ROTA[mealId][i]);
-    /* Aynı gün iki öğüne aynı ana yemek düşmesin. */
-    const av = mealId === 'aksam' ? mainFor(wk[i], 'ogle').g : (mainById(peek(wk[i]).main.aksam) || {}).g;
-    if (pool[m.g] <= 0 || m.g === av) {
+    /* Aynı gün iki öğüne aynı ana yemek düşmesin: öncekilerin dağıtılmış, sonrakilerin seçilmiş yemeği dolu sayılır. */
+    const av = new Set(), at = MAIN_MEALS.findIndex(x => x.id === mealId);
+    MAIN_MEALS.forEach((x, j) => { const o = j < at ? mainFor(wk[i], x.id) : j > at ? mainById(peek(wk[i]).main[x.id]) : null; if (o) av.add(o.g); });
+    if (pool[m.g] <= 0 || av.has(m.g)) {
       const by = (x, y) => pool[y] - pool[x], left = Object.keys(pool).filter(g => pool[g] > 0);
-      const g = left.filter(g => g !== av).sort(by)[0] || (pool[m.g] <= 0 ? left.sort(by)[0] : null);
+      const g = left.filter(g => !av.has(g)).sort(by)[0] || (pool[m.g] <= 0 ? left.sort(by)[0] : null);
       if (g) m = MAINS.find(x => x.g === g);
     }
     pool[m.g]--;
@@ -142,7 +90,10 @@ function isLate(meal, k) {
    Yenenle plan arasındaki fark (kcal, protein) hesaplanır; bugünün kalan
    öğünleri buna göre güncellenir. Eksikte önce protein, sonra ekmek eklenir;
    fazlada protein kalemlerine dokunulmaz, yağ ve ekmek azaltılır. */
-const CUTS = { salata: ['Bol salata, yağsız', 45, 0], kabak: ['½ avuç kabak çekirdeği', 57, 3], yag: ['¼ avokado veya 1 ceviz', 55, 1], ekmek: ['1 dilim tam buğday ekmeği', 62, 2.5] };
+const TUNE = PLAN.tune;
+/* Önerinin düşeceği öğün: 'main', 'first', 'last' ya da öğün kimliği; liste ise ilk bulunan. */
+const mealAt = (meals, at) => [].concat(at).map(a => a === 'main' ? meals.find(m => m.main) : a === 'first' ? meals[0] : a === 'last' ? meals[meals.length - 1] : meals.find(m => m.id === a)).find(Boolean);
+const fill = (t, n, x) => t.replace('{n}', n).replace('{g}', n * (x.g || 1));
 function balance(k) {
   const d = peek(k), open = []; let gk = 0, gp = 0, tk = 0, tp = 0, rk = 0, rp = 0, any = false;
   MEALS.forEach(m => itemsOf(m, k).forEach(it => {
@@ -168,21 +119,19 @@ function adjust(k) {
   /* Telafi zincirlenmesin: önceki öğünlerde yenen telafi 250 kcal'i geçtiyse yenisi önerilmez. */
   const paid = (d0.extras || []).reduce((t, e) => t + (e.adj && !openIds.has(e.meal) ? e.k : 0), 0);
   const add = (meal, id, name, kk, pp) => { if (paid >= 250) return; out.adds.push({ meal: meal.id, id, name, k: kk, p: pp }); gk -= kk; gp -= pp; };
-  if (gp >= 8 && gk > -100) {
-    const main = meals.find(m => m.main), gece = meals.find(m => m.id === 'gece');
-    if (main) { const n = Math.min(3, Math.max(1, Math.round(gp / 7))); add(main, 'x-prot', `+${n * 30} g et / tavuk (${n} köfte kadar)`, n * 55, n * 7); }
-    else if (gece) add(gece, 'x-prot', '+2 haşlanmış yumurta ya da 1 kutu quark', 150, 14);
-    else add(meals[0], 'x-prot', '+1 haşlanmış yumurta', 75, 6.5);
-  }
-  if (gk >= 60) { const n = Math.min(2, Math.max(1, Math.round(gk / 62))); add(meals[0], 'x-ekmek', `+${n} dilim tam buğday ekmeği`, 62 * n, 2.5 * n); }
-  if (gk >= 90) add(meals.find(m => m.id === 'ikindi' || m.id === 'gece') || meals[meals.length - 1], 'x-ara', '+1 porsiyon meyve ya da 2 ceviz', 80, 1);
+  /* Birimli öneri: max varsa açığa göre 1..max birim, yoksa tek birim. */
+  const offer = (x, id, gap, per) => { const m = mealAt(meals, x.at); if (!m) return false;
+    const n = x.max ? Math.min(x.max, Math.max(1, Math.round(gap / per))) : 1; add(m, id, fill(x.name, n, x), x.k * n, x.p * n); return true; };
+  if (gp >= 8 && gk > -100) TUNE.protein.some(x => offer(x, 'x-prot', gp, x.p));
+  if (gk >= 60 && TUNE.carb) offer(TUNE.carb, 'x-ekmek', gk, TUNE.carb.k);
+  if (gk >= 90 && TUNE.snack) offer(TUNE.snack, 'x-ara', gk, TUNE.snack.k);
   out.adds.forEach(a => a.xi = (d0.extras || []).findIndex(e => e.adj && e.id === a.id && e.meal === a.meal));
   if (out.adds.length) out.why = 'Eksik kalanı dengelemek için eklendi';
   if (gk <= -80) {
     let need = -gk, cut = 0;
-    for (const id of ['salata', 'kabak', 'yag', 'ekmek']) for (const o of b.open) {
+    for (const { item: id, name, k: dk, p: dp } of TUNE.cuts) for (const o of b.open) {
       if (o.it.id !== id || need < 40 || cut >= 300) continue;
-      const [name, dk, dp] = CUTS[id]; out.over[o.key] = { name, k: o.it.k - dk, p: o.it.p - dp }; need -= dk; cut += dk;
+      out.over[o.key] = { name, k: o.it.k - dk, p: o.it.p - dp }; need -= dk; cut += dk;
     }
     if (cut) out.why = 'Fazlayı dengelemek için azaltıldı';
     if (need >= 150) out.note = 'Fazlanın kalanını telafi etmeye çalışma; yarın programa normal devam et.';
@@ -209,13 +158,12 @@ const P = {
   gece: '<path d="M20 14.500A8 8 0 019.500 4a8 8 0 1010.500 10.500z"/>',
   gym: '<path d="M6.500 6.500v11M3.500 9v6M17.500 6.500v11M20.500 9v6M6.500 12h11"/>',
 };
-const ic = n => `<svg class="i" viewBox="0 0 24 24">${P[n]}</svg>`;
+const ic = n => `<svg class="i" viewBox="0 0 24 24">${P[n] || ''}</svg>`;
 const ring = (pct, size, w, color) => { const r = (size - w) / 2, C = 2 * Math.PI * r, c = size / 2;
   return `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="--c:${color}"><circle class="t" cx="${c}" cy="${c}" r="${r}" stroke-width="${w}"/><circle class="p" cx="${c}" cy="${c}" r="${r}" stroke-width="${w}" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - Math.max(0, Math.min(1, pct)))}"/></svg>`; };
-const SHORT = { limon: 'Ilık limonlu su', peynir: 'Peynir', yumurta: '2 yumurta', sebze: 'Söğüş', yag: 'Avokado ya da ceviz', ekmek: 'Ekmek', yogurt: 'Yoğurt', salata: 'Salata', galeta: 'Galeta', meyve: 'Meyve', bar: 'Protein bar', psut: 'Protein süt', kabak: 'Kabak çekirdeği' };
 const label = it => it.opts ? it.opts[0] : it.name;
 const hint = it => it.opts ? 'veya ' + it.opts.slice(1).join(' · ') : it.meta || '';
-const short = it => it.chip || SHORT[it.id] || it.name;
+const short = it => it.chip || it.name;
 const nextMeal = () => MEALS.find(m => m.time && !mealStat(m, today).resolved);
 const openEv = {};
 
@@ -232,7 +180,7 @@ function rowHTML(meal, it, d, ov) {
 }
 function mealPanel(meal, k, A, st) {
   const d = peek(k), W = WORKOUTS[parse(k).getDay()];
-  const cap = W && meal.id === 'ikindi' ? 'Antrenmandan önce: galeta ve meyveyi seç, karbonhidrat işe yarar.' : W && meal.id === 'aksam' ? 'Antrenmandan sonra: bu öğünü ve ekmeğini atlama.' : '';
+  const cap = W && TRAIN.notes[meal.id] || '';
   let h = cap ? `<p class="cap">${cap}</p>` : '';
   if (meal.modes) h += `<div class="seg">${meal.modes.map((m, i) => `<button class="${(d.mode[meal.id] || 0) === i ? 'on' : ''}" data-act="mode" data-meal="${meal.id}" data-i="${i}">${m}</button>`).join('')}</div>`;
   h += itemsOf(meal, k).map(it => rowHTML(meal, it, d, A.over[meal.id + '.' + it.id])).join('');
@@ -258,8 +206,9 @@ function mealEvent(meal, k, A, next, open) {
   if (isNow) { const mt = minsTo(meal, k); sub = timeOf(meal, k) + ' · ' + sub;
     right = `<span class="pill ${mt < -90 ? 'late' : mt <= 30 ? 'hot' : ''}">${mt > 0 ? (mt >= 60 ? `${Math.floor(mt / 60)} sa ${mt % 60} dk` : `${mt} dk`) : mt > -90 ? 'Şimdi' : 'Gecikti'}</span>`; }
   else if (isLate(meal, k)) right = `<span class="pill late">Gecikti</span>`;
-  if (!meal.time) { const s = d.items['sabah.limon'];   /* tek kalem: satıra dokunmak yeter */
-    return eventHTML({ cls, node: s ? 'check' : 'sabah', title: meal.title, sub: s ? 'Tamam' : '2 bardak ılık su, içine 2-3 damla limon', right: '', act: 'data-act="toggle" data-id="sabah.limon"' }); }
+  if (!meal.time) { const it = meal.items[0], id = meal.id + '.' + it.id, s = d.items[id];   /* saatsiz tek kalem: satıra dokunmak yeter */
+    const sub = [label(it), it.meta && it.meta[0].toLocaleLowerCase('tr') + it.meta.slice(1)].filter(Boolean).join(', ');
+    return eventHTML({ cls, node: s ? 'check' : meal.id, title: meal.title, sub: s ? 'Tamam' : sub, right: '', act: `data-act="toggle" data-id="${id}"` }); }
   return eventHTML({ cls, node: st.resolved ? (allSkip ? 'dash' : 'check') : meal.id, title: meal.title, sub, right,
     act: `data-act="ev" data-id="${meal.id}"`, panel: open === meal.id ? mealPanel(meal, k, A, st) : '' });
 }
@@ -268,7 +217,7 @@ function gymEvent(k, W, open) {
   const panel = open !== 'gym' ? '' : `<p class="cap">Öncesi · ${W.pre}</p>${W.ex.map(([n, x]) => `<div class="kv"><span>${n}</span><span>${x}</span></div>`).join('')}<p class="cap" style="padding-bottom:8px">Sonrası · ${W.post}</p>
     <div class="row ${d.z2 ? 'done' : ''}" data-act="z2"><span class="chk">${ic('check')}</span><span class="b"><span class="n">Antrenman sonrası kardiyo</span><span class="m">İsteğe bağlı</span></span></div>
     <div class="actions" style="grid-template-columns:1fr"><button class="primary ${d.gym ? 'is-done' : ''}" data-act="gym">${ic('check')}${d.gym ? 'Yapıldı' : 'Antrenmanı yaptım'}</button></div>`;
-  return eventHTML({ cls: d.gym ? 'done' : '', node: d.gym ? 'check' : 'gym', title: 'Antrenman', sub: d.gym ? 'Tamam' : `${W.name} · ${W.ex.length} hareket`, right: '<span class="t">18:00</span>', act: 'data-act="ev" data-id="gym"', panel });
+  return eventHTML({ cls: d.gym ? 'done' : '', node: d.gym ? 'check' : 'gym', title: 'Antrenman', sub: d.gym ? 'Tamam' : `${W.name} · ${W.ex.length} hareket`, right: `<span class="t">${TRAIN.time}</span>`, act: 'data-act="ev" data-id="gym"', panel });
 }
 function stepper(act, val, over) {
   return `<span class="stepper"><button data-act="${act}" data-n="-1" aria-label="Azalt">${ic('minus')}</button><b class="${over ? 'over' : ''}">${val}</b><button data-act="${act}" data-n="1" aria-label="Artır">${ic('plus')}</button></span>`;
@@ -285,14 +234,14 @@ function todayView() {
   return `<header class="head"><div><p>${fmtLong(sel)}</p><h1>${sel === today ? 'Bugün' : parse(sel).toLocaleDateString('tr-TR', { weekday: 'long' })}</h1></div>
       ${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : `<div class="dayring">${ring(st.pct / 100, 54, 5, 'var(--accent)')}<b>%${st.pct}</b></div>`}</header>
     <div class="strip">${strip}</div>
-    <div class="tiles">${tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)')}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', '/ 2,5 L', d.water / WATER_GOAL, 'var(--blue)')}</div>
+    <div class="tiles">${tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)')}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', `/ ${WATER_L} L`, d.water / WATER_GOAL, 'var(--blue)')}</div>
     ${A.note ? `<p class="note">${A.note}</p>` : ''}
-    <div class="tl">${MEALS.map(m => mealEvent(m, sel, A, next, open) + (m.id === 'ikindi' && W ? gymEvent(sel, W, open) : '')).join('')}</div>
+    <div class="tl">${MEALS.map(m => mealEvent(m, sel, A, next, open) + (m.id === TRAIN.after && W ? gymEvent(sel, W, open) : '')).join('')}</div>
     <div class="sect">Gün boyu</div>
     <section class="card">
-      <div class="row"><span class="b"><span class="n">Su</span><span class="m">${d.water} bardak · ${litres} / 2,5 L</span></span>${stepper('water', d.water)}</div>
-      <div class="row"><span class="b"><span class="n">Kahve</span><span class="m ${d.coffee > COFFEE_MAX ? 'over' : ''}">${d.coffee > COFFEE_MAX ? 'Günlük sınır aşıldı' : 'En fazla 2 fincan, sade'}</span></span>${stepper('coffee', d.coffee, d.coffee > COFFEE_MAX)}</div>
-      <div class="row ${d.walk ? 'done' : ''}" data-act="walk"><span class="b"><span class="n">45 dk yürüyüş</span><span class="m">Bu hafta ${walks} / ${WALK_GOAL}</span></span><span class="chk">${ic('check')}</span></div>
+      <div class="row"><span class="b"><span class="n">Su</span><span class="m">${d.water} bardak · ${litres} / ${WATER_L} L</span></span>${stepper('water', d.water)}</div>
+      <div class="row"><span class="b"><span class="n">Kahve</span><span class="m ${d.coffee > COFFEE_MAX ? 'over' : ''}">${d.coffee > COFFEE_MAX ? 'Günlük sınır aşıldı' : PLAN.daily.coffee.note}</span></span>${stepper('coffee', d.coffee, d.coffee > COFFEE_MAX)}</div>
+      <div class="row ${d.walk ? 'done' : ''}" data-act="walk"><span class="b"><span class="n">${PLAN.daily.walk.name}</span><span class="m">Bu hafta ${walks} / ${WALK_GOAL}</span></span><span class="chk">${ic('check')}</span></div>
       ${W ? '' : `<div class="row ${d.gym ? 'done' : ''}" data-act="gym"><span class="b"><span class="n">Ağırlık antrenmanı</span><span class="m">Bugün planlı değil · bu hafta ${gyms} / ${GYM_GOAL}</span></span><span class="chk">${ic('check')}</span></div>`}
     </section>`;
 }
@@ -311,19 +260,18 @@ function weekView() {
   if (ws.length > 1) { const v = ws.map(w => w.kg), mn = Math.min(...v), mx = Math.max(...v), r = mx - mn || 1;
     spark = `<svg class="spark" viewBox="0 0 300 56" preserveAspectRatio="none"><polyline points="${ws.map((w, i) => `${4 + i * (292 / (ws.length - 1))},${6 + (1 - (w.kg - mn) / r) * 44}`).join(' ')}"/></svg>`; }
   const diff = last && first && last !== first ? last.kg - first.kg : 0;
-  const fmtD = k => parse(k).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
   const stat = (name, val, unit, sub) => `<div class="tile"><span class="label">${name}</span><strong style="margin-top:10px">${val}${unit ? `<em>${unit}</em>` : ''}</strong><small>${sub}</small></div>`;
-  return `<header class="head"><div><p>${fmtD(wk[0])} – ${fmtD(wk[6])}</p><h1>Hafta</h1></div>
+  return `<header class="head"><div><p>${fmtDM(wk[0])} – ${fmtDM(wk[6])}</p><h1>Hafta</h1></div>
       <div style="display:flex;gap:8px"><button class="round" data-act="week" data-n="-1" aria-label="Önceki hafta">${ic('left')}</button><button class="round" data-act="week" data-n="1" aria-label="Sonraki hafta" ${wk[6] >= today ? 'disabled' : ''}>${ic('right')}</button></div></header>
     <section class="card pad"><div class="between"><div><span class="label">Ortalama uyum</span><div class="num">%${avg}</div></div><span class="pill">${logged.length} gün kayıtlı</span></div>
-      <div class="bars">${wk.map((k, i) => `<button class="barcol ${k === today ? 'today' : ''}" data-act="day" data-k="${k}" data-go="1" aria-label="${fmtD(k)}"><span><u style="height:${stats[i].pct}%"></u></span><small>${DOW[parse(k).getDay()]}</small></button>`).join('')}</div></section>
+      <div class="bars">${wk.map((k, i) => `<button class="barcol ${k === today ? 'today' : ''}" data-act="day" data-k="${k}" data-go="1" aria-label="${fmtDM(k)}"><span><u style="height:${stats[i].pct}%"></u></span><small>${DOW[parse(k).getDay()]}</small></button>`).join('')}</div></section>
     <div class="tiles two">${stat('Kalori dengesi', Math.abs(gk) < 50 ? 'Dengede' : (gk > 0 ? '−' : '+') + num(Math.abs(gk)), Math.abs(gk) < 50 ? '' : 'kcal', Math.abs(gk) < 50 ? 'Plana göre' : gk > 0 ? 'Plandan eksik' : 'Plandan fazla')}
       ${stat('Protein', pavg ? num(pavg) : '—', pavg ? 'g' : '', 'Günlük ortalama')}${stat('Atlanan öğün', skipped, '', 'Bu hafta')}${stat('Su', wavg ? wavg.toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : '—', wavg ? 'L' : '', 'Günlük ortalama')}</div>
     <section class="card"><div class="kv"><span>Ağırlık antrenmanı</span><span style="display:flex;align-items:center;gap:10px">${gyms} / ${GYM_GOAL}${dots(gyms)}</span></div>
       <div class="kv"><span>Yürüyüş</span><span style="display:flex;align-items:center;gap:10px">${walks} / ${WALK_GOAL}${dots(walks)}</span></div></section>
     <div class="sect">Haftanın ana yemekleri</div>
-    <section class="card" style="padding:10px 8px"><div class="menu h"><span></span><span>Öğle</span><span>Akşam</span></div>
-      ${wk.map(k => `<button class="menu ${k === today ? 'today' : k < today ? 'past' : ''}" data-act="day" data-k="${k}" data-go="1"><b>${DOW[parse(k).getDay()]}</b><span>${mainFor(k, 'ogle').chip}</span><span>${mainFor(k, 'aksam').chip}</span></button>`).join('')}</section>
+    <section class="card" style="padding:10px 8px"><div class="menu h"><span></span>${MAIN_MEALS.map(m => `<span>${m.title}</span>`).join('')}</div>
+      ${wk.map(k => `<button class="menu ${k === today ? 'today' : k < today ? 'past' : ''}" data-act="day" data-k="${k}" data-go="1"><b>${DOW[parse(k).getDay()]}</b>${MAIN_MEALS.map(m => `<span>${mainFor(k, m.id).chip}</span>`).join('')}</button>`).join('')}</section>
     <p class="note">Bir gün farklı yersen kalan günler kotaya göre yeniden dağıtılır.</p>
     <div class="sect">Kilo</div>
     <section class="card pad"><div class="between"><div><span class="label">Son ölçüm · ${last ? parse(last.d).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }) : ''}</span><div class="num">${last ? last.kg.toLocaleString('tr-TR') : '—'}<em>kg</em></div></div>
@@ -332,12 +280,12 @@ function weekView() {
     <p class="note">Haftada bir, aynı saatte tartıl.</p>`;
 }
 const PROG = [['kurallar', 'list', 'Kurallar', `${RULES.length} madde`], ['saatler', 'clock', 'Öğün saatleri', 'Hafta içi ve hafta sonu'], ['muadil', 'swap', 'Muadiller', 'Neyin yerine ne yenir'],
-  ['antrenman', 'gym', 'Antrenman', 'Pzt üst · Çar alt · Cum full body'], ['vucut', 'person', 'Vücut analizi', '13 Kasım ölçümü'], ['ai', 'cam', 'Fotoğrafla kayıt', ''], ['veri', 'down', 'Yedek', 'İndir ya da geri yükle']];
+  ['antrenman', 'gym', 'Antrenman', Object.entries(WORKOUTS).map(([n, w]) => `${DOW[n]} ${w.name.toLocaleLowerCase('tr')}`).join(' · ')], ['vucut', 'person', 'Vücut analizi', `${fmtDM(PLAN.body.date)} ölçümü`], ['ai', 'cam', 'Fotoğrafla kayıt', ''], ['veri', 'down', 'Yedek', 'İndir ya da geri yükle']];
 function planView() {
   const t = balance(today), last = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1).pop();
-  return `<header class="head"><div><p>Diyetisyen programı · 13 Kasım</p><h1>Program</h1></div></header>
-    <section class="card pad"><span class="label">Hedef</span><div class="num">85<em>kg</em></div><p class="note" style="padding:8px 0 14px">Göbeksiz, kas ağırlıklı. Önce yağ ver, sonra kaloriyi artırıp tırman.</p>
-      <div class="tiles two" style="margin:0"><div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Şu an</span><strong style="margin-top:8px">${last.kg.toLocaleString('tr-TR')}<em>kg</em></strong><small>%14,5 yağ</small></div>
+  return `<header class="head"><div><p>${esc(PLAN.dietitian.name || 'Diyetisyen programı')} · ${fmtDM(PLAN.date)}</p><h1>Program</h1></div></header>
+    <section class="card pad"><span class="label">Hedef</span><div class="num">${PLAN.goal.kg.toLocaleString('tr-TR')}<em>kg</em></div><p class="note" style="padding:8px 0 14px">${esc(PLAN.goal.text)}</p>
+      <div class="tiles two" style="margin:0"><div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Şu an</span><strong style="margin-top:8px">${last.kg.toLocaleString('tr-TR')}<em>kg</em></strong><small>${PLAN.body.fat} yağ</small></div>
         <div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Günlük plan</span><strong style="margin-top:8px">${num(t.tk)}<em>kcal</em></strong><small>${num(t.tp)} g protein</small></div></div></section>
     <section class="card">${PROG.map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiKey() ? 'API anahtarı kayıtlı' : 'API anahtarı gerekli') : m}</span></span>${ic('right')}</button>`).join('')}</section>
     <p class="note">Kayıtlar yalnızca bu cihazda tutulur. Kalori ve protein değerleri yaklaşık tahminlerdir.</p>`;
@@ -349,9 +297,9 @@ function progSheet(p) {
     kurallar: () => `<h2>Kurallar</h2><p class="lead">Diyetisyenin notları.</p>${prose(RULES)}`,
     saatler: () => `<h2>Öğün saatleri</h2><p class="lead">Hafta sonu saatleri kendiliğinden uygulanır.</p><div class="sect">Hafta içi</div>${kv(MEALS.filter(m => m.time).map(m => [m.title, m.time]))}<div class="sect">Hafta sonu</div>${kv(MEALS.filter(m => m.time).map(m => [m.title, m.wknd]))}`,
     muadil: () => `<h2>Muadiller</h2><p class="lead">Aynı grup içinde değişim programı bozmaz. Yaklaşık eşdeğerlerdir; diyetisyenin onayladıklarını kullan.</p>${prose(SWAPS)}`,
-    antrenman: () => `<h2>Antrenman</h2><p class="lead">Haftada üç gün, akşam 18:00-19:00.</p>${[[1, 'Pazartesi'], [3, 'Çarşamba'], [5, 'Cuma']].map(([n, g]) => { const w = WORKOUTS[n];
+    antrenman: () => `<h2>Antrenman</h2><p class="lead">${TRAIN.lead}</p>${Object.entries(WORKOUTS).map(([n, w]) => { const g = DAYNAME[n];
       return `<div class="sect">${g} · ${w.name}</div><div class="group"><p class="cap">Öncesi · ${w.pre}</p>${w.ex.map(([a, b]) => `<div class="kv"><span>${a}</span><span>${b}</span></div>`).join('')}<p class="cap" style="padding-bottom:12px">Sonrası · ${w.post}</p></div>`; }).join('')}`,
-    vucut: () => `<h2>Vücut analizi</h2><p class="lead">13 Kasım 2026 ölçümü.</p>${kv(BODY)}`,
+    vucut: () => `<h2>Vücut analizi</h2><p class="lead">${parse(PLAN.body.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })} ölçümü.</p>${kv(BODY)}`,
     ai: () => `<h2>Fotoğrafla kayıt</h2><p class="lead">Yediğinin fotoğrafını çek ya da yaz; plana göre işlenir. Bunun için bir Anthropic API anahtarı gerekir. Anahtar yalnızca bu cihazda saklanır, fotoğraflar analiz için doğrudan Anthropic'e gider.</p>
       <div class="group"><div class="kv"><span>Durum</span><span>${aiKey() ? 'Anahtar kayıtlı' : 'Anahtar yok'}</span></div><div class="field"><input id="aikey" type="password" autocomplete="off" placeholder="sk-ant-…"><button class="btn" data-act="savekey">Kaydet</button></div></div>
       ${aiKey() ? `<button class="textbtn" data-act="delkey">Anahtarı sil</button>` : ''}`,
@@ -373,7 +321,7 @@ function findItem(id) { const [mid, iid] = id.split('.'), meal = MEALS.find(m =>
 function openSheet(id) {
   const [meal, it] = findItem(id), st = peek(sel).items[id], s = st ? st.s : ''; sheet = id;
   const tick = on => on ? ic('check') : '';
-  const mains = it.id !== 'ana' ? '' : `<div class="sect">Ana yemeği değiştir</div><div class="group">${MAINS.map(m => { const [, q] = QUOTA[m.g], u = quotaUsed(sel, meal.id, m.g), cur = mainFor(sel, meal.id).id === m.id;
+  const mains = it.id !== 'ana' ? '' : `<div class="sect">Ana yemeği değiştir</div><div class="group">${MAINS.map(m => { const q = GROUPS[m.g].perWeek, u = quotaUsed(sel, meal.id, m.g), cur = mainFor(sel, meal.id).id === m.id;
     return `<button class="opt" data-act="main" data-meal="${meal.id}" data-m="${m.id}"><span>${m.name}<small>Bu hafta ${u} / ${q}</small></span>${tick(cur)}</button>`; }).join('')}</div>`;
   showSheet(`<h2>${esc(label(it))}</h2><p class="lead">${meal.title}${hint(it) ? ' · ' + esc(hint(it)) : ''}</p>
     <div class="group"><button class="opt" data-act="s-done"><span>Yedim</span>${tick(s === 'done')}</button><button class="opt" data-act="s-skip"><span>Atladım</span>${tick(s === 'skip')}</button></div>
@@ -393,7 +341,7 @@ function writeSheet(meal) {
 
 /* ---------- Claude ile analiz ---------- */
 const SCHEMA = { type: 'object', additionalProperties: false, required: ['main', 'items', 'extras', 'note'], properties: {
-  main: { type: 'string', enum: ['', 'bakla', 'kofte', 'tavuk', 'balik', 'ton'] },
+  main: { type: 'string', enum: ['', ...MAINS.map(m => m.id)] },
   items: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'status', 'sub', 'kcal', 'protein'], properties: {
     id: { type: 'string' }, status: { type: 'string', enum: ['done', 'skip', 'swap'] }, sub: { type: 'string' }, kcal: { type: 'number' }, protein: { type: 'number' } } } },
   extras: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'kcal', 'protein'], properties: { name: { type: 'string' }, kcal: { type: 'number' }, protein: { type: 'number' } } } },
@@ -417,7 +365,7 @@ Planlanan kalemler JSON olarak verilecek. Her kalem için bir karar ver:
 - "swap": yerine başka bir şey ya da belirgin biçimde farklı miktarda yendi. sub alanına ne yendiğini kısa Türkçe yaz (örn. "1 dilim beyaz ekmek", "200 g pilav"); kcal ve protein yenen şeyin tahmini değerleri.
 Plandaki her kalem items listesinde tam bir kez yer almalı. Plandaki hiçbir kaleme karşılık gelmeyen yiyecek ve kalorili içecekleri extras listesine tahmini kcal ve protein ile ekle; su, şekersiz çay ve sade kahveyi ekleme.
 
-Kimliği "ana" olan kalem ana yemektir. Yenen ana yemek şu seçeneklerden birine uyuyorsa main alanına onun kimliğini yaz ve kalemi "done" say: bakla (kurubaklagil yemeği), kofte (ızgara köfte), tavuk, balik, ton (ton balıklı salata). Hiçbirine uymuyorsa main boş kalsın ve kalemi "swap" olarak işle. Plan "ana" kalemi içermiyorsa main boş kalsın.
+Kimliği "ana" olan kalem ana yemektir. Yenen ana yemek şu seçeneklerden birine uyuyorsa main alanına onun kimliğini yaz ve kalemi "done" say: ${MAINS.map(m => m.ai ? `${m.id} (${m.ai})` : m.id).join(', ')}. Hiçbirine uymuyorsa main boş kalsın ve kalemi "swap" olarak işle. Plan "ana" kalemi içermiyorsa main boş kalsın.
 
 Emin olamadığın bir şey varsa note alanında tek cümleyle söyle; yoksa boş bırak.`;
   const content = [];
