@@ -11,6 +11,7 @@ Diyetisyen planını takip eden kişisel PWA. iPhone'da ana ekrana eklenip uygul
 |---|---|
 | `index.html` | Tüm CSS + iskelet (`#app`, `#dock`, `.scrim`, `#sheet`, gizli `#cam` ve `#file` inputları) |
 | `plan.js` | Diyetisyen programı (`PLAN_DEFAULT`): saf JSON. Uygulama ile ileride yapılacak diyetisyen paneli arasındaki sözleşme |
+| `foods.js` | Yerel yemek kütüphanesi (`FOODS`): yaklaşık 160 yaygın yemek ve içecek, porsiyon başına yaklaşık kcal ve protein |
 | `app.js` | Motor, görünümler, olay işleyiciler; plan verisini yalnızca okur |
 | `sw.js` | Service worker, önce ağ; önbellek yalnızca çevrimdışıyken |
 | `manifest.json`, `icon-*.png` | PWA kimliği |
@@ -25,10 +26,10 @@ Diyetisyen planını takip eden kişisel PWA. iPhone'da ana ekrana eklenip uygul
 ## app.js yapısı (yukarıdan aşağı)
 
 1. **Plandan türetilenler:** `PLAN` (`plan.js`), `MEALS` (kalem kimlikleri `PLAN.items` kataloğundan nesneye açılır), `MAINS`, `GROUPS` (haftalık kota), `ROTA`, `MAIN_MEALS`, `TRAIN`/`WORKOUTS`, gün boyu hedefler, `AI_MODEL`. Planda değişiklik `plan.js`'te yapılır; `app.js`'te öğün ya da kalem kimliği sabit yazılmaz.
-2. **Durum:** `localStorage['diyet-v1']` → `S = { days: { 'YYYY-MM-DD': { items, main, mode, extras, water, coffee, walk, gym, z2 } }, weights }`. Öğe anahtarı `'ogun.oge'`, durum `done | skip | swap`. API anahtarı ayrı tutulur (`diyet-ai-key`) ve yedeğe girmez.
+2. **Durum:** `localStorage['diyet-v1']` → `S = { days: { 'YYYY-MM-DD': { items, main, mode, extras, water, coffee, walk, gym, z2 } }, weights, foods }`. Öğe anahtarı `'ogun.oge'`, durum `done | skip | swap`. `foods` kullanıcının kendi kütüphanesi (hızlı kayıt ve yapay zekâ sonuçlarından birikir; yoksa boş sayılır). Yedeğe girmeyen ayrı anahtarlar: `diyet-ai-key` (API anahtarı), `diyet-ai-use` (aylık token ve maliyet sayacı), `diyet-chat` (günün sohbeti).
 3. **Motor:** `mainFor` (kalan haftalık kotayı dağıtır, aynı gün iki ana öğüne aynı grubu vermez), `balance` (günün kalori/protein açığı), `adjust` (telafi: eşikler kodda, ne önerileceği `PLAN.tune` içinde; açıkta protein/ekmek/ara öğün ekler, fazlada `tune.cuts` sırasıyla kısar, proteinden asla kısmaz).
 4. **Görünümler:** `todayView` (zaman çizelgesi), `weekView`, `planView` + `progSheet`; `render()` hepsini ve alt çubuğu basar.
-5. **Alt sayfalar ve yapay zekâ:** `openSheet`, `writeSheet`, `analyze` (fotoğraf veya yazıdan öğün kaydı), `resultSheet`, `applyAI`.
+5. **Alt sayfalar ve yapay zekâ:** `openSheet`, `analyze` (fotoğraf veya yazıdan öğün kaydı), `resultSheet`, `applyAI` (tanınanları `remember` ile kütüphaneye yazar). **Hızlı kayıt** (`quickSheet`, `qFind`, `qSave`): öğündeki kalem düğmesi açar; önce `S.foods`, sonra `FOODS`, en son açık bir "Yapay zekâyla işle" satırı. **Asistan** (`openChat`, `chatSend`, `dayContext`): Bugün başlığındaki düğme; sistem isteminde plan, her soruda `<durum>` içinde günün kaydı. **Kullanım sayacı** (`track`): her çağrının `usage` değerini aylık toplar.
 6. **Olaylar:** tek bir delegeli `click` dinleyicisi, `data-act` üzerinden `switch`; sonunda `save(); render();`.
 
 Planı ya da motoru yeniden düzenlerken davranışın değişmediğini, aynı rastgele durumlar için eski ve yeni kodun tüm görünümlerini karşılaştırarak doğrula (vm içinde çalıştırılan bir anlık görüntü betiğiyle).
@@ -37,7 +38,7 @@ Planı ya da motoru yeniden düzenlerken davranışın değişmediğini, aynı r
 
 ## Yapay zekâ çağrısı
 
-Tarayıcıdan doğrudan `https://api.anthropic.com/v1/messages`; kullanıcı kendi anahtarını uygulamada girer. Model `claude-sonnet-5-5` (kullanıcının tercihi; fotoğraf ve yazı için aynı). Yapılandırılmış çıktı `output_config.format` + `SCHEMA` ile. Fotoğraf canvas'ta en çok 1280 px'e küçültülür.
+Tarayıcıdan doğrudan `https://api.anthropic.com/v1/messages`; kullanıcı kendi anahtarını uygulamada girer. Öğün analizi `claude-sonnet-5-5` (kullanıcının tercihi; fotoğraf ve yazı için aynı). Asistan `claude-haiku-5-5`: akışlı (SSE), düşünme kapalı, efor `low`, sistem istemi `cache_control` ile önbellekli. Asistan gerçek anahtarla henüz denenmedi. Yapılandırılmış çıktı `output_config.format` + `SCHEMA` ile. Fotoğraf canvas'ta en çok 1280 px'e küçültülür.
 
 Yazıyla kayıt gerçek anahtarla çalıştı (14 Kasım 2026). Fotoğraf yolu gerçek anahtarla henüz doğrulanmadı.
 

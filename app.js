@@ -8,10 +8,12 @@ const MAIN_MEALS = MEALS.filter(m => m.main);
 const TRAIN = PLAN.training, WORKOUTS = TRAIN.days, GYM_GOAL = TRAIN.perWeek;
 const WATER_GOAL = PLAN.daily.water.goal, WATER_ML = PLAN.daily.water.ml, COFFEE_MAX = PLAN.daily.coffee.max, WALK_GOAL = PLAN.daily.walk.perWeek;
 const WATER_L = (WATER_GOAL * WATER_ML / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
-const AI_MODEL = 'claude-sonnet-5-5';
+const AI_MODEL = 'claude-sonnet-5-5', CHAT_MODEL = 'claude-haiku-5-5';
+/* Milyon token başına dolar (girdi, çıktı); kullanım sayacı için. */
+const PRICE = { 'claude-sonnet-5-5': [2, 10], 'claude-haiku-5-5': [0.1, 0.5] };
 
 /* ---------- Durum ---------- */
-const KEY = 'diyet-v1', AIKEY = 'diyet-ai-key';
+const KEY = 'diyet-v1', AIKEY = 'diyet-ai-key', USEKEY = 'diyet-ai-use', CHATKEY = 'diyet-chat';
 let S = { days: {}, weights: [{ d: '2026-11-13', kg: 83.9 }] };
 try { const raw = localStorage.getItem(KEY); if (raw) S = JSON.parse(raw); } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
@@ -72,7 +74,8 @@ function mealStat(meal, k) {
 }
 function dayStat(k) {
   let total = 0, ok = 0, skipped = 0;
-  MEALS.forEach(m => { const s = mealStat(m, k); total += s.total; ok += s.ok; if (s.skip === s.total) skipped++; });
+  const ate = new Set((peek(k).extras || []).filter(e => !e.adj).map(e => e.meal));
+  MEALS.forEach(m => { const s = mealStat(m, k); total += s.total; ok += s.ok; if (s.skip === s.total && !ate.has(m.id)) skipped++; });
   return { total, ok, pct: total ? Math.round(ok / total * 100) : 0, skipped };
 }
 function quotaUsed(k, mealId, g) {
@@ -157,6 +160,9 @@ const P = {
   aksam: '<path d="M4 12h16a8 8 0 01-16 0zM9 21h6M9 8c0-1 1-1 1-2s-1-1-1-2M14 8c0-1 1-1 1-2s-1-1-1-2"/>',
   gece: '<path d="M20 14.500A8 8 0 019.500 4a8 8 0 1010.500 10.500z"/>',
   gym: '<path d="M6.500 6.500v11M3.500 9v6M17.500 6.500v11M20.500 9v6M6.500 12h11"/>',
+  chat: '<path d="M20 11.500c0 3.900-3.600 7-8 7-1.100 0-2.100-.2-3-.5L4.500 19.500l1.300-3.700C4.700 14.600 4 13.100 4 11.500c0-3.900 3.600-7 8-7s8 3.100 8 7z"/>',
+  up: '<path d="M12 19V6M6.500 11.500L12 6l5.500 5.500"/>',
+  search: '<circle cx="11" cy="11" r="6.500"/><path d="M20 20l-4.200-4.200"/>',
 };
 const ic = n => `<svg class="i" viewBox="0 0 24 24">${P[n] || ''}</svg>`;
 const ring = (pct, size, w, color) => { const r = (size - w) / 2, C = 2 * Math.PI * r, c = size / 2;
@@ -197,9 +203,9 @@ function eventHTML({ id, cls, node, title, sub, right, panel, act }) {
     <button class="evh" ${act}><div><h3>${title}</h3><p>${esc(sub)}</p></div>${right}</button></div>${panel ? `<div class="panel">${panel}</div>` : ''}</div>`;
 }
 function mealEvent(meal, k, A, next, open) {
-  const st = mealStat(meal, k), allSkip = st.skip === st.total, isNow = meal === next, d = peek(k);
+  const d = peek(k), st = mealStat(meal, k), ate = (d.extras || []).filter(e => e.meal === meal.id && !e.adj), allSkip = st.skip === st.total && !ate.length, isNow = meal === next;
   const cls = st.resolved ? (allSkip ? 'skipd' : 'done') : isNow ? 'now' : '';
-  let sub = st.resolved ? (allSkip ? 'Atlandı' : st.skip ? `${st.ok} / ${st.total} kalem` : 'Tamam')
+  let sub = st.resolved ? (allSkip ? 'Atlandı' : st.skip === st.total ? ate.map(e => e.name).join(' · ') : st.skip ? `${st.ok} / ${st.total} kalem` : 'Tamam')
     : itemsOf(meal, k).filter(i => !i.optional).map(short).join(' · ') + (A.adds.some(a => a.meal === meal.id) ? ' · + telafi' : '');
   let right = meal.time ? `<span class="t">${timeOf(meal, k)}</span>` : '';
   if (open === meal.id && !st.resolved) sub = itemsOf(meal, k).filter(i => !i.optional).length + ' kalem';
@@ -232,7 +238,8 @@ function todayView() {
   const tile = (name, val, unit, of, pct, color) => `<div class="tile"><div class="top"><span class="label">${name}</span>${ring(pct, 30, 4.5, color)}</div><strong>${val}${unit ? `<em>${unit}</em>` : ''}</strong><small>${of}</small></div>`;
   const walks = wk.filter(x => peek(x).walk).length, gyms = wk.filter(x => peek(x).gym).length;
   return `<header class="head"><div><p>${fmtLong(sel)}</p><h1>${sel === today ? 'Bugün' : parse(sel).toLocaleDateString('tr-TR', { weekday: 'long' })}</h1></div>
-      ${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : `<div class="dayring">${ring(st.pct / 100, 54, 5, 'var(--accent)')}<b>%${st.pct}</b></div>`}</header>
+      <div class="hright"><button class="round" data-act="chat" aria-label="Asistana sor">${ic('chat')}</button>
+      ${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : `<div class="dayring">${ring(st.pct / 100, 54, 5, 'var(--accent)')}<b>%${st.pct}</b></div>`}</div></header>
     <div class="strip">${strip}</div>
     <div class="tiles">${tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)')}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', `/ ${WATER_L} L`, d.water / WATER_GOAL, 'var(--blue)')}</div>
     ${A.note ? `<p class="note">${A.note}</p>` : ''}
@@ -280,7 +287,7 @@ function weekView() {
     <p class="note">Haftada bir, aynı saatte tartıl.</p>`;
 }
 const PROG = [['kurallar', 'list', 'Kurallar', `${RULES.length} madde`], ['saatler', 'clock', 'Öğün saatleri', 'Hafta içi ve hafta sonu'], ['muadil', 'swap', 'Muadiller', 'Neyin yerine ne yenir'],
-  ['antrenman', 'gym', 'Antrenman', Object.entries(WORKOUTS).map(([n, w]) => `${DOW[n]} ${w.name.toLocaleLowerCase('tr')}`).join(' · ')], ['vucut', 'person', 'Vücut analizi', `${fmtDM(PLAN.body.date)} ölçümü`], ['ai', 'cam', 'Fotoğrafla kayıt', ''], ['veri', 'down', 'Yedek', 'İndir ya da geri yükle']];
+  ['antrenman', 'gym', 'Antrenman', Object.entries(WORKOUTS).map(([n, w]) => `${DOW[n]} ${w.name.toLocaleLowerCase('tr')}`).join(' · ')], ['vucut', 'person', 'Vücut analizi', `${fmtDM(PLAN.body.date)} ölçümü`], ['ai', 'chat', 'Yapay zekâ', ''], ['veri', 'down', 'Yedek', 'İndir ya da geri yükle']];
 function planView() {
   const t = balance(today), last = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1).pop();
   return `<header class="head"><div><p>${esc(PLAN.dietitian.name || 'Diyetisyen programı')} · ${fmtDM(PLAN.date)}</p><h1>Program</h1></div></header>
@@ -300,9 +307,9 @@ function progSheet(p) {
     antrenman: () => `<h2>Antrenman</h2><p class="lead">${TRAIN.lead}</p>${Object.entries(WORKOUTS).map(([n, w]) => { const g = DAYNAME[n];
       return `<div class="sect">${g} · ${w.name}</div><div class="group"><p class="cap">Öncesi · ${w.pre}</p>${w.ex.map(([a, b]) => `<div class="kv"><span>${a}</span><span>${b}</span></div>`).join('')}<p class="cap" style="padding-bottom:12px">Sonrası · ${w.post}</p></div>`; }).join('')}`,
     vucut: () => `<h2>Vücut analizi</h2><p class="lead">${parse(PLAN.body.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })} ölçümü.</p>${kv(BODY)}`,
-    ai: () => `<h2>Fotoğrafla kayıt</h2><p class="lead">Yediğinin fotoğrafını çek ya da yaz; plana göre işlenir. Bunun için bir Anthropic API anahtarı gerekir. Anahtar yalnızca bu cihazda saklanır, fotoğraflar analiz için doğrudan Anthropic'e gider.</p>
+    ai: () => `<h2>Yapay zekâ</h2><p class="lead">Fotoğraftan ya da yazıdan kayıt ve asistan için bir Anthropic API anahtarı gerekir. Kütüphanede ve geçmişinde bulunanlar anahtarsız kaydedilir. Anahtar yalnızca bu cihazda saklanır, fotoğraflar analiz için doğrudan Anthropic'e gider.</p>
       <div class="group"><div class="kv"><span>Durum</span><span>${aiKey() ? 'Anahtar kayıtlı' : 'Anahtar yok'}</span></div><div class="field"><input id="aikey" type="password" autocomplete="off" placeholder="sk-ant-…"><button class="btn" data-act="savekey">Kaydet</button></div></div>
-      ${aiKey() ? `<button class="textbtn" data-act="delkey">Anahtarı sil</button>` : ''}`,
+      ${usageRows()}${aiKey() ? `<button class="textbtn" data-act="delkey">Anahtarı sil</button>` : ''}`,
     veri: () => `<h2>Yedek</h2><p class="lead">Kayıtların bu cihazda durur. Telefon değiştirmeden önce yedek al.</p><div class="group"><button class="opt" data-act="export"><span>Yedeği indir</span>${ic('down')}</button><button class="opt" data-act="import"><span>Yedekten yükle</span>${ic('right')}</button></div>`,
   };
   showSheet(S2[p]());
@@ -331,13 +338,6 @@ function openSheet(id) {
     ${s ? `<button class="textbtn" data-act="s-clear">İşareti kaldır</button>` : ''}`);
 }
 function needKey() { progSheet('ai'); }
-function writeSheet(meal) {
-  camMeal = meal.id;
-  showSheet(`<h2>${meal.title}: ne yedin?</h2><p class="lead">Yaz, plana göre işleyeyim.</p>
-    <textarea id="said" placeholder="Örn. 2 yumurta, peynir, 1 dilim ekmek. Avokado yoktu, yerine 5 zeytin yedim."></textarea>
-    <button class="primary" data-act="sendtext">Gönder</button><button class="textbtn" data-act="close">Vazgeç</button>`);
-  setTimeout(() => { const t = document.getElementById('said'); t && t.focus(); }, 320);
-}
 
 /* ---------- Claude ile analiz ---------- */
 const SCHEMA = { type: 'object', additionalProperties: false, required: ['main', 'items', 'extras', 'note'], properties: {
@@ -376,6 +376,7 @@ Emin olamadığın bir şey varsa note alanında tek cümleyle söyle; yoksa bo�
       headers: { 'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({ model: AI_MODEL, max_tokens: 16000, system, messages: [{ role: 'user', content }], output_config: { format: { type: 'json_schema', schema: SCHEMA } } }) });
     const j = await r.json();
+    if (r.ok) track(AI_MODEL, j.usage);
     if (!r.ok) throw new Error(r.status === 401 ? 'API anahtarı geçersiz. Program sekmesinden yenisini gir.' : r.status === 429 ? 'Çok fazla istek; biraz sonra yeniden dene.' : (j.error && j.error.message) || 'İstek başarısız oldu.');
     if (j.stop_reason === 'refusal') throw new Error('Bu içerik analiz edilemedi.');
     const R = JSON.parse((j.content || []).find(b => b.type === 'text').text);
@@ -401,7 +402,202 @@ function applyAI() {
   its.forEach(it => { const x = R.items.find(a => a.id === it.id) || { status: 'skip' }, id = mealId + '.' + it.id;
     d.items[id] = x.status === 'done' ? { s: 'done' } : x.status === 'skip' ? { s: 'skip' } : { s: 'swap', sub: x.sub || 'Farklı bir şey', k: x.kcal, p: x.protein }; });
   d.extras = d.extras.filter(e => e.meal !== mealId || e.adj).concat(R.extras.map(e => ({ meal: mealId, name: e.name, k: e.kcal, p: e.protein })));
+  /* Yapay zekânın tanıdığı her şey kendi kütüphanene girer: bir dahakine çağrısız bulunur. */
+  R.extras.forEach(e => remember(mealId, e.name, e.kcal, e.protein));
+  R.items.forEach(x => { if (x.status === 'swap' && x.sub) remember(mealId, x.sub, x.kcal, x.protein); });
   delete openEv[sel];
+}
+
+/* ---------- Hızlı kayıt ----------
+   Plan dışı yeneni yapay zekâya gitmeden kaydeder: önce kullanıcının kendi geçmişi (S.foods), sonra yerel
+   kütüphane (FOODS). Bulunamazsa yapay zekâ seçeneği sunulur; yapay zekânın bulduğu her şey de geçmişe girer,
+   böylece aynı şey ikinci kez çağrısız kaydedilir. */
+const fold = s => String(s).toLocaleLowerCase('tr').replace(/[çğıöşüâîû]/g, c => 'cgiosuaiu'['çğıöşüâîû'.indexOf(c)]).replace(/[^a-z0-9]+/g, ' ').trim();
+const qLab = q => (Math.floor(q) || '') + (q % 1 ? '½' : '');
+/* Kullanıcının kendi kütüphanesi: k ve p bir porsiyon içindir; c kaç kez, t son tarih, m öğün başına sayı. */
+function remember(meal, n, k, p, u) {
+  const id = fold(n); if (!id || !(k >= 0)) return;
+  const F = S.foods || (S.foods = {}), f = F[id] || (F[id] = { c: 0, m: {} });
+  Object.assign(f, { n, k: Math.round(k), p: Math.round((p || 0) * 10) / 10 }); if (u) f.u = u;
+  f.c++; f.t = today; f.m[meal] = (f.m[meal] || 0) + 1;
+}
+const qScore = (f, meal) => (f.m[meal] || 0) * 3 + f.c + Math.max(0, 14 - (parse(today) - parse(f.t || today)) / 864e5);
+function qFind(meal, q) {
+  const mine = Object.entries(S.foods || {}).map(([id, f]) => ({ id, n: f.n, u: f.u || '', k: f.k, p: f.p, mine: true, s: qScore(f, meal) })).sort((a, b) => b.s - a.s);
+  const t = fold(q).split(' ').filter(Boolean);
+  if (!t.length) return mine.slice(0, 8);
+  const lib = FOODS.map(f => ({ id: fold(f.n), n: f.n, u: f.u, k: f.k, p: f.p, a: f.a }));
+  const hit = x => { const w = fold([x.n, ...(x.a || [])].join(' ')).split(' '); return t.every(y => w.some(z => z.startsWith(y))); };
+  const seen = new Set(), head = fold(q), out = [];
+  for (const x of [...mine, ...lib]) if (!seen.has(x.id) && hit(x)) { seen.add(x.id); out.push(x); }
+  /* Kendi kayıtların önde; sonra adı aranan şeyle başlayanlar. Sıralama kararlı. */
+  const rank = x => (x.mine ? 2 : 0) + (fold(x.n).startsWith(head) ? 1 : 0);
+  return out.map((x, i) => [x, i]).sort((a, b) => rank(b[0]) - rank(a[0]) || a[1] - b[1]).map(a => a[0]).slice(0, 12);
+}
+
+let Q = null;   /* { meal, tray: [{ id, n, u, k, p, q }], mode: null | 'yerine' | 'ek', res: [] } */
+const qOpen = meal => itemsOf(meal, sel).filter(i => !i.optional && !stOf(peek(sel), meal, i));
+const qMode = () => { const meal = MEALS.find(m => m.id === Q.meal), open = qOpen(meal);
+  if (!open.length) return 'ek'; if (Q.mode) return Q.mode;
+  /* Kendiliğinden: yenen, öğünün açık kısmının yarısını geçiyorsa planın yerine sayılır. */
+  return Q.tray.reduce((t, x) => t + x.k * x.q, 0) >= open.reduce((t, i) => t + i.k, 0) * .5 ? 'yerine' : 'ek'; };
+function quickSheet(meal) {
+  Q = { meal: meal.id, tray: [], mode: null, res: [] }; sheet = 'quick';
+  showSheet(`<h2>${meal.title}: ne yedin?</h2>
+    <label class="qbox">${ic('search')}<input id="q" type="search" autocomplete="off" placeholder="Ara: iskender, simit, ayran…" enterkeyhint="done"></label>
+    <div id="qtray"></div><div id="qres"></div>`);
+  qPaint();
+  setTimeout(() => { const t = document.getElementById('q'); t && t.focus(); }, 320);
+}
+function qPaint() {
+  const meal = MEALS.find(m => m.id === Q.meal), inp = document.getElementById('q'), q = inp ? inp.value.trim() : '';
+  const tk = Q.tray.reduce((t, x) => t + x.k * x.q, 0), tp = Q.tray.reduce((t, x) => t + x.p * x.q, 0), mode = qMode(), open = qOpen(meal);
+  document.getElementById('qtray').innerHTML = !Q.tray.length ? '' : `<div class="group" style="margin-top:12px">${Q.tray.map((x, i) =>
+    `<div class="row"><span class="b"><span class="n">${esc(x.n)}</span><span class="m">${esc(x.u ? x.u + ' · ' : '')}${num(x.k * x.q)} kcal · ${num(x.p * x.q)} g protein</span></span>${stepperQ(i, x.q)}</div>`).join('')}</div>
+    ${open.length ? `<div class="seg" style="margin:0 0 6px"><button class="${mode === 'yerine' ? 'on' : ''}" data-act="qmode" data-m="yerine">Planın yerine</button><button class="${mode === 'ek' ? 'on' : ''}" data-act="qmode" data-m="ek">Plana ek</button></div>
+      <p class="note" style="padding:6px 6px 12px">${mode === 'yerine' ? `Öğünün işaretlenmemiş kalemleri atlandı sayılır; kalan öğünler buna göre dengelenir.` : `Öğünün planı olduğu gibi kalır; bu, üstüne eklenir.`}</p>` : ''}
+    <button class="primary" data-act="qsave">${ic('check')}Kaydet · ${num(tk)} kcal</button>`;
+  Q.res = qFind(meal.id, q).filter(x => !Q.tray.some(t => t.id === x.id));
+  const rows = Q.res.map((x, i) => `<button class="opt" data-act="qadd" data-i="${i}"><span>${esc(x.n)}<small>${esc(x.u ? x.u + ' · ' : '')}${num(x.k)} kcal${x.mine ? ' · senin kaydın' : ''}</small></span>${ic('plus')}</button>`).join('');
+  const ai = q ? `<button class="opt" data-act="qai"><span>“${esc(q)}”<small>Yapay zekâyla işle${aiKey() ? '' : ' · API anahtarı gerekli'}</small></span>${ic('pen')}</button>` : '';
+  document.getElementById('qres').innerHTML = !q && !Q.res.length
+    ? (Q.tray.length ? '' : `<p class="lead" style="padding-top:14px">Yediğin şeyi ara. Kaydettiklerin burada birikir; bir dahakine tek dokunuşla eklersin.</p>`)
+    : `<div class="sect">${q ? 'Sonuçlar' : 'Son yediklerin'}</div><div class="group">${rows}${ai}</div>${q && !Q.res.length ? `<p class="note">Kütüphanede yok. Yapay zekâ işlerse bir dahakine burada çıkar.</p>` : ''}`;
+}
+const stepperQ = (i, q) => `<span class="stepper"><button data-act="qq" data-i="${i}" data-n="-0.5" aria-label="Azalt">${ic('minus')}</button><b>${qLab(q)}</b><button data-act="qq" data-i="${i}" data-n="0.5" aria-label="Artır">${ic('plus')}</button></span>`;
+function qSave() {
+  const d = day(sel), meal = MEALS.find(m => m.id === Q.meal), mode = qMode();
+  Q.tray.forEach(x => { d.extras.push({ meal: meal.id, name: x.q === 1 ? x.n : `${x.n} × ${qLab(x.q)}`, k: Math.round(x.k * x.q), p: Math.round(x.p * x.q * 10) / 10 }); remember(meal.id, x.n, x.k, x.p, x.u); });
+  if (mode === 'yerine') { lockMain(sel, meal); qOpen(meal).forEach(it => d.items[meal.id + '.' + it.id] = { s: 'skip' }); }
+  if (mealStat(meal, sel).resolved) delete openEv[sel];
+}
+
+/* ---------- Kullanım sayacı ----------
+   Her çağrının token kullanımı ay ay toplanır; maliyeti tahmin değil ölçümle konuşmak için. */
+function track(model, u) {
+  if (!u) return;
+  try {
+    const o = JSON.parse(localStorage.getItem(USEKEY) || '{}'), m = today.slice(0, 7), x = o[m] || (o[m] = { n: 0, usd: 0, in: 0, out: 0 });
+    const [pi, po] = PRICE[model] || [0, 0], cw = u.cache_creation_input_tokens || 0, cr = u.cache_read_input_tokens || 0;
+    x.n++; x.in += (u.input_tokens || 0) + cw + cr; x.out += u.output_tokens || 0;
+    x.usd += ((u.input_tokens || 0) * pi + cw * pi * 1.25 + cr * pi * 0.1 + (u.output_tokens || 0) * po) / 1e6;
+    localStorage.setItem(USEKEY, JSON.stringify(o));
+  } catch (e) {}
+}
+function usageRows() {
+  let x = null; try { x = JSON.parse(localStorage.getItem(USEKEY) || '{}')[today.slice(0, 7)]; } catch (e) {}
+  if (!x || !x.n) return '';
+  const usd = x.usd.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: x.usd < 1 ? 3 : 2 });
+  return `<div class="sect">Bu ay</div><div class="group"><div class="kv"><span>İstek</span><span>${num(x.n)}</span></div><div class="kv"><span>Yaklaşık maliyet</span><span>${usd} $</span></div></div>`;
+}
+
+/* ---------- Asistan ----------
+   Genel sohbet: Haiku, düşünme kapalı, akışla. Programın tamamı sistem isteminde (önbelleğe alınır);
+   günün anlık durumu her soruyla birlikte <durum> içinde gider. Sohbet gün boyu saklanır, ertesi gün sıfırlanır. */
+let CHAT = [], chatBusy = false, chatErr = '';
+const chatLoad = () => { try { const o = JSON.parse(localStorage.getItem(CHATKEY) || 'null'); CHAT = o && o.d === today ? o.m : []; } catch (e) { CHAT = []; } };
+const chatSave = () => { try { localStorage.setItem(CHATKEY, JSON.stringify({ d: today, m: CHAT })); } catch (e) {} };
+
+const CHAT_SYSTEM = () => `Bu bir diyet takip uygulamasının içindeki asistansın. Kullanıcı, diyetisyeninin hazırladığı programı uyguluyor. Programın tamamı aşağıda JSON olarak var (k tahmini kcal, p tahmini protein gramı). Her mesajla birlikte <durum> içinde bugünün anlık kaydı gelir: saat, öğünlerin durumu, yenenler, kalan kalori ve protein, uygulamanın kendi hesapladığı telafiler.
+
+Nasıl cevap verirsin:
+- Türkçe, kısa ve doğrudan. Cevap telefonda okunacak; çoğu cevap 2-5 cümle. Liste gerekiyorsa satır başına "- " koy. Başlık, tablo, kalın yazı kullanma.
+- Program diyetisyenindir. Programı değiştirmeyi, öğün atlamayı ya da kaloriyi daha da kısmayı önerme. Sapmayı programın kendi muadilleriyle (swaps, kalemlerin subs alanı) ve uygulamanın telafi önerileriyle dengele. Programda karşılığı olmayan bir şey için yaklaşık bir öneri ver ve diyetisyenine danışmasını söyle.
+- Kalori ve protein söylerken <durum>daki değerleri kullan. Kendin tahmin ediyorsan "yaklaşık" de.
+- Dışarıda yemek, davet, tatil gibi durumlarda suçlama yok. En iyi seçeneği söyle, günün kalanının nasıl dengeleneceğini anlat: tek bir öğün günü bozmaz, kalan öğünlere devam etmek önemli.
+- Tıbbi bir şikâyet, ilaç, hastalık, hamilelik ya da yeme bozukluğu işareti varsa diyetisyenine veya doktoruna yönlendir.
+- Kayıt yapamazsın. Kullanıcı bir şey yediğini söylerse uygulamada nasıl kaydedeceğini kısaca hatırlat: öğüne dokununca kalemler açılır; "Hepsini yedim" hepsini işaretler; satırdaki üç nokta muadil seçtirir; kalem düğmesi yenen şeyi aratır ya da yazdırır; kamera fotoğraftan kaydeder. Plandan sapınca kalan öğünlere telafi satırları kendiliğinden eklenir.
+
+Program:
+${JSON.stringify(PLAN)}`;
+
+/* Günün anlık durumu, düz metin. */
+function dayContext() {
+  const k = today, d = peek(k), A = adjust(k), B = balance(k), now = new Date();
+  const lines = [`${fmtLong(k)}, saat ${pad(now.getHours())}:${pad(now.getMinutes())}${isWknd(k) ? ' (hafta sonu saatleri)' : ''}`];
+  MEALS.forEach(m => {
+    const its = itemsOf(m, k).filter(i => !i.optional), st = mealStat(m, k);
+    const other = (d.extras || []).some(e => e.meal === m.id && !e.adj);
+    const head = `${m.title}${m.time ? ' ' + timeOf(m, k) : ''}: ${st.resolved ? (st.skip === st.total ? (other ? 'plan yerine başka şey yendi' : 'atlandı') : 'tamam') : st.ok + st.skip ? 'kısmen' : 'açık'}`;
+    const rows = its.map(it => { const s = stOf(d, m, it), key = m.id + '.' + it.id, ov = A.over[key];
+      const nm = label(it) + (it.id === 'ana' ? ' (ana yemek)' : '');
+      if (!s) return `  - ${ov ? ov.name + ' (bugün için azaltıldı)' : nm}: açık · ${ov ? ov.k : it.k} kcal`;
+      if (s.s === 'skip') return `  - ${nm}: atlandı`;
+      if (s.s === 'swap') return `  - ${nm} yerine ${s.sub}${s.k != null ? ` · ${s.k} kcal, ${s.p} g protein` : ''}`;
+      return `  - ${s.name || nm}: yendi`; });
+    (d.extras || []).filter(e => e.meal === m.id).forEach(e => rows.push(`  - ${e.adj ? 'telafi' : 'plan dışı'}: ${e.name} · ${num(e.k)} kcal, ${num(e.p)} g protein`));
+    A.adds.filter(a => a.meal === m.id && a.xi < 0).forEach(a => rows.push(`  - uygulamanın telafi önerisi: ${a.name} · ${a.k} kcal`));
+    lines.push(head, ...rows);
+  });
+  lines.push(`Planın günlük toplamı: ${num(B.tk)} kcal, ${num(B.tp)} g protein.`,
+    `İşaretlenenlerde yenen: ${num(B.ek)} kcal, ${num(B.ep)} g protein.`,
+    `İşaretlenen öğünlerde plana göre: ${Math.abs(B.gk) < 30 ? 'dengede' : B.gk > 0 ? num(B.gk) + ' kcal eksik' : num(-B.gk) + ' kcal fazla'}, protein ${Math.abs(B.gp) < 3 ? 'dengede' : B.gp > 0 ? num(B.gp) + ' g eksik' : num(-B.gp) + ' g fazla'}.`);
+  if (A.note) lines.push('Uygulamanın notu: ' + A.note);
+  MAIN_MEALS.forEach(m => lines.push(`Bu hafta ${m.title.toLocaleLowerCase('tr')} ana yemek kotası: ${Object.entries(GROUPS).map(([g, x]) => `${x.name} ${quotaUsed(k, m.id, g)}/${x.perWeek}`).join(', ')}`));
+  const W = WORKOUTS[parse(k).getDay()];
+  lines.push(`Su: ${d.water}/${WATER_GOAL} bardak. Kahve: ${d.coffee}/${COFFEE_MAX}. Yürüyüş: ${d.walk ? 'yapıldı' : 'yapılmadı'}.`,
+    W ? `Bugün antrenman var (${TRAIN.time}, ${W.name}): ${d.gym ? 'yapıldı' : 'henüz yapılmadı'}.` : 'Bugün planlı antrenman yok.');
+  const ws = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1);
+  if (ws.length) lines.push(`Son tartı: ${ws[ws.length - 1].kg.toLocaleString('tr-TR')} kg (${fmtDM(ws[ws.length - 1].d)}); ilk kayıt ${ws[0].kg.toLocaleString('tr-TR')} kg. Hedef ${PLAN.goal.kg} kg.`);
+  return lines.join('\n');
+}
+
+const SUGGEST = ['Akşam ne yesem?', 'Dışarıda yiyeceğim, ne sipariş edeyim?', 'Protein açığımı nasıl kapatırım?', 'Canım tatlı çekti, ne yapayım?'];
+const fmtMsg = t => esc(t.replace(/\*\*(.+?)\*\*/g, '$1').replace(/^#+\s*/gm, '').trim());
+function chatSheet() {
+  sheet = 'chat';
+  const msgs = CHAT.map((m, i) => `<div class="msg ${m.role === 'user' ? 'u' : 'a'}" ${i === CHAT.length - 1 && m.role === 'assistant' ? 'id="live"' : ''}>${m.role === 'user' ? esc(m.show) : m.content ? fmtMsg(m.content) : '<span class="typing"><i></i><i></i><i></i></span>'}</div>`).join('');
+  const intro = CHAT.length ? '' : `<p class="lead">Programın ve bugünün kaydı elimde. Ne istersen sor.</p><div class="chips">${SUGGEST.map(q => `<button data-act="chatq">${q}</button>`).join('')}</div>`;
+  const keep = document.getElementById('said2'), draft = keep ? keep.value : '';
+  showSheet(`<div class="between" style="align-items:center;padding-right:6px"><h2>Asistan</h2>${CHAT.length ? `<button class="pill" data-act="chatnew">Yeni sohbet</button>` : ''}</div>
+    ${intro}<div class="chat">${msgs}</div>${chatErr ? `<p class="err">${esc(chatErr)}</p>` : ''}
+    <div class="ask"><textarea id="said2" rows="1" placeholder="Bir şey sor…" enterkeyhint="send"></textarea><button class="send" data-act="chatsend" aria-label="Gönder" ${chatBusy ? 'disabled' : ''}>${ic('up')}</button></div>`);
+  const t = document.getElementById('said2'); t.value = draft; grow(t);
+  $sheet().scrollTop = $sheet().scrollHeight;
+}
+const grow = t => { t.style.height = 'auto'; t.style.height = Math.min(120, t.scrollHeight) + 'px'; };
+function openChat() {
+  if (!aiKey()) return needKey();
+  chatLoad(); chatErr = ''; chatSheet();
+  if (!CHAT.length) setTimeout(() => { const t = document.getElementById('said2'); t && t.focus(); }, 320);
+}
+async function chatSend(text) {
+  if (chatBusy || !text) return;
+  chatBusy = true; chatErr = '';
+  const q = { role: 'user', content: `<durum>\n${dayContext()}\n</durum>\n\n${text}`, show: text }, a = { role: 'assistant', content: '' };
+  CHAT.push(q, a); const t0 = document.getElementById('said2'); if (t0) t0.value = ''; chatSheet();
+  const paint = () => { const el = document.getElementById('live'); if (el) { el.innerHTML = fmtMsg(a.content); $sheet().scrollTop = $sheet().scrollHeight; } };
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: CHAT_MODEL, max_tokens: 4000, stream: true, thinking: { type: 'disabled' }, output_config: { effort: 'low' },
+        system: [{ type: 'text', text: CHAT_SYSTEM(), cache_control: { type: 'ephemeral' } }],
+        messages: CHAT.slice(0, -1).map(({ role, content }) => ({ role, content })) }) });
+    if (!r.ok) { const j = await r.json().catch(() => ({}));
+      throw new Error(r.status === 401 ? 'API anahtarı geçersiz. Program sekmesinden yenisini gir.' : r.status === 429 ? 'Çok fazla istek; biraz sonra yeniden dene.' : r.status === 529 ? 'Servis şu an yoğun; biraz sonra yeniden dene.' : (j.error && j.error.message) || 'İstek başarısız oldu.'); }
+    const rd = r.body.getReader(), dec = new TextDecoder(), usage = {}; let buf = '', stop = '';
+    for (;;) {
+      const { done, value } = await rd.read(); if (done) break;
+      buf += dec.decode(value, { stream: true }); let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (!line.startsWith('data:')) continue;
+        const ev = JSON.parse(line.slice(5));
+        if (ev.type === 'message_start') Object.assign(usage, ev.message.usage);
+        else if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta') { a.content += ev.delta.text; paint(); }
+        else if (ev.type === 'message_delta') { stop = ev.delta.stop_reason || stop; Object.assign(usage, ev.usage); }
+        else if (ev.type === 'error') throw new Error(ev.error && ev.error.message || 'Akış kesildi.');
+      }
+    }
+    track(CHAT_MODEL, usage);
+    if (stop === 'refusal' && !a.content) throw new Error('Bu soruya cevap veremiyorum.');
+    if (!a.content) throw new Error('Boş cevap geldi; yeniden dene.');
+  } catch (e) {
+    /* Başarısız soru-cevap çifti geçmişten çıkar, soru kutuya geri döner. */
+    CHAT.splice(CHAT.indexOf(q), 2); chatErr = e.message || 'Bağlantı kurulamadı.';
+    chatBusy = false; if (sheet !== 'chat') return; chatSheet(); const t = document.getElementById('said2'); if (t) { t.value = text; grow(t); } return;
+  }
+  chatBusy = false; chatSave(); if (sheet === 'chat') chatSheet();
 }
 
 /* ---------- Etkileşim ---------- */
@@ -424,6 +620,10 @@ document.addEventListener('click', e => {
     case 'unextra': d.extras.splice(+el.dataset.i, 1); break;
     case 'sheet': openSheet(el.dataset.id); return;
     case 'prog': progSheet(el.dataset.p); return;
+    case 'chat': openChat(); return;
+    case 'chatq': chatSend(el.textContent); return;
+    case 'chatsend': chatSend(document.getElementById('said2').value.trim()); return;
+    case 'chatnew': if (chatBusy) return; CHAT = []; chatErr = ''; chatSave(); chatSheet(); return;
     case 'close': closeSheet(); return;
     case 'all': lockMain(sel, meal); A.adds.filter(x => x.meal === meal.id && x.xi < 0).forEach(({ xi, ...x }) => d.extras.push({ ...x, adj: true }));
       setAll(meal, (c, i, k) => c || (i.optional ? null : eaten(k))); delete openEv[sel]; buzz(); break;
@@ -433,8 +633,13 @@ document.addEventListener('click', e => {
     case 'main': d.main[meal.id] = el.dataset.m; closeSheet(); break;
     case 'quick': { const m = nextMeal(); sel = today; tab = 'today'; render(); if (!m) return; if (!aiKey()) return needKey(); camMeal = m.id; document.getElementById('cam').click(); return; }
     case 'photo': if (!aiKey()) return needKey(); camMeal = meal.id; document.getElementById('cam').click(); return;
-    case 'write': if (!aiKey()) return needKey(); writeSheet(meal); return;
-    case 'sendtext': { const v = document.getElementById('said').value.trim(); if (v) analyze(camMeal, { text: v }); return; }
+    case 'write': quickSheet(meal); return;
+    case 'qadd': { const x = Q.res[+el.dataset.i], had = Q.tray.find(t => t.id === x.id); if (had) had.q += 1; else Q.tray.push({ ...x, q: 1 });
+      const t = document.getElementById('q'); t.value = ''; qPaint(); buzz(); return; }
+    case 'qq': { const x = Q.tray[+el.dataset.i]; x.q = Math.min(4, x.q + +el.dataset.n); if (x.q < .5) Q.tray.splice(+el.dataset.i, 1); qPaint(); return; }
+    case 'qmode': Q.mode = el.dataset.m; qPaint(); return;
+    case 'qai': { const v = document.getElementById('q').value.trim(); if (!v) return; if (!aiKey()) return needKey(); analyze(Q.meal, { text: v }); return; }
+    case 'qsave': if (!Q.tray.length) return; qSave(); closeSheet(); buzz(); break;
     case 'applyai': applyAI(); closeSheet(); buzz(); break;
     case 'savekey': { const v = document.getElementById('aikey').value.trim(); if (!v) return; try { localStorage.setItem(AIKEY, v); } catch (x) {} closeSheet(); break; }
     case 'delkey': try { localStorage.removeItem(AIKEY); } catch (x) {} closeSheet(); break;
@@ -461,7 +666,12 @@ document.addEventListener('change', e => {
   if (e.target.id === 'cam') { e.target.value = ''; shrink(f).then(image => analyze(camMeal, { image })).catch(() => {}); }
   if (e.target.id === 'file') f.text().then(t => { const o = JSON.parse(t); if (o && o.days) { S = o; save(); closeSheet(); render(); } }).catch(() => {});
 });
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'custom') document.querySelector('[data-act="s-custom"]').click(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id === 'q') { e.preventDefault(); const b = document.querySelector('[data-act="qadd"]'); b ? b.click() : e.target.blur(); }
+  if (e.key === 'Enter' && e.target.id === 'custom') document.querySelector('[data-act="s-custom"]').click();
+  if (e.key === 'Enter' && !e.shiftKey && e.target.id === 'said2') { e.preventDefault(); document.querySelector('[data-act="chatsend"]').click(); }
+});
+document.addEventListener('input', e => { if (e.target.id === 'said2') grow(e.target); if (e.target.id === 'q') qPaint(); });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return; const t = key(new Date());
   if (t !== today) { if (sel === today) sel = t; today = t; } if (!document.body.classList.contains('sheet-open')) render();
