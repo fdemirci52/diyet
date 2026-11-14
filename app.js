@@ -62,7 +62,7 @@ const WORKOUTS = {
 };
 const GYM_GOAL = 3;
 const WATER_GOAL = 10, WATER_ML = 250, COFFEE_MAX = 2, WALK_GOAL = 3;
-const AI_MODEL = 'claude-opus-5-5';
+const AI_MODEL = 'claude-sonnet-5-5';
 
 /* ---------- Durum ---------- */
 const KEY = 'diyet-v1', AIKEY = 'diyet-ai-key';
