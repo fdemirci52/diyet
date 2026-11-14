@@ -161,7 +161,13 @@ function adjust(k) {
   let { gk, gp } = b;
   const meals = [...new Set(b.open.map(o => o.m))].filter(m => m.time);
   if (!meals.length) return out;
-  const add = (meal, id, name, kk, pp) => { out.adds.push({ meal: meal.id, id, name, k: kk, p: pp }); gk -= kk; gp -= pp; };
+  /* Kabul edilen telafiler öneriyi değiştirmesin: açık öğünlerdeki telafi kayıtları farka geri eklenir,
+     öneriler hep aynı farktan hesaplanır ve kabul edilenler işaretli görünür. */
+  const d0 = peek(k), openIds = new Set(b.open.map(o => o.m.id));
+  (d0.extras || []).forEach(e => { if (e.adj && openIds.has(e.meal)) { gk += e.k; gp += e.p; } });
+  /* Telafi zincirlenmesin: önceki öğünlerde yenen telafi 250 kcal'i geçtiyse yenisi önerilmez. */
+  const paid = (d0.extras || []).reduce((t, e) => t + (e.adj && !openIds.has(e.meal) ? e.k : 0), 0);
+  const add = (meal, id, name, kk, pp) => { if (paid >= 250) return; out.adds.push({ meal: meal.id, id, name, k: kk, p: pp }); gk -= kk; gp -= pp; };
   if (gp >= 8 && gk > -100) {
     const main = meals.find(m => m.main), gece = meals.find(m => m.id === 'gece');
     if (main) { const n = Math.min(3, Math.max(1, Math.round(gp / 7))); add(main, 'x-prot', `+${n * 30} g et / tavuk (${n} köfte kadar)`, n * 55, n * 7); }
@@ -170,6 +176,7 @@ function adjust(k) {
   }
   if (gk >= 60) { const n = Math.min(2, Math.max(1, Math.round(gk / 62))); add(meals[0], 'x-ekmek', `+${n} dilim tam buğday ekmeği`, 62 * n, 2.5 * n); }
   if (gk >= 90) add(meals.find(m => m.id === 'ikindi' || m.id === 'gece') || meals[meals.length - 1], 'x-ara', '+1 porsiyon meyve ya da 2 ceviz', 80, 1);
+  out.adds.forEach(a => a.xi = (d0.extras || []).findIndex(e => e.adj && e.id === a.id && e.meal === a.meal));
   if (out.adds.length) out.why = 'Eksik kalanı dengelemek için eklendi';
   if (gk <= -80) {
     let need = -gk, cut = 0;
@@ -229,8 +236,8 @@ function mealPanel(meal, k, A, st) {
   let h = cap ? `<p class="cap">${cap}</p>` : '';
   if (meal.modes) h += `<div class="seg">${meal.modes.map((m, i) => `<button class="${(d.mode[meal.id] || 0) === i ? 'on' : ''}" data-act="mode" data-meal="${meal.id}" data-i="${i}">${m}</button>`).join('')}</div>`;
   h += itemsOf(meal, k).map(it => rowHTML(meal, it, d, A.over[meal.id + '.' + it.id])).join('');
-  h += A.adds.filter(a => a.meal === meal.id).map(a => `<div class="row plus" data-act="add" data-i="${A.adds.indexOf(a)}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(a.name)}</span><span class="m">${A.why}</span></span></div>`).join('');
-  h += (d.extras || []).map((e, i) => e.meal !== meal.id ? '' : `<div class="row done" data-act="unextra" data-i="${i}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(e.name)}</span><span class="m">${e.adj ? 'Telafi' : 'Plan dışı'} · yaklaşık ${num(e.k)} kcal</span></span></div>`).join('');
+  h += A.adds.filter(a => a.meal === meal.id).map(a => `<div class="row ${a.xi >= 0 ? 'done' : 'plus'}" data-act="add" data-i="${A.adds.indexOf(a)}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(a.name)}</span><span class="m">${A.why}</span></span></div>`).join('');
+  h += (d.extras || []).map((e, i) => e.meal !== meal.id || (e.adj && A.adds.some(a => a.xi === i)) ? '' : `<div class="row done" data-act="unextra" data-i="${i}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(e.name)}</span><span class="m">${e.adj ? 'Telafi' : 'Plan dışı'} · yaklaşık ${num(e.k)} kcal</span></span></div>`).join('');
   if (st.resolved) return h + `<button class="textbtn" data-act="clear" data-meal="${meal.id}">İşaretleri sıfırla</button>`;
   return h + `<div class="actions"><button class="primary" data-act="all" data-meal="${meal.id}">${ic('check')}${st.ok + st.skip ? 'Kalanını yedim' : 'Hepsini yedim'}</button>
       <button class="sq" data-act="photo" data-meal="${meal.id}" aria-label="Fotoğrafla kaydet">${ic('cam')}</button>
@@ -465,12 +472,12 @@ document.addEventListener('click', e => {
     case 'toggle': { const id = el.dataset.id, m = MEALS.find(x => x.id === id.split('.')[0]);
       if (d.items[id]) delete d.items[id]; else { lockMain(sel, m); d.items[id] = eaten(id); }
       if (mealStat(m, sel).resolved && m.time) delete openEv[sel]; buzz(); break; }
-    case 'add': d.extras.push({ ...A.adds[+el.dataset.i], adj: true }); buzz(); break;
+    case 'add': { const x = A.adds[+el.dataset.i]; if (x.xi >= 0) d.extras.splice(x.xi, 1); else { const { xi, ...keep } = x; d.extras.push({ ...keep, adj: true }); } buzz(); break; }
     case 'unextra': d.extras.splice(+el.dataset.i, 1); break;
     case 'sheet': openSheet(el.dataset.id); return;
     case 'prog': progSheet(el.dataset.p); return;
     case 'close': closeSheet(); return;
-    case 'all': lockMain(sel, meal); A.adds.filter(x => x.meal === meal.id).forEach(x => d.extras.push({ ...x, adj: true }));
+    case 'all': lockMain(sel, meal); A.adds.filter(x => x.meal === meal.id && x.xi < 0).forEach(({ xi, ...x }) => d.extras.push({ ...x, adj: true }));
       setAll(meal, (c, i, k) => c || (i.optional ? null : eaten(k))); delete openEv[sel]; buzz(); break;
     case 'skipmeal': lockMain(sel, meal); setAll(meal, (c, i) => i.optional ? null : { s: 'skip' }); delete openEv[sel]; break;
     case 'clear': setAll(meal, () => null); d.extras = d.extras.filter(x => x.meal !== meal.id); openEv[sel] = meal.id; break;
