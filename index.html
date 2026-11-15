@@ -242,6 +242,8 @@ body.sheet-open .sheet { transform: none; }
 .qchips button { height: 34px; border-radius: 10px; background: var(--sheet); font-size: 14px; font-weight: 600; text-align: center; color: var(--muted); }
 .qchips button.on { background: var(--fg); color: var(--bg); }
 .qchips button:active { transform: scale(.92); }
+.qchips.free { margin: 0 2px 14px; }
+.qchips.free button:not(.on) { background: var(--sheet-fill); }
 .fphoto { display: flex; align-items: center; gap: 16px; padding: 4px 6px 18px; }
 .fphoto p { font-size: 14px; color: var(--muted); line-height: 1.35; margin-bottom: 10px; }
 .ph { width: 88px; height: 88px; border-radius: 22px; flex: none; background: var(--sheet-fill); color: var(--muted); display: grid; place-items: center; overflow: hidden; }
@@ -271,6 +273,9 @@ a.primary { text-decoration: none; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 2px 16px; }
 .chips button { min-height: 36px; padding: 7px 14px; border-radius: 999px; background: var(--sheet-fill); font-size: 14px; font-weight: 500; line-height: 1.3; }
 .chips button:active { transform: scale(.96); }
+.chips.pick { padding-bottom: 12px; }
+.chips.pick button { color: var(--muted); font-weight: 600; }
+.chips.pick button.on { background: var(--fg); color: var(--bg); }
 .chat { display: flex; flex-direction: column; gap: 8px; padding: 0 2px 4px; }
 .msg { max-width: 86%; padding: 10px 14px; border-radius: 20px; font-size: 16px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }
 .msg.u { align-self: flex-end; background: var(--fg); color: var(--bg); border-bottom-right-radius: 6px; }

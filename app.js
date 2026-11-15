@@ -192,6 +192,7 @@ const P = {
   x: '<path d="M7 7l10 10M17 7L7 17"/>',
   link: '<path d="M10 14a4 4 0 005.700 0l3-3a4 4 0 00-5.700-5.700l-1 1M14 10a4 4 0 00-5.700 0l-3 3a4 4 0 005.700 5.700l1-1"/>',
   search: '<circle cx="11" cy="11" r="6.500"/><path d="M20 20l-4.200-4.200"/>',
+  pill: '<path d="M10.500 20.500l10-10a4.950 4.950 0 10-7-7l-10 10a4.950 4.950 0 107 7zM8.500 8.500l7 7"/>',
 };
 const ic = n => `<svg class="i" viewBox="0 0 24 24">${P[n] || ''}</svg>`;
 const ring = (pct, size, w, color) => { const r = (size - w) / 2, C = 2 * Math.PI * r, c = size / 2;
@@ -223,7 +224,7 @@ function mealPanel(meal, k, A, st) {
   if (meal.modes) h += `<div class="seg">${meal.modes.map((m, i) => `<button class="${(d.mode[meal.id] || 0) === i ? 'on' : ''}" data-act="mode" data-meal="${meal.id}" data-i="${i}">${m}</button>`).join('')}</div>`;
   h += itemsOf(meal, k).map(it => rowHTML(meal, it, d, A.over[meal.id + '.' + it.id])).join('');
   h += A.adds.filter(a => a.meal === meal.id).map(a => `<div class="row ${a.xi >= 0 ? 'done' : 'plus'}" data-act="add" data-i="${A.adds.indexOf(a)}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(a.name)}</span><span class="m">${A.why}</span></span></div>`).join('');
-  h += (d.extras || []).map((e, i) => e.meal !== meal.id || (e.adj && A.adds.some(a => a.xi === i)) ? '' : `<div class="row ${e.pl ? '' : 'done'}" data-act="unextra" data-i="${i}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(e.name)}</span><span class="m">${e.adj ? 'Telafi' : e.pl ? 'Planlandı' : 'Plan dışı'}${KC ? ` · yaklaşık ${num(e.k)} kcal` : ''}</span></span></div>`).join('');
+  h += (d.extras || []).map((e, i) => e.meal !== meal.id || (e.adj && A.adds.some(a => a.xi === i)) ? '' : `<div class="row ${e.pl ? '' : 'done'}" data-act="${e.adj ? 'unextra' : 'xedit'}" data-i="${i}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(e.name)}</span><span class="m">${e.adj ? 'Telafi' : e.pl ? 'Planlandı' : 'Plan dışı'}${KC ? ` · yaklaşık ${num(e.k)} kcal` : ''}</span></span></div>`).join('');
   if (planned(meal, k)) return h + `<div class="actions" style="grid-template-columns:1fr"><button class="primary" data-act="plok" data-meal="${meal.id}">${ic('check')}Yedim</button></div>
     <button class="textbtn" data-act="plno" data-meal="${meal.id}">Planı kaldır</button>`;
   if (st.resolved) return h + `<button class="textbtn" data-act="clear" data-meal="${meal.id}">İşaretleri sıfırla</button>`;
@@ -261,13 +262,93 @@ function gymEvent(k, W, open) {
     <div class="actions" style="grid-template-columns:1fr"><button class="primary ${d.gym ? 'is-done' : ''}" data-act="gym">${ic('check')}${d.gym ? 'Yapıldı' : 'Antrenmanı yaptım'}</button></div>`;
   return eventHTML({ cls: d.gym ? 'done' : '', node: d.gym ? 'check' : 'gym', title: 'Antrenman', sub: d.gym ? 'Tamam' : `${W.name} · ${W.ex.length} hareket`, right: `<span class="t">${TRAIN.time}</span>`, act: 'data-act="ev" data-id="gym"', panel });
 }
+/* ---------- Takviyeler ----------
+   Kullanıcının kendi girdiği takviyeler: S.supps = [{ id, n, dose, at }]. Programın parçası değil, kullanıcı verisi.
+   at: öğün kimliği (o öğünden sonra), 'yat' (yatmadan önce), 'SS:DD' (belirli saat) ya da '' (saat önemsiz).
+   Günlük işaret: S.days[k].supps = { id: 1 }. Öğüne bağlı olanlar zaman çizelgesinde öğünün hemen ardından çıkar;
+   öğün işaretlenince sıradaki iş o olur ve kendiliğinden açılır. */
+const SUPS = () => S.supps || [];
+const isHM = at => /^\d\d:\d\d$/.test(at || '');
+/* Programdan kalkmış bir öğüne bağlı takviye saat önemsiz sayılır. */
+const anc = s => s.at === 'yat' || isHM(s.at) || MEALS.some(m => m.id === s.at) ? s.at : '';
+const supTaken = (k, id) => !!(peek(k).supps || {})[id];
+const supAt = at => at === 'yat' ? 'Yatmadan önce' : isHM(at) ? 'Saat ' + at : !at ? 'Saat önemsiz'
+  : (m => !m ? 'Saat önemsiz' : m.time ? m.title + ' sonrası' : m.title)(MEALS.find(m => m.id === at));
+const hm = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const supRank = at => at === 'yat' ? 3000 : isHM(at) ? hm(at) : !at ? 4000 : (m => m.time ? hm(m.time) + 1 : 0)(MEALS.find(m => m.id === at));
+const supList = at => SUPS().filter(s => anc(s) === at);
+/* Zaman çizelgesindeki gruplar; saat önemsizler Gün boyu bölümünde. */
+const supGroups = () => [...new Set(SUPS().map(anc))].filter(Boolean).map(at => ({ at, list: supList(at) }));
+function supDue(at, k) {
+  if (k !== today) return false;
+  const n = new Date(), now = n.getHours() * 60 + n.getMinutes();
+  if (at === 'yat') { const ms = MEALS.filter(m => m.time), last = ms[ms.length - 1]; return now >= 22 * 60 + 30 || (!!last && mealStat(last, k).resolved); }
+  if (isHM(at)) return hm(at) - now <= 15;
+  const m = MEALS.find(x => x.id === at); return mealStat(m, k).resolved && !planned(m, k);
+}
+/* Açık duran olay: zamanı gelmiş ve alınmamış takviye öne geçer; sıradaki öğünün vakti geldiyse (yarım saat kala
+   ile gecikmiş sayılana kadar) öğün açılır. */
+function defOpen(k) {
+  if (k !== today) return '';
+  const next = nextMeal(), g = supGroups().find(g => supDue(g.at, k) && g.list.some(s => !supTaken(k, s.id))), mt = next ? minsTo(next, k) : 0;
+  if (g && (!next || mt > 30 || mt < -90)) return 'sp:' + g.at;
+  return next ? next.id : '';
+}
+const supRow = (s, k) => `<div class="row ${supTaken(k, s.id) ? 'done' : ''}" data-act="sup" data-id="${esc(s.id)}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(s.n)}</span>${s.dose ? `<span class="m">${esc(s.dose)}</span>` : ''}</span></div>`;
+function supEvent(g, k, open) {
+  const id = 'sp:' + g.at, taken = g.list.filter(s => supTaken(k, s.id)).length, all = taken === g.list.length;
+  const sub = all ? 'Tamam' : taken ? `${taken} / ${g.list.length} alındı` : g.list.map(s => s.n).join(' · ');
+  const right = isHM(g.at) ? `<span class="t">${g.at}</span>` : g.at === 'yat' ? `<span class="t">Yatarken</span>` : '';
+  const panel = open !== id ? '' : g.list.map(s => supRow(s, k)).join('') + (all ? ''
+    : `<div class="actions" style="grid-template-columns:1fr"><button class="primary" data-act="supall" data-at="${esc(g.at)}">${ic('check')}${g.list.length > 1 ? 'Hepsini aldım' : 'Aldım'}</button></div>`);
+  return eventHTML({ cls: all ? 'done' : '', node: all ? 'check' : 'pill', title: 'Takviye', sub, right, act: `data-act="ev" data-id="${id}"`, panel });
+}
+let SP = null;   /* düzenlenen takviye: { id, n, dose, at, del } */
+function supsSheet() {
+  sheet = 'sups';
+  const L = [...SUPS()].sort((a, b) => supRank(anc(a)) - supRank(anc(b)));
+  showSheet(`<div class="between" style="align-items:center;padding-right:6px"><h2>Takviyeler</h2>${L.length ? `<button class="pill" data-act="spnew">${ic('plus')}Yeni</button>` : ''}</div>
+    <p class="lead">Aldığın takviyeler ve ne zaman aldığın. Öğüne bağlı olanlar öğünün hemen ardından çıkar; öğünü işaretleyince sırada onlar olur.</p>
+    ${L.length ? `<div class="group">${L.map(s => `<button class="opt" data-act="spedit" data-id="${esc(s.id)}"><span>${esc(s.n)}<small>${[s.dose, supAt(anc(s))].filter(Boolean).map(esc).join(' · ')}</small></span>${ic('right')}</button>`).join('')}</div>`
+      : `<button class="primary" data-act="spnew">${ic('plus')}İlk takviyeni ekle</button><p class="note" style="padding-top:12px">Örneğin omega 3 kahvaltıdan sonra, magnezyum yatmadan önce, kreatin günün herhangi bir saatinde.</p>`}
+    <p class="note">Bu liste senin kaydın; diyetisyenin programını değiştirmez. Yeni bir takviyeye başlamadan önce ona danış.</p>`);
+}
+function supForm() {
+  sheet = 'sup';
+  const f = SP, at = f.at, kind = isHM(at) ? 'saat' : at;
+  const ch = (v, n) => `<button class="${kind === v ? 'on' : ''}" data-act="spat" data-at="${v}">${n}</button>`;
+  const m = MEALS.find(x => x.id === at);
+  const how = at === 'yat' ? 'Günün sonunda, gece öğününden sonra hatırlatılır.' : isHM(at) ? 'Zaman çizelgesinde bu saate yerleşir.'
+    : !at ? 'Gün boyu bölümünde durur; ne zaman alırsan işaretle.' : `${m.title} işaretlenince sırada bu olur.`;
+  showSheet(`<h2>${f.id ? 'Takviyeyi düzenle' : 'Yeni takviye'}</h2>
+    <div class="group form" style="margin-top:12px"><label class="fl"><span>Ad</span><input id="spn" value="${esc(f.n)}" placeholder="Örn. Omega 3" autocomplete="off"></label>
+      <label class="fl"><span>Miktar</span><input id="spd" value="${esc(f.dose)}" placeholder="Örn. 1 kapsül, 3 damla, 5 g" autocomplete="off"></label></div>
+    <div class="sect">Ne zaman?</div>
+    <div class="chips pick">${MEALS.map(x => ch(x.id, x.time ? x.title + ' sonrası' : x.title)).join('')}${ch('yat', 'Yatmadan önce')}${ch('saat', 'Belirli saatte')}${ch('', 'Saat önemsiz')}</div>
+    ${isHM(at) ? `<div class="group form"><label class="fl"><span>Saat</span><input id="spt" type="time" value="${at}"></label></div>` : ''}
+    <p class="note">${how}</p>
+    <button class="primary" data-act="spsave" ${f.n.trim() ? '' : 'disabled'}>${ic('check')}Kaydet</button>
+    ${f.id ? `<button class="textbtn ${f.del ? 'over' : ''}" data-act="spdel">${f.del ? 'Silmek için tekrar dokun' : 'Sil'}</button>` : `<button class="textbtn" data-act="spback">Vazgeç</button>`}`);
+}
+const spSync = () => { if (!SP) return; const n = document.getElementById('spn'), d = document.getElementById('spd'), t = document.getElementById('spt');
+  if (n) SP.n = n.value; if (d) SP.dose = d.value; if (t && isHM(t.value)) SP.at = t.value; };
+function spSave() {
+  const n = SP.n.trim(); if (!n) return;
+  const L = S.supps || (S.supps = []), x = { id: SP.id || 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), n, dose: SP.dose.trim(), at: SP.at };
+  const i = L.findIndex(s => s.id === x.id); i >= 0 ? L[i] = x : L.push(x);
+}
 function stepper(act, val, over) {
   return `<span class="stepper"><button data-act="${act}" data-n="-1" aria-label="Azalt">${ic('minus')}</button><b class="${over ? 'over' : ''}">${val}</b><button data-act="${act}" data-n="1" aria-label="Artır">${ic('plus')}</button></span>`;
 }
 function todayView() {
   const d = peek(sel), st = dayStat(sel), A = adjust(sel), B = balance(sel), wk = weekOf(sel);
   const next = sel === today ? nextMeal() : null, W = WORKOUTS[parse(sel).getDay()];
-  const open = openEv[sel] !== undefined ? openEv[sel] : next ? next.id : '';
+  const open = openEv[sel] !== undefined ? openEv[sel] : defOpen(sel);
+  /* Takviyeler: öğüne bağlı olan öğünün ardından, saatli olan saatine göre, yatarken olan en sonda. */
+  const G = supGroups(), sp = at => G.filter(g => g.at === at).map(g => supEvent(g, sel, open)).join('');
+  const timed = G.filter(g => isHM(g.at)).sort((a, b) => a.at < b.at ? -1 : 1);
+  const before = m => { if (!m.time) return ''; const t = timeOf(m, sel), out = timed.filter(g => !g.put && g.at < t); out.forEach(g => g.put = true); return out.map(g => supEvent(g, sel, open)).join(''); };
+  const anytime = SUPS().filter(s => !anc(s));
   const strip = wk.map(k => { const dt = parse(k);
     return `<button class="day ${k === sel ? 'sel' : ''} ${k === today ? 'today' : ''}" data-act="day" data-k="${k}"><small>${DOW[dt.getDay()]}</small><span class="disc" style="--p:${dayStat(k).pct}"><b>${dt.getDate()}</b></span></button>`; }).join('');
   const litres = (d.water * WATER_ML / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
@@ -279,12 +360,13 @@ function todayView() {
     <div class="strip">${strip}</div>
     <div class="tiles">${KC ? tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)') : (() => { const ms = MEALS.filter(m => m.time), r = ms.filter(m => mealStat(m, sel).resolved).length; return tile('Öğün', r, '', `/ ${ms.length} öğün`, r / ms.length, 'var(--fg)'); })()}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', `/ ${WATER_L} L`, d.water / WATER_GOAL, 'var(--blue)')}</div>
     ${A.note ? `<p class="note">${A.note}</p>` : ''}
-    <div class="tl">${MEALS.map(m => mealEvent(m, sel, A, next, open) + (m.id === TRAIN.after && W ? gymEvent(sel, W, open) : '')).join('')}</div>
+    <div class="tl">${MEALS.map(m => before(m) + mealEvent(m, sel, A, next, open) + sp(m.id) + (m.id === TRAIN.after && W ? gymEvent(sel, W, open) : '')).join('')}${timed.filter(g => !g.put).map(g => supEvent(g, sel, open)).join('')}${sp('yat')}</div>
     <div class="sect">Gün boyu</div>
     <section class="card">
       <div class="row"><span class="b"><span class="n">Su</span><span class="m">${d.water} bardak · ${litres} / ${WATER_L} L</span></span>${stepper('water', d.water)}</div>
       <div class="row"><span class="b"><span class="n">Kahve</span><span class="m ${d.coffee > COFFEE_MAX ? 'over' : ''}">${d.coffee > COFFEE_MAX ? 'Günlük sınır aşıldı' : PLAN.daily.coffee.note}</span></span>${stepper('coffee', d.coffee, d.coffee > COFFEE_MAX)}</div>
       <div class="row ${d.walk ? 'done' : ''}" data-act="walk"><span class="b"><span class="n">${PLAN.daily.walk.name}</span><span class="m">Bu hafta ${walks} / ${WALK_GOAL}</span></span><span class="chk">${ic('check')}</span></div>
+      ${anytime.map(s => `<div class="row ${supTaken(sel, s.id) ? 'done' : ''}" data-act="sup" data-id="${esc(s.id)}"><span class="b"><span class="n">${esc(s.n)}</span><span class="m">${esc(s.dose ? s.dose + ' · saat önemsiz' : 'Takviye · saat önemsiz')}</span></span><span class="chk">${ic('check')}</span></div>`).join('')}
       ${W ? '' : `<div class="row ${d.gym ? 'done' : ''}" data-act="gym"><span class="b"><span class="n">Ağırlık antrenmanı</span><span class="m">Bugün planlı değil · bu hafta ${gyms} / ${GYM_GOAL}</span></span><span class="chk">${ic('check')}</span></div>`}
     </section>`;
 }
@@ -325,7 +407,7 @@ function weekView() {
     <button class="primary" data-act="report" style="margin:8px 0 4px">${ic('up')}Haftalık raporu gönder</button>
     <p class="note" style="text-align:center">Haftalık kontrolden önce diyetisyenine.</p>`;
 }
-const PROG = [['kurallar', 'list', 'Kurallar', `${RULES.length} madde`], ['saatler', 'clock', 'Öğün saatleri', 'Hafta içi ve hafta sonu'], ['muadil', 'swap', 'Muadiller', 'Neyin yerine ne yenir'], ['gidalar', 'ogle', 'Gıdalarım', ''],
+const PROG = [['kurallar', 'list', 'Kurallar', `${RULES.length} madde`], ['saatler', 'clock', 'Öğün saatleri', 'Hafta içi ve hafta sonu'], ['muadil', 'swap', 'Muadiller', 'Neyin yerine ne yenir'], ['gidalar', 'ogle', 'Gıdalarım', ''], ['takviye', 'pill', 'Takviyeler', ''],
   ['antrenman', 'gym', 'Antrenman', Object.entries(WORKOUTS).map(([n, w]) => `${DOW[n]} ${w.name.toLocaleLowerCase('tr')}`).join(' · ')], ['vucut', 'person', 'Vücut analizi', `${fmtDM(PLAN.body.date)} ölçümü`], ['ai', 'chat', 'Yapay zekâ', ''], ['baglanti', 'link', 'Program bağlantısı', 'Yükle ya da paylaş'], ['veri', 'down', 'Yedek', 'İndir ya da geri yükle']];
 function planView() {
   const t = balance(today), last = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1).pop();
@@ -333,7 +415,7 @@ function planView() {
     <section class="card pad"><span class="label">Hedef</span><div class="num">${PLAN.goal.kg.toLocaleString('tr-TR')}<em>kg</em></div><p class="note" style="padding:8px 0 14px">${esc(PLAN.goal.text)}</p>
       <div class="tiles two" style="margin:0"><div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Şu an</span><strong style="margin-top:8px">${last.kg.toLocaleString('tr-TR')}<em>kg</em></strong><small>${PLAN.body.fat} yağ</small></div>
         <div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Günlük plan</span>${KC ? `<strong style="margin-top:8px">${num(t.tk)}<em>kcal</em></strong><small>${num(t.tp)} g protein</small>` : `<strong style="margin-top:8px">${num(t.tp)}<em>g</em></strong><small>protein</small>`}</div></div></section>
-    <section class="card">${PROG.map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiCode() ? 'Davet kodu kayıtlı' : aiKey() ? 'API anahtarı kayıtlı' : PROXY_URL ? 'Davet kodu gerekli' : 'API anahtarı gerekli') : id === 'gidalar' ? (Object.keys(S.foods || {}).length ? `${Object.keys(S.foods).length} gıda` : 'Kendi ürünlerin') : m}</span></span>${ic('right')}</button>`).join('')}</section>
+    <section class="card">${PROG.map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiCode() ? 'Davet kodu kayıtlı' : aiKey() ? 'API anahtarı kayıtlı' : PROXY_URL ? 'Davet kodu gerekli' : 'API anahtarı gerekli') : id === 'gidalar' ? (Object.keys(S.foods || {}).length ? `${Object.keys(S.foods).length} gıda` : 'Kendi ürünlerin') : id === 'takviye' ? (SUPS().length ? `${SUPS().length} takviye` : 'Ne zaman alacağını hatırlat') : m}</span></span>${ic('right')}</button>`).join('')}</section>
     <p class="note">Kayıtlar yalnızca bu cihazda tutulur. Kalori ve protein değerleri yaklaşık tahminlerdir.</p>`;
 }
 function progSheet(p) {
@@ -377,9 +459,10 @@ function openSheet(id) {
     return `<button class="opt" data-act="main" data-meal="${meal.id}" data-m="${m.id}"><span>${m.name}<small>Bu hafta ${u} / ${q}</small></span>${tick(cur)}</button>`; }).join('')}</div>`;
   showSheet(`<h2>${esc(label(it))}</h2><p class="lead">${meal.title}${hint(it) ? ' · ' + esc(hint(it)) : ''}</p>
     <div class="group"><button class="opt" data-act="s-done"><span>Yedim</span>${tick(s === 'done')}</button><button class="opt" data-act="s-skip"><span>Atladım</span>${tick(s === 'skip')}</button></div>
+    ${s === 'swap' && st.k != null ? `<div class="sect">${esc(st.src ? st.src.n : st.sub)}: ne kadar?</div>${qchips('sq', st.q || 1)}` : ''}
     ${mains}<div class="sect">Yerine bunu yedim</div>
     <div class="group">${(it.subs || []).map((x, i) => `<button class="opt" data-act="s-sub" data-i="${i}"><span>${esc(x)}</span>${tick(s === 'swap' && st.sub === x)}</button>`).join('')}
-      <div class="field"><input id="custom" type="text" placeholder="Başka bir şey…" enterkeyhint="done"><button class="btn" data-act="s-custom">Ekle</button></div></div>
+      <div class="field"><input id="custom" type="text" placeholder="Başka bir şey… (ara ya da yaz)" enterkeyhint="done" autocomplete="off"><button class="btn" data-act="s-custom">Ekle</button></div><div id="csug"></div></div>
     ${s ? `<button class="textbtn" data-act="s-clear">İşareti kaldır</button>` : ''}`);
 }
 function needKey() { progSheet('ai'); }
@@ -559,9 +642,49 @@ function qPaint() {
 const qLater = meal => sel > today || (sel === today && !!meal.time && minsTo(meal, sel) > 30);
 function qSave(pl) {
   const d = day(sel), meal = MEALS.find(m => m.id === Q.meal), mode = qMode(), f = pl ? { pl: true } : {};   /* src: ölçeksiz değerler, onayda kütüphaneye */
-  Q.tray.forEach(x => { d.extras.push({ meal: meal.id, name: x.q === 1 ? x.n : `${x.n} × ${qLab(x.q)}`, k: Math.round(x.k * x.q), p: Math.round(x.p * x.q * 10) / 10, ...(pl ? { pl: true, src: { n: x.n, k: x.k, p: x.p, u: x.u } } : {}) }); if (!pl) remember(meal.id, x.n, x.k, x.p, x.u); });
+  Q.tray.forEach(x => { d.extras.push({ meal: meal.id, name: x.q === 1 ? x.n : `${x.n} × ${qLab(x.q)}`, k: Math.round(x.k * x.q), p: Math.round(x.p * x.q * 10) / 10, q: x.q, src: { n: x.n, k: x.k, p: x.p, u: x.u }, ...(pl ? { pl: true } : {}) }); if (!pl) remember(meal.id, x.n, x.k, x.p, x.u); });
   if (mode === 'yerine') { lockMain(sel, meal); qOpen(meal).forEach(it => d.items[meal.id + '.' + it.id] = { s: 'skip', ...f }); }
   if (mealStat(meal, sel).resolved) delete openEv[sel];
+}
+
+/* ---------- Kayıt düzenleme ----------
+   Kaydedilmiş bir plan dışı yemeğin ya da kalem yerine yenenin porsiyonu, adı ve değerleri sonradan değişir.
+   Kayıtlar ölçeksiz hâlini src ({ n, k, p, u }) ve porsiyonu q olarak taşır; eskilerde değerler tek porsiyon sayılır. */
+const baseOf = (n, e) => e.src ? { n: e.src.n, k: e.src.k, p: e.src.p, u: e.src.u || '', q: e.q || 1 } : { n, k: e.k || 0, p: e.p || 0, u: '', q: 1 };
+const scaled = (b, q) => ({ name: q === 1 ? b.n : `${b.n} × ${qLab(q)}`, k: Math.round(b.k * q), p: Math.round(b.p * q * 10) / 10, q, src: { n: b.n, k: b.k, p: b.p, u: b.u } });
+/* Düzeltilen değer kişisel kütüphaneye geçer (kullanım sayısı artmaz); kullanıcının kendi ürünlerine dokunulmaz. */
+function learn(n, k, p, u) {
+  const id = fold(n), F = S.foods || (S.foods = {}); if (!id || (F[id] && F[id].own)) return;
+  const f = F[id] || (F[id] = { c: 0, m: {}, t: today });
+  Object.assign(f, { n, k: Math.round(k), p: Math.round(p * 10) / 10 }); if (u) f.u = u;
+}
+let XE = null;   /* düzenlenen plan dışı kayıt: { i, meal, n, u, bk, bp, q, pl } */
+function xOpen(i) {
+  const e = day(sel).extras[i], b = baseOf(e.name, e);
+  XE = { i, meal: e.meal, n: b.n, u: b.u, bk: b.k, bp: b.p, q: b.q, pl: !!e.pl }; xSheet();
+}
+function xSheet() {
+  sheet = 'xedit';
+  const meal = MEALS.find(m => m.id === XE.meal);
+  showSheet(`<h2>Kaydı düzenle</h2><p class="lead">${meal.title}${XE.pl ? ' · planlandı, henüz yenmedi' : ''}</p>
+    <div class="group form"><label class="fl"><span>Ad</span><input id="xn" value="${esc(XE.n)}" autocomplete="off"></label>
+      ${XE.u ? `<div class="fl"><span>Porsiyon</span><span class="wide" style="color:var(--muted)">${esc(XE.u)}</span></div>` : ''}</div>
+    <div class="sect">Ne kadar yedin?</div>${qchips('xq', XE.q)}
+    <div class="group form">${KC ? `<label class="fl"><span>Kalori</span><input id="xk" value="${Math.round(XE.bk * XE.q)}" inputmode="decimal"></label>` : ''}
+      <label class="fl"><span>Protein</span><input id="xp" value="${num1(XE.bp * XE.q)}" inputmode="decimal"></label></div>
+    <p class="note">Değerler yediğin miktar içindir. Düzelttiğin değer bir dahaki seferde de kullanılır.</p>
+    <button class="primary" data-act="xsave">${ic('check')}Kaydet</button><button class="textbtn" data-act="xdel">Kaydı sil</button>`);
+}
+const qchips = (act, cur) => `<div class="qchips free">${QS.map(v => `<button class="${v === cur ? 'on' : ''}" data-act="${act}" data-v="${v}">${qLab(v)}</button>`).join('')}</div>`;
+/* Alanlardaki değerler seçili porsiyon içindir; ölçeksiz değere çevrilir. */
+const xSync = () => { const n = document.getElementById('xn'), k = document.getElementById('xk'), p = document.getElementById('xp');
+  if (n && n.value.trim()) XE.n = n.value.trim(); if (k) XE.bk = fNum(k.value) / XE.q; if (p) XE.bp = fNum(p.value) / XE.q; };
+/* Kalem yerine yenen için kütüphane önerileri (#custom yazılırken). */
+let CS = [];
+function csPaint() {
+  const box = document.getElementById('csug'), v = document.getElementById('custom').value.trim(); if (!box) return;
+  CS = v ? qFind(sheet.split('.')[0], v).slice(0, 4) : [];
+  box.innerHTML = CS.map((x, i) => `<button class="opt" data-act="s-food" data-i="${i}"><span>${esc(x.n)}<small>${esc(x.u || '')}${KC ? `${x.u ? ' · ' : ''}${num(x.k)} kcal` : ''}</small></span>${ic('plus')}</button>`).join('');
 }
 
 /* ---------- Gıdalarım ----------
@@ -720,6 +843,7 @@ function weekReport(k0) {
   const gyms = wk.filter(k => peek(k).gym).length, walks = wk.filter(k => peek(k).walk).length;
   L.push(`*Antrenman:* ${gyms} / ${GYM_GOAL} · *Yürüyüş:* ${walks} / ${WALK_GOAL}`);
   const cof = past.map(k => peek(k).coffee).filter(Boolean); if (cof.some(c => c > COFFEE_MAX)) L.push(`*Kahve:* ${cof.filter(c => c > COFFEE_MAX).length} gün sınırın üstünde`);
+  if (SUPS().length && logged.length) L.push(`*Takviye:* ${SUPS().map(s => `${s.n} ${logged.filter(k => supTaken(k, s.id)).length}/${logged.length}`).join(' · ')}`);
   /* Günler: yalnızca plandan farklı olanlar yazılır, gerisi "plana uygun". */
   L.push('', '*Günler*');
   past.forEach(k => {
@@ -814,6 +938,7 @@ function dayContext() {
   const W = WORKOUTS[parse(k).getDay()];
   lines.push(`Su: ${d.water}/${WATER_GOAL} bardak. Kahve: ${d.coffee}/${COFFEE_MAX}. Yürüyüş: ${d.walk ? 'yapıldı' : 'yapılmadı'}.`,
     W ? `Bugün antrenman var (${TRAIN.time}, ${W.name}): ${d.gym ? 'yapıldı' : 'henüz yapılmadı'}.` : 'Bugün planlı antrenman yok.');
+  if (SUPS().length) lines.push('Kullanıcının kendi takviyeleri (programın parçası değil): ' + SUPS().map(s => `${s.n}${s.dose ? ' ' + s.dose : ''} (${supAt(anc(s)).toLocaleLowerCase('tr')}): ${supTaken(k, s.id) ? 'alındı' : 'alınmadı'}`).join('; ') + '.');
   const ws = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1);
   if (ws.length) lines.push(`Son tartı: ${ws[ws.length - 1].kg.toLocaleString('tr-TR')} kg (${fmtDM(ws[ws.length - 1].d)}); ilk kayıt ${ws[0].kg.toLocaleString('tr-TR')} kg. Hedef ${PLAN.goal.kg} kg.`);
   return lines.join('\n');
@@ -886,14 +1011,33 @@ document.addEventListener('click', e => {
     case 'day': sel = el.dataset.k; if (el.dataset.go) { tab = 'today'; window.scrollTo(0, 0); } break;
     case 'week': sel = addDays(sel, 7 * +el.dataset.n); if (sel > today) sel = today; break;
     case 'gotoday': sel = today; break;
-    case 'ev': { const next = sel === today ? nextMeal() : null, cur = openEv[sel] !== undefined ? openEv[sel] : next ? next.id : ''; openEv[sel] = cur === el.dataset.id ? '' : el.dataset.id; break; }
+    case 'ev': { const cur = openEv[sel] !== undefined ? openEv[sel] : defOpen(sel); openEv[sel] = cur === el.dataset.id ? '' : el.dataset.id; break; }
+    case 'sup': { const s = d.supps || (d.supps = {}), id = el.dataset.id, x = SUPS().find(y => y.id === id); if (!x) return;
+      if (s[id]) delete s[id]; else s[id] = 1;
+      if (openEv[sel] === 'sp:' + anc(x) && supList(anc(x)).every(y => s[y.id])) delete openEv[sel]; buzz(); break; }
+    case 'supall': { const s = d.supps || (d.supps = {}); supList(el.dataset.at).forEach(y => s[y.id] = 1); delete openEv[sel]; buzz(); break; }
+    case 'spnew': { const m = MEALS.find(x => x.time); SP = { n: '', dose: '', at: m ? m.id : '' }; supForm(); return; }
+    case 'spedit': { const x = SUPS().find(y => y.id === el.dataset.id); if (!x) return; SP = { ...x, at: anc(x) }; supForm(); return; }
+    case 'spat': { spSync(); const v = el.dataset.at; SP.at = v === 'saat' ? (isHM(SP.at) ? SP.at : '08:00') : v; SP.del = false; supForm(); return; }
+    case 'spsave': spSync(); spSave(); SP = null; supsSheet(); break;
+    case 'spdel': if (!SP.del) { spSync(); SP.del = true; return supForm(); } S.supps = SUPS().filter(y => y.id !== SP.id); SP = null; supsSheet(); break;
+    case 'spback': SP = null; supsSheet(); return;
     case 'toggle': { const id = el.dataset.id, m = MEALS.find(x => x.id === id.split('.')[0]);
       if (d.items[id]) delete d.items[id]; else { lockMain(sel, m); d.items[id] = eaten(id); }
       if (mealStat(m, sel).resolved && m.time) delete openEv[sel]; buzz(); break; }
     case 'add': { const x = A.adds[+el.dataset.i]; if (x.xi >= 0) d.extras.splice(x.xi, 1); else { const { xi, ...keep } = x; d.extras.push({ ...keep, adj: true }); } buzz(); break; }
     case 'unextra': d.extras.splice(+el.dataset.i, 1); break;
+    case 'xedit': xOpen(+el.dataset.i); return;
+    case 'xq': xSync(); XE.q = +el.dataset.v; xSheet(); buzz(); return;
+    case 'xsave': { xSync(); const e = d.extras[XE.i]; if (!e) return closeSheet();
+      Object.assign(e, scaled({ n: XE.n, k: XE.bk, p: XE.bp, u: XE.u }, XE.q)); learn(XE.n, XE.bk, XE.bp, XE.u); XE = null; closeSheet(); buzz(); break; }
+    case 'xdel': d.extras.splice(XE.i, 1); XE = null; closeSheet(); break;
+    case 'sq': { const st = d.items[sheet], b = baseOf(st.sub, st), x = scaled(b, +el.dataset.v);
+      d.items[sheet] = { s: 'swap', sub: x.name, k: x.k, p: x.p, q: x.q, src: x.src }; save(); render(); openSheet(sheet); buzz(); return; }
+    case 's-food': { const x = CS[+el.dataset.i], meal2 = sheet.split('.')[0];
+      d.items[sheet] = { s: 'swap', sub: x.n, k: x.k, p: x.p, q: 1, src: { n: x.n, k: x.k, p: x.p, u: x.u || '' } }; remember(meal2, x.n, x.k, x.p, x.u); closeSheet(); buzz(); break; }
     case 'sheet': openSheet(el.dataset.id); return;
-    case 'prog': if (el.dataset.p === 'gidalar') return foodsSheet(); if (el.dataset.p === 'baglanti') { PL = {}; return planSheet(); } progSheet(el.dataset.p); if (el.dataset.p === 'ai' && aiCode()) loadMe().then(() => { if (sheet === 'ai') progSheet('ai'); }); return;
+    case 'prog': if (el.dataset.p === 'gidalar') return foodsSheet(); if (el.dataset.p === 'takviye') return supsSheet(); if (el.dataset.p === 'baglanti') { PL = {}; return planSheet(); } progSheet(el.dataset.p); if (el.dataset.p === 'ai' && aiCode()) loadMe().then(() => { if (sheet === 'ai') progSheet('ai'); }); return;
     case 'planpaste': { const v = document.getElementById('plink').value.trim(); if (!v) return;
       unpackPlan(v).then(p2 => { PL = { incoming: p2 }; planSheet(); }).catch(x => { PL = { err: x.message || 'Bağlantı okunamadı.' }; planSheet(); }); return; }
     case 'planload': try { localStorage.setItem(PLANKEY, JSON.stringify(PL.incoming)); } catch (x) { PL = { err: 'Program kaydedilemedi.' }; return planSheet(); } reloadClean(); return;
@@ -946,7 +1090,7 @@ document.addEventListener('click', e => {
     case 'qai': { const v = document.getElementById('q').value.trim(); if (!v) return; const go = () => analyze(Q.meal, { text: v }); if (aiReady(go)) go(); return; }
     case 'qsave': if (!Q.tray.length) return; qSave(!!el.dataset.pl); closeSheet(); buzz(); break;
     case 'plok': { /* plan gerçekleşti: işaretler kalkar, yenenler kütüphaneye girer */
-      d.extras.forEach(e => { if (e.meal === meal.id && e.pl) { delete e.pl; if (e.src) remember(meal.id, e.src.n, e.src.k, e.src.p, e.src.u); delete e.src; } });
+      d.extras.forEach(e => { if (e.meal === meal.id && e.pl) { delete e.pl; if (e.src) remember(meal.id, e.src.n, e.src.k, e.src.p, e.src.u); } });
       Object.entries(d.items).forEach(([k, v]) => { if (k.startsWith(meal.id + '.') && v.pl) delete v.pl; }); delete openEv[sel]; buzz(); break; }
     case 'plno': d.extras = d.extras.filter(e => !(e.meal === meal.id && e.pl));
       Object.entries(d.items).forEach(([k, v]) => { if (k.startsWith(meal.id + '.') && v.pl) delete d.items[k]; }); break;
@@ -995,6 +1139,8 @@ document.addEventListener('input', e => {
   if ((e.target.id === 'dname' || e.target.id === 'dphone') && PL) { PL.dirty = true; const b = document.querySelector('[data-act="pset"]'); if (b) b.disabled = false; }
   if (e.target.id === 'said2') grow(e.target);
   if (e.target.id === 'q') qPaint();
+  if (e.target.id === 'custom') csPaint();
+  if (e.target.id === 'spn') { const b = document.querySelector('[data-act="spsave"]'); if (b) b.disabled = !e.target.value.trim(); }
   if (e.target.id === 'fn' || e.target.id === 'fk') { const n = document.getElementById('fn').value.trim(), k = document.getElementById('fk').value.trim(), b = document.querySelector('[data-act="fsave"]');
     if (b) b.disabled = !(n && k && !isNaN(+k.replace(',', '.'))); }
 });
