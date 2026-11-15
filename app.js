@@ -333,10 +333,11 @@ function planView() {
     <section class="card pad"><span class="label">Hedef</span><div class="num">${PLAN.goal.kg.toLocaleString('tr-TR')}<em>kg</em></div><p class="note" style="padding:8px 0 14px">${esc(PLAN.goal.text)}</p>
       <div class="tiles two" style="margin:0"><div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Şu an</span><strong style="margin-top:8px">${last.kg.toLocaleString('tr-TR')}<em>kg</em></strong><small>${PLAN.body.fat} yağ</small></div>
         <div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Günlük plan</span>${KC ? `<strong style="margin-top:8px">${num(t.tk)}<em>kcal</em></strong><small>${num(t.tp)} g protein</small>` : `<strong style="margin-top:8px">${num(t.tp)}<em>g</em></strong><small>protein</small>`}</div></div></section>
-    <section class="card">${PROG.map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiKey() ? 'API anahtarı kayıtlı' : 'API anahtarı gerekli') : id === 'gidalar' ? (Object.keys(S.foods || {}).length ? `${Object.keys(S.foods).length} gıda` : 'Kendi ürünlerin') : m}</span></span>${ic('right')}</button>`).join('')}</section>
+    <section class="card">${PROG.map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiCode() ? 'Davet kodu kayıtlı' : aiKey() ? 'API anahtarı kayıtlı' : PROXY_URL ? 'Davet kodu gerekli' : 'API anahtarı gerekli') : id === 'gidalar' ? (Object.keys(S.foods || {}).length ? `${Object.keys(S.foods).length} gıda` : 'Kendi ürünlerin') : m}</span></span>${ic('right')}</button>`).join('')}</section>
     <p class="note">Kayıtlar yalnızca bu cihazda tutulur. Kalori ve protein değerleri yaklaşık tahminlerdir.</p>`;
 }
 function progSheet(p) {
+  sheet = p;
   const kv = rows => `<div class="group">${rows.map(([a, b]) => `<div class="kv"><span>${a}</span><span>${b}</span></div>`).join('')}</div>`;
   const prose = rows => `<div class="group prose">${rows.map(([a, b]) => `<p>${a}${b ? `<small>${b}</small>` : ''}</p>`).join('')}</div>`;
   const S2 = {
@@ -346,8 +347,12 @@ function progSheet(p) {
     antrenman: () => `<h2>Antrenman</h2><p class="lead">${TRAIN.lead}</p>${Object.entries(WORKOUTS).map(([n, w]) => { const g = DAYNAME[n];
       return `<div class="sect">${g} · ${w.name}</div><div class="group"><p class="cap">Öncesi · ${w.pre}</p>${w.ex.map(([a, b]) => `<div class="kv"><span>${a}</span><span>${b}</span></div>`).join('')}<p class="cap" style="padding-bottom:12px">Sonrası · ${w.post}</p></div>`; }).join('')}`,
     vucut: () => `<h2>Vücut analizi</h2><p class="lead">${parse(PLAN.body.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })} ölçümü.</p>${kv(BODY)}`,
-    ai: () => `<h2>Yapay zekâ</h2><p class="lead">Fotoğraftan ya da yazıdan kayıt ve asistan için bir Anthropic API anahtarı gerekir. Kütüphanede ve geçmişinde bulunanlar anahtarsız kaydedilir. Anahtar yalnızca bu cihazda saklanır, fotoğraflar analiz için doğrudan Anthropic'e gider.</p>
-      <div class="group"><div class="kv"><span>Durum</span><span>${aiKey() ? 'Anahtar kayıtlı' : 'Anahtar yok'}</span></div><div class="field"><input id="aikey" type="password" autocomplete="off" placeholder="sk-ant-…"><button class="btn" data-act="savekey">Kaydet</button></div></div>
+    ai: () => `<h2>Yapay zekâ</h2><p class="lead">Fotoğraftan ya da yazıdan kayıt, etiket okuma ve asistan için ${PROXY_URL ? 'diyetisyeninin verdiği davet kodu' : 'bir Anthropic API anahtarı'} gerekir. Kütüphanede ve geçmişinde bulunanlar bunsuz kaydedilir.</p>
+      ${PROXY_URL ? `<div class="group"><div class="kv"><span>Davet kodu</span><span>${aiCode() ? esc(aiCode()) : 'Yok'}</span></div>
+        ${aiCode() ? `<div class="kv"><span>Bu ayki hak</span><span>${!ME ? '…' : ME.err ? ME.err : `%${Math.min(100, Math.round(ME.usd / ME.budget * 100))} kullanıldı`}</span></div>` : ''}
+        <div class="field"><input id="aicode" type="text" autocomplete="off" autocapitalize="characters" placeholder="Örn. AYSE-7K2M"><button class="btn" data-act="savecode">Kaydet</button></div></div>
+        ${aiCode() ? `<button class="textbtn" data-act="delcode">Kodu kaldır</button>` : ''}<div class="sect">Kendi anahtarınla</div>` : ''}
+      <div class="group"><div class="kv"><span>API anahtarı</span><span>${aiKey() ? 'Kayıtlı' : 'Yok'}</span></div><div class="field"><input id="aikey" type="password" autocomplete="off" placeholder="sk-ant-…"><button class="btn" data-act="savekey">Kaydet</button></div></div>
       <div class="group"><div class="kv"><span>Veri paylaşım onayı</span><span>${aiOk() ? fmtDM(aiOk()) : 'Verilmedi'}</span></div></div>
       ${usageRows()}${aiOk() ? `<button class="textbtn" data-act="aino">Onayı geri al</button>` : ''}${aiKey() ? `<button class="textbtn" data-act="delkey">Anahtarı sil</button>` : ''}`,
     veri: () => `<h2>Yedek</h2><p class="lead">Kayıtların bu cihazda durur. Telefon değiştirmeden önce yedek al.</p><div class="group"><button class="opt" data-act="export"><span>Yedeği indir</span>${ic('down')}</button><button class="opt" data-act="import"><span>Yedekten yükle</span>${ic('right')}</button></div>`,
@@ -383,11 +388,24 @@ function needKey() { progSheet('ai'); }
    Bütün çağrılar aiFetch'ten geçer. Bugün tarayıcıdan doğrudan Anthropic'e, kullanıcının anahtarıyla gider;
    sunucu vekiline geçişte değişecek tek yer burası. Sağlık verisi yurt dışına gittiği için ilk kullanımdan önce
    açık rıza alınır (diyet-ai-ok); rıza yoksa yapay zekâ özellikleri çalışmaz, geri kalan her şey çalışır. */
-const AI_URL = 'https://api.anthropic.com/v1/messages', OKKEY = 'diyet-ai-ok';
-const aiFetch = body => fetch(AI_URL, { method: 'POST', body: JSON.stringify(body),
-  headers: { 'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' } });
-const aiErr = (r, j) => new Error(r.status === 401 ? 'API anahtarı geçersiz. Program sekmesinden yenisini gir.' : r.status === 429 ? 'Çok fazla istek; biraz sonra yeniden dene.'
-  : r.status === 529 ? 'Servis şu an yoğun; biraz sonra yeniden dene.' : (j && j.error && j.error.message) || 'İstek başarısız oldu.');
+const AI_URL = 'https://api.anthropic.com/v1/messages', OKKEY = 'diyet-ai-ok', CODEKEY = 'diyet-ai-code';
+/* Sunucu vekili (server/worker.js). Adres boşken davet kodu seçeneği görünmez, yalnızca kendi anahtarınla çalışır. */
+const PROXY_URL = 'https://diyet-api.basedchimpers.workers.dev';
+const aiCode = () => { try { return PROXY_URL && localStorage.getItem(CODEKEY) || ''; } catch (e) { return ''; } };
+const aiAuth = () => aiCode() || aiKey();
+/* Davet kodu varsa vekile, yoksa kullanıcının kendi anahtarıyla doğrudan Anthropic'e. */
+const aiFetch = body => aiCode()
+  ? fetch(PROXY_URL + '/v1/messages', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', authorization: 'Bearer ' + aiCode() } })
+  : fetch(AI_URL, { method: 'POST', body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' } });
+const aiErr = (r, j) => new Error(r.status === 401 ? (aiCode() ? 'Davet kodu geçersiz. Program → Yapay zekâ bölümünden kontrol et.' : 'API anahtarı geçersiz. Program sekmesinden yenisini gir.')
+  : r.status === 402 ? 'Bu ayın yapay zekâ hakkı doldu. Kütüphane ve geçmişinden kayıt yapmaya devam edebilirsin.'
+  : r.status === 429 ? 'Çok fazla istek; biraz sonra yeniden dene.' : r.status === 529 ? 'Servis şu an yoğun; biraz sonra yeniden dene.'
+  : r.status === 502 ? 'Servis şu an çalışmıyor; diyetisyenine haber ver.' : (j && j.error && j.error.message) || 'İstek başarısız oldu.');
+/* Vekildeki bu ayki kullanım: { name, n, usd, budget }. */
+let ME = null;
+const loadMe = () => !aiCode() ? Promise.resolve(null) : fetch(PROXY_URL + '/v1/me', { headers: { authorization: 'Bearer ' + aiCode() } })
+  .then(r => r.ok ? r.json() : Promise.reject(r.status)).then(j => (ME = j)).catch(x => { ME = { err: x === 401 ? 'Kod geçersiz' : 'Bağlanılamadı' }; return ME; });
 /* Yapılandırılmış çıktılı tek istek; sonucu nesne olarak döndürür. */
 async function aiJSON(body, refusal) {
   const r = await aiFetch(body), j = await r.json().catch(() => ({}));
@@ -400,7 +418,7 @@ const aiOk = () => { try { return localStorage.getItem(OKKEY) || ''; } catch (e)
 let afterOk = null;
 /* Yapay zekâ kapısı: anahtar yoksa ayar sayfası, rıza yoksa aydınlatma metni açılır; onaydan sonra then çalışır. */
 function aiReady(then) {
-  if (!aiKey()) { needKey(); return false; }
+  if (!aiAuth()) { needKey(); return false; }
   if (!aiOk()) { afterOk = then; consentSheet(); return false; }
   return true;
 }
@@ -532,7 +550,7 @@ function qPaint() {
   Q.res = qFind(meal.id, q).filter(x => !Q.tray.some(t => t.id === x.id));
   const rows = Q.res.map((x, i) => `<button class="opt" data-act="qadd" data-i="${i}"><span>${esc(x.n)}<small>${esc(x.u || '')}${KC ? `${x.u ? ' · ' : ''}${num(x.k)} kcal` : ''}${x.mine ? ' · senin' : ''}</small></span><span class="fi">${x.img ? `<img class="th" src="${x.img}" alt="">` : ''}${ic('plus')}</span></button>`).join('');
   const add = `<button class="opt" data-act="fnew" data-ret="${meal.id}" data-q="${esc(q)}"><span>Yeni gıda ekle<small>Kendi ürününü fotoğrafla ya da elle kaydet</small></span>${ic('cam')}</button>`;
-  const ai = q ? `<button class="opt" data-act="qai"><span>“${esc(q)}”<small>Yapay zekâyla işle${aiKey() ? '' : ' · API anahtarı gerekli'}</small></span>${ic('pen')}</button>` : '';
+  const ai = q ? `<button class="opt" data-act="qai"><span>“${esc(q)}”<small>Yapay zekâyla işle${aiAuth() ? '' : PROXY_URL ? ' · davet kodu gerekli' : ' · API anahtarı gerekli'}</small></span>${ic('pen')}</button>` : '';
   document.getElementById('qres').innerHTML = !q && !Q.res.length
     ? (Q.tray.length ? '' : `<p class="lead" style="padding-top:14px">Yediğin şeyi ara. Kaydettiklerin burada birikir; bir dahakine tek dokunuşla eklersin.</p><div class="group">${add}</div>`)
     : `<div class="sect">${q ? 'Sonuçlar' : 'Senin gıdaların'}</div><div class="group">${rows}${ai}${add}</div>${q && !Q.res.length ? `<p class="note">Kütüphanede yok. Yapay zekâ işlerse ya da kendin eklersen bir dahakine burada çıkar.</p>` : ''}`;
@@ -875,7 +893,7 @@ document.addEventListener('click', e => {
     case 'add': { const x = A.adds[+el.dataset.i]; if (x.xi >= 0) d.extras.splice(x.xi, 1); else { const { xi, ...keep } = x; d.extras.push({ ...keep, adj: true }); } buzz(); break; }
     case 'unextra': d.extras.splice(+el.dataset.i, 1); break;
     case 'sheet': openSheet(el.dataset.id); return;
-    case 'prog': if (el.dataset.p === 'gidalar') return foodsSheet(); if (el.dataset.p === 'baglanti') { PL = {}; return planSheet(); } progSheet(el.dataset.p); return;
+    case 'prog': if (el.dataset.p === 'gidalar') return foodsSheet(); if (el.dataset.p === 'baglanti') { PL = {}; return planSheet(); } progSheet(el.dataset.p); if (el.dataset.p === 'ai' && aiCode()) loadMe().then(() => { if (sheet === 'ai') progSheet('ai'); }); return;
     case 'planpaste': { const v = document.getElementById('plink').value.trim(); if (!v) return;
       unpackPlan(v).then(p2 => { PL = { incoming: p2 }; planSheet(); }).catch(x => { PL = { err: x.message || 'Bağlantı okunamadı.' }; planSheet(); }); return; }
     case 'planload': try { localStorage.setItem(PLANKEY, JSON.stringify(PL.incoming)); } catch (x) { PL = { err: 'Program kaydedilemedi.' }; return planSheet(); } reloadClean(); return;
@@ -917,7 +935,7 @@ document.addEventListener('click', e => {
     case 'fnew': FD = { n: el.dataset.q || '', u: '', k: '', p: '', img: '', ret: el.dataset.ret || '' }; foodForm(); return;
     case 'fedit': { const f = S.foods[el.dataset.id]; FD = { id: el.dataset.id, n: f.n, u: f.u || '', k: String(f.k), p: String(f.p).replace('.', ','), img: f.img || '' }; foodForm(); return; }
     case 'fpic': fSync(); document.getElementById('pic').click(); return;
-    case 'fai': fSync(); if (!aiKey()) { FD.err = 'Yapay zekâ için Program → Yapay zekâ bölümünden API anahtarı gir. Değerleri elle de girebilirsin.'; return foodForm(); }
+    case 'fai': fSync(); if (!aiAuth()) { FD.err = 'Yapay zekâ için Program → Yapay zekâ bölümünden ' + (PROXY_URL ? 'davet kodunu' : 'API anahtarı') + ' gir. Değerleri elle de girebilirsin.'; return foodForm(); }
       if (aiReady(foodAI)) foodAI(); return;
     case 'fdel': if (!FD.del) { FD.del = true; fSync(); return foodForm(); } delete S.foods[FD.id]; FD = null; foodsSheet(); break;
     case 'fback': if (FD && FD.ret) { const m = MEALS.find(x => x.id === FD.ret); FD = null; quickSheet(m, true); return; } FD = null; foodsSheet(); return;
@@ -935,6 +953,9 @@ document.addEventListener('click', e => {
     case 'applyai': applyAI(); closeSheet(); buzz(); break;
     case 'savekey': { const v = document.getElementById('aikey').value.trim(); if (!v) return; try { localStorage.setItem(AIKEY, v); } catch (x) {} closeSheet(); break; }
     case 'delkey': try { localStorage.removeItem(AIKEY); } catch (x) {} closeSheet(); break;
+    case 'savecode': { const v = document.getElementById('aicode').value.trim().toUpperCase().replace(/\s+/g, ''); if (!v) return;
+      try { localStorage.setItem(CODEKEY, v); } catch (x) {} ME = null; progSheet('ai'); loadMe().then(() => { if (sheet === 'ai') progSheet('ai'); }); return; }
+    case 'delcode': try { localStorage.removeItem(CODEKEY); } catch (x) {} ME = null; progSheet('ai'); return;
     case 'water': d.water = Math.max(0, d.water + +el.dataset.n); buzz(); break;
     case 'coffee': d.coffee = Math.max(0, d.coffee + +el.dataset.n); break;
     case 'walk': d.walk = !d.walk; buzz(); break;
@@ -956,7 +977,7 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const f = e.target.files && e.target.files[0]; if (!f) return;
   if (e.target.id === 'pic' && FD) { e.target.value = '';
-    Promise.all([thumb(f), shrink(f)]).then(([img, full]) => { FD.img = img; FD.full = full; FD.err = ''; if (sheet !== 'food') return; if (aiKey() && aiOk()) foodAI(); else foodForm(); })
+    Promise.all([thumb(f), shrink(f)]).then(([img, full]) => { FD.img = img; FD.full = full; FD.err = ''; if (sheet !== 'food') return; if (aiAuth() && aiOk()) foodAI(); else foodForm(); })
       .catch(x => { FD.err = x.message; foodForm(); }); return; }
   if (e.target.id === 'cam') { e.target.value = ''; shrink(f).then(image => analyze(camMeal, { image })).catch(() => {}); }
   if (e.target.id === 'file') f.text().then(t => { const o = JSON.parse(t); if (!o || !o.days) return;

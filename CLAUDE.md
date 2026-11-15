@@ -14,6 +14,7 @@ Diyetisyen planını takip eden kişisel PWA. iPhone'da ana ekrana eklenip uygul
 | `foods.js` | Yerel yemek kütüphanesi (`FOODS`): yaklaşık 160 yaygın yemek ve içecek, porsiyon başına yaklaşık kcal ve protein |
 | `app.js` | Motor, görünümler, olay işleyiciler; plan verisini yalnızca okur |
 | `sw.js` | Service worker, önce ağ; önbellek yalnızca çevrimdışıyken |
+| `server/` | Yapay zekâ vekili (Cloudflare Worker): `worker.js`, `wrangler.toml`, kurulum ve davet kodu komutları `README.md`'de |
 | `manifest.json`, `icon-*.png` | PWA kimliği |
 
 ## Çalıştırma ve yayın
@@ -40,7 +41,7 @@ Planı ya da motoru yeniden düzenlerken davranışın değişmediğini, aynı r
 
 ## Yapay zekâ çağrısı
 
-Tarayıcıdan doğrudan `https://api.anthropic.com/v1/messages` (`aiFetch`); kullanıcı kendi anahtarını uygulamada girer. Başka danışanlara açmadan önce anahtar bir sunucu vekiline taşınmalı. Rıza metni hukuki incelemeden geçmedi. Öğün analizi `claude-sonnet-5-5` (kullanıcının tercihi; fotoğraf ve yazı için aynı). Asistan `claude-haiku-5-5`: akışlı (SSE), düşünme kapalı, efor `low`, sistem istemi `cache_control` ile önbellekli. Asistan gerçek anahtarla henüz denenmedi. Yapılandırılmış çıktı `output_config.format` + `SCHEMA` ile. Fotoğraf canvas'ta en çok 1280 px'e küçültülür.
+İki yol, ikisi de `aiFetch`'ten geçer: davet kodu varsa ve `PROXY_URL` doluysa vekile (`server/worker.js`: model izin listesi, araç yok, `max_tokens` ≤ 16000, kod başına aylık dolar bütçesi KV'de, yalnızca `ORIGINS` kökenleri); yoksa kullanıcının kendi anahtarıyla doğrudan `https://api.anthropic.com/v1/messages`. Vekil yayında: `https://diyet-api.basedchimpers.workers.dev` (Cloudflare hesabı basedchimpers; bu projenin wrangler oturumu ayrı: komutlardan önce `export XDG_CONFIG_HOME=$HOME/.diyet-cloudflare`). Davet kodları erişim anahtarıdır: repoya, belgeye ya da commit mesajına yazma. Vekili değiştirirken sahte Anthropic ve bellekte KV ile yerel Node sarmalayıcısında uçtan uca dene. Rıza metni hukuki incelemeden geçmedi. Öğün analizi `claude-sonnet-5-5` (kullanıcının tercihi; fotoğraf ve yazı için aynı). Asistan `claude-haiku-5-5`: akışlı (SSE), düşünme kapalı, efor `low`, sistem istemi `cache_control` ile önbellekli. Asistan ve yazıdan öğün analizi canlı vekil üzerinden gerçek istekle çalıştı (15 Kasım 2026; ölçülen maliyet: Sonnet öğün analizi ~0,009 $, Haiku asistan sorusu ~0,0003 $). Yapılandırılmış çıktı `output_config.format` + `SCHEMA` ile. Fotoğraf canvas'ta en çok 1280 px'e küçültülür.
 
 Yazıyla kayıt gerçek anahtarla çalıştı (14 Kasım 2026). Fotoğraf yolu gerçek anahtarla henüz doğrulanmadı.
 

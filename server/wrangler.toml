@@ -1,0 +1,14 @@
+name = "diyet-api"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+# Basedchimpers hesabı. Bu projenin wrangler oturumu ayrı tutulur: XDG_CONFIG_HOME=$HOME/.diyet-cloudflare
+account_id = "372baa87f889847e51231be2ea50191a"
+
+# Uygulamanın yayınlandığı kökenler; başka siteler vekili kullanamaz.
+[vars]
+ORIGINS = "https://fdemirci52.github.io,http://localhost:4173"
+
+# Davet kodları ve aylık kullanım. id, `wrangler kv namespace create DIYET` çıktısından gelir.
+[[kv_namespaces]]
+binding = "DIYET"
+id = "ab57532c655e4395a43c7d8e015e1c4b"
