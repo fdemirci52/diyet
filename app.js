@@ -40,7 +40,7 @@ const PRICE = { 'claude-sonnet-5-5': [2, 10], 'claude-haiku-5-5': [0.1, 0.5] };
 
 /* ---------- Durum ---------- */
 const KEY = 'diyet-v1', AIKEY = 'diyet-ai-key', USEKEY = 'diyet-ai-use', CHATKEY = 'diyet-chat';
-let S = { days: {}, weights: [{ d: '2026-11-13', kg: 83.9 }] };
+let S = { days: {}, weights: [] };
 try { const raw = localStorage.getItem(KEY); if (raw) S = JSON.parse(raw); } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const aiKey = () => { try { return localStorage.getItem(AIKEY) || ''; } catch (e) { return ''; } };
@@ -105,6 +105,36 @@ function dayStat(k) {
   MEALS.forEach(m => { const s = mealStat(m, k); total += s.total; ok += s.ok; if (s.skip === s.total && !ate.has(m.id)) skipped++; });
   return { total, ok, pct: total ? Math.round(ok / total * 100) : 0, skipped };
 }
+/* ---------- Uyum puanı ----------
+   Yalnızca kaydı olan öğünler üzerinden: %50 öğün düzeni, %25 kalori, %25 protein. Kaydedilmemiş öğün puanı
+   düşürmez; günün ne kadarının kaydedildiği ayrıca cover olarak döner (halkalar onu gösterir).
+   Öğün düzeni: plandaki gibi, programın kendi seçeneği ya da muadiliyle yenen kalem 1; başka bir şeyle değiştirilen
+   kalem ya da plan yerine yenen öğün ¾; atlanan 0. Kalori: planın ±%10'u tam puan, fark %40'a çıkınca 0.
+   Protein: planın %90'ı ve üstü tam puan, %50'ye inince 0. Ağırlıklar ve eşikler SCORE içinde. */
+const SCORE = { meal: .5, kcal: .25, prot: .25, kOk: .1, kZero: .4, pOk: .9, pZero: .5, other: .75 };
+const TIMED = MEALS.filter(m => m.time);
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const isAlt = (it, s) => s.alt || (it.subs || []).includes(s.base || s.sub);
+function mealVal(m, k) {
+  if (planned(m, k)) return null;
+  const d = peek(k), ex = (d.extras || []).some(e => e.meal === m.id && !e.adj);
+  let n = 0, v = 0;
+  itemsOf(m, k).forEach(it => { if (it.optional) return; const s = stOf(d, m, it); if (!s) return; n++;
+    v += s.s === 'skip' ? (ex ? SCORE.other : 0) : s.s === 'swap' && !isAlt(it, s) ? SCORE.other : 1; });
+  return n ? v / n : null;
+}
+function dayScore(k) {
+  const d = S.days[k]; if (!d || (!Object.keys(d.items || {}).length && !(d.extras || []).length)) return null;
+  const vals = TIMED.map(m => mealVal(m, k)).filter(v => v != null); if (!vals.length) return null;
+  /* Fark günün planına oranlanır: öğün içindeki küçük sapma yarım gün kaydedilmişken de abartılmaz. */
+  const B = balance(k), meal = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const kcal = B.tk < 300 ? 1 : clamp01(1 - (Math.abs(B.gk) / B.tk - SCORE.kOk) / (SCORE.kZero - SCORE.kOk));
+  const prot = B.tp < 5 ? 1 : clamp01((1 - Math.max(0, B.gp) / B.tp - SCORE.pZero) / (SCORE.pOk - SCORE.pZero));
+  const pct = Math.round(100 * (SCORE.meal * meal + SCORE.kcal * kcal + SCORE.prot * prot));
+  return { pct, cover: vals.length / TIMED.length, meal, kcal, prot, n: vals.length };
+}
+/* Halkalar: günün ne kadarı plana uygun kaydedildi (gün bitince uyum puanına eşit). */
+const dayFill = k => { const s = dayScore(k); return s ? Math.round(s.pct * s.cover) : 0; };
 function quotaUsed(k, mealId, g) {
   return weekOf(k).filter(x => { const m = mainById(peek(x).main[mealId]); return m && m.g === g; }).length;
 }
@@ -189,6 +219,9 @@ const P = {
   gym: '<path d="M6.500 6.500v11M3.500 9v6M17.500 6.500v11M20.500 9v6M6.500 12h11"/>',
   chat: '<path d="M20 11.500c0 3.900-3.600 7-8 7-1.100 0-2.100-.2-3-.5L4.500 19.500l1.300-3.700C4.700 14.600 4 13.100 4 11.500c0-3.900 3.600-7 8-7s8 3.100 8 7z"/>',
   up: '<path d="M12 19V6M6.500 11.500L12 6l5.500 5.500"/>',
+  grid: '<rect x="4" y="4" width="4.200" height="4.200" rx="1.200"/><rect x="9.900" y="4" width="4.200" height="4.200" rx="1.200"/><rect x="15.800" y="4" width="4.200" height="4.200" rx="1.200"/><rect x="4" y="9.900" width="4.200" height="4.200" rx="1.200"/><rect x="9.900" y="9.900" width="4.200" height="4.200" rx="1.200"/><rect x="15.800" y="9.900" width="4.200" height="4.200" rx="1.200" fill="currentColor"/><rect x="4" y="15.800" width="4.200" height="4.200" rx="1.200"/><rect x="9.900" y="15.800" width="4.200" height="4.200" rx="1.200" fill="currentColor"/><rect x="15.800" y="15.800" width="4.200" height="4.200" rx="1.200" fill="currentColor"/>',
+  doc: '<path d="M7 3.500h7l4 4V19a1.500 1.500 0 01-1.500 1.500h-9.500A1.500 1.500 0 015.500 19V5A1.500 1.500 0 017 3.500zM13.500 3.500V8H18M8.500 12.500h7M8.500 16h5"/>',
+  photo: '<rect x="4" y="5" width="16" height="14" rx="2.500"/><circle cx="9" cy="10" r="1.600"/><path d="M20 15.500l-4.500-4.500L7 19"/>',
   x: '<path d="M7 7l10 10M17 7L7 17"/>',
   link: '<path d="M10 14a4 4 0 005.700 0l3-3a4 4 0 00-5.700-5.700l-1 1M14 10a4 4 0 00-5.700 0l-3 3a4 4 0 005.700 5.700l1-1"/>',
   search: '<circle cx="11" cy="11" r="6.500"/><path d="M20 20l-4.200-4.200"/>',
@@ -200,38 +233,97 @@ const ring = (pct, size, w, color) => { const r = (size - w) / 2, C = 2 * Math.P
 const label = it => it.opts ? it.opts[0] : it.name;
 const hint = it => it.opts ? 'veya ' + it.opts.slice(1).join(' · ') : it.meta || '';
 const short = it => it.chip || it.name;
+const cap = s => s ? s[0].toLocaleUpperCase('tr') + s.slice(1) : s, lc = s => s ? s[0].toLocaleLowerCase('tr') + s.slice(1) : s;
+const r1 = x => Math.round(x * 10) / 10;
+
+/* ---------- Miktar ----------
+   Kalem adının başındaki miktar ayrıştırılır: "2 dilim tam buğday ekmeği" → 2 · dilim · "Tam buğday ekmeği".
+   Porsiyon (q) değişince miktar ölçeklenerek gösterilir; adet gibi sayılanlarda adım bir birimdir (2 dilimde ½),
+   gram ve ayrışmayan adlarda ¼ porsiyon. */
+const UNITS = ['su bardağı', 'çay bardağı', 'yemek kaşığı', 'tatlı kaşığı', 'çay kaşığı', 'avuç içi', 'küçük kase', 'gr', 'g', 'kg', 'ml', 'yk', 'tk', 'çk', 'dilim', 'adet', 'bardak', 'fincan', 'kase', 'avuç', 'porsiyon', 'kutu', 'ölçü', 'ölçek', 'tane', 'paket', 'kepçe'];
+const AMT_RE = new RegExp(`^(\\d+(?:[.,]\\d+)?|[½¼¾]|yarım)(?:\\s*[-–]\\s*(\\d+(?:[.,]\\d+)?))?\\s+(?:(${UNITS.join('|')})\\s+)?(.+)$`, 'i');
+const MASS = ['g', 'gr', 'kg', 'ml'];
+function parseAmt(t) {
+  const m = String(t || '').match(AMT_RE); if (!m || m[4].includes('+')) return null;
+  const n = s => ({ '½': .5, '¼': .25, '¾': .75, yarım: .5 })[s.toLocaleLowerCase('tr')] ?? parseFloat(s.replace(',', '.'));
+  return { a: n(m[1]), b: m[2] ? n(m[2]) : 0, u: (m[3] || '').toLocaleLowerCase('tr'), rest: cap(m[4]) };
+}
+const fmtQ = (x, u) => { if (MASS.includes(u) && x >= 20) return num(Math.round(x / 5) * 5);
+  const r = x >= 4 ? Math.round(x * 2) / 2 : Math.round(x * 4) / 4, w = Math.floor(r); return (w || '') + ({ .25: '¼', .5: '½', .75: '¾' }[r - w] || '') || '0'; };
+const amtNum = (pa, q) => fmtQ(pa.a * q, pa.u) + (pa.b ? '-' + fmtQ(pa.b * q, pa.u) : '');
+const amtText = (pa, q) => `${amtNum(pa, q)} ${pa.u || 'adet'}`;
+/* Addaki parantezli gramaj da ölçeklenir: "(40 g)" → "(20 g)". */
+const scaleRest = (rest, q) => q === 1 ? rest : rest.replace(/\((~?)(\d+)\s?(g|ml)\)/, (_, t, n, u) => `(${t}${fmtQ(n * q, u)} ${u})`);
+const stepOf = pa => pa && !MASS.includes(pa.u) && !pa.b && Number.isInteger(pa.a) && pa.a >= 1 && pa.a <= 6 ? (pa.a === 1 ? .5 : 1 / pa.a) : .25;
+/* Düz metin olarak ölçeklenmiş ad: "4 yk yulaf ezmesi (40 g)" × ½ → "2 yk yulaf ezmesi (20 g)". */
+function scaleText(t, q) {
+  if (q === 1) return t; const pa = parseAmt(t);
+  return pa ? `${amtNum(pa, q)}${pa.u ? ' ' + pa.u : ''} ${lc(scaleRest(pa.rest, q))}` : `${t} × ${qLab(q)}`;
+}
+/* Kalemin ekranda görünüşü: ad, miktar hapı ve plandan farklı mı. */
+function itemView(it, st) {
+  let text = label(it), q = 1, changed = false;
+  if (st && st.s === 'done') { if (st.o && it.opts) text = it.opts[st.o]; if (st.name) { text = st.name; changed = true; } q = st.q || 1; }
+  if (st && st.s === 'swap') {
+    if (st.src) return { n: st.src.n, amt: st.q && st.q !== 1 ? qLab(st.q) + ' porsiyon' : '', changed: !!st.q && st.q !== 1 };
+    text = st.sub; changed = !!st.q && st.q !== 1;
+    const pa = parseAmt(text); return pa ? { n: pa.rest, amt: amtText(pa, 1), changed } : { n: text, amt: '', changed };
+  }
+  if (q !== 1) changed = true;
+  const pa = parseAmt(text);
+  return pa ? { n: scaleRest(pa.rest, q), amt: amtText(pa, q), changed } : { n: text, amt: q !== 1 ? qLab(q) + ' porsiyon' : '', changed };
+}
+const viewText = (it, st) => { const v = itemView(it, st); return v.amt ? `${v.amt.replace(/ adet$/, '')} ${lc(v.n)}` : v.n; };
+/* Açık kalemin alt satırı: eşdeğer seçenekler ve muadil sayısı. */
+const altHint = it => { const o = (it.opts || []).slice(1).map(lc), n = (it.subs || []).length + (it.sugg || []).length;
+  return [o.length ? 'veya ' + o.join(', ') : it.meta || '', n ? `${n} muadil` : ''].filter(Boolean).join(' · '); };
 /* Önceden planlanmış sapma: henüz yenmemiş, plan dışı bir öğün. extras ve atlanan kalemler pl: true taşır;
    motor onları yenmiş sayar ki gün yemekten önce dengelensin. Kullanıcı yiyince "Yedim" ile onaylar. */
 const planned = (m, k) => (peek(k).extras || []).some(e => e.meal === m.id && e.pl);
 const nextMeal = () => MEALS.find(m => m.time && (!mealStat(m, today).resolved || planned(m, today)));
 const openEv = {};
 
+/* Kalem satırı: dokununca yendi/yenmedi; sağdaki miktar hapı porsiyon ve muadil sayfasını açar. */
 function rowHTML(meal, it, d, ov) {
   const id = meal.id + '.' + it.id, st = d.items[id], s = st ? st.s : '';
-  let n = label(it), m = hint(it);
-  if (!s && ov) { n = ov.name; m = 'Bugün için azaltıldı'; }
-  if (s === 'done' && st.name) { n = st.name; m = 'Azaltılmış porsiyon'; }
-  if (s === 'swap') { n = st.sub; m = label(it) + ' yerine'; }
+  const v = itemView(it, !s && ov ? { s: 'done', name: ov.name } : st), plan = itemView(it, null);
+  let m = altHint(it);
+  if (!s && ov) m = 'Bugün için azaltıldı';
+  if (s === 'done') m = st.name && !st.q ? 'Azaltılmış porsiyon' : v.changed ? `Planda ${plan.amt || '1 porsiyon'}` : st.o ? 'Programdaki seçenek' : '';
+  if (s === 'swap') m = `${short(it)} yerine`;
   if (s === 'skip') m = st.pl ? 'Yerine başka şey planlandı' : 'Atlandı';
+  const pill = v.amt ? `<button class="amt ${v.changed ? 'on' : ''}" data-act="sheet" data-id="${id}" aria-label="Porsiyon ve muadil">${esc(v.amt)}</button>`
+    : `<button class="amt dot" data-act="sheet" data-id="${id}" aria-label="Porsiyon ve muadil">${ic('dots')}</button>`;
   return `<div class="row ${s}" data-act="toggle" data-id="${id}"><span class="chk">${ic(s === 'skip' ? 'dash' : s === 'swap' ? 'swap' : 'check')}</span>
-    <span class="b"><span class="n">${esc(n)}</span>${m ? `<span class="m">${esc(m)}</span>` : ''}</span>
-    <button class="more" data-act="sheet" data-id="${id}" aria-label="Seçenekler">${ic('dots')}</button></div>`;
+    <span class="b"><span class="n">${esc(v.n)}</span>${m ? `<span class="m">${esc(m)}</span>` : ''}</span>${pill}</div>`;
+}
+/* Öğünün planı ve şimdiye kadar yenen: kalem sayısı, kalori, protein. */
+function mealSum(meal, k) {
+  const d = peek(k); let pk = 0, pp = 0, ek = 0, ep = 0, n = 0, ok = 0;
+  itemsOf(meal, k).forEach(it => { if (it.optional) return; n++; pk += it.k; pp += it.p; const s = stOf(d, meal, it);
+    if (s) ok++; if (s && s.s !== 'skip') { ek += s.k ?? it.k; ep += s.p ?? it.p; } });
+  (d.extras || []).forEach(e => { if (e.meal === meal.id && !e.pl) { ek += e.k; ep += e.p; } });
+  return { pk, pp, ek, ep, n, ok };
 }
 function mealPanel(meal, k, A, st) {
   const d = peek(k), W = WORKOUTS[parse(k).getDay()];
-  const cap = W && TRAIN.notes[meal.id] || '';
-  let h = cap ? `<p class="cap">${cap}</p>` : '';
+  const cap = W && TRAIN.notes[meal.id] || '', M = mealSum(meal, k), note = (d.notes || {})[meal.id];
+  const ps = (n, a, b, u) => `<div><small>${n}</small><span><b>${a}</b> / ${b}${u}</span></div>`;
+  let h = `<div class="psum">${ps('Kalem', M.ok, M.n, '')}${KC ? ps('Kalori', num(M.ek), num(M.pk), ' kcal') : ''}${ps('Protein', num(M.ep), num(M.pp), ' g')}</div>`;
+  h += cap ? `<p class="cap">${cap}</p>` : '';
+  if (note) h += `<button class="mnote" data-act="note" data-meal="${meal.id}">${ic('pen')}<span>${esc(note)}</span></button>`;
   if (meal.modes) h += `<div class="seg">${meal.modes.map((m, i) => `<button class="${(d.mode[meal.id] || 0) === i ? 'on' : ''}" data-act="mode" data-meal="${meal.id}" data-i="${i}">${m}</button>`).join('')}</div>`;
   h += itemsOf(meal, k).map(it => rowHTML(meal, it, d, A.over[meal.id + '.' + it.id])).join('');
   h += A.adds.filter(a => a.meal === meal.id).map(a => `<div class="row ${a.xi >= 0 ? 'done' : 'plus'}" data-act="add" data-i="${A.adds.indexOf(a)}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(a.name)}</span><span class="m">${A.why}</span></span></div>`).join('');
   h += (d.extras || []).map((e, i) => e.meal !== meal.id || (e.adj && A.adds.some(a => a.xi === i)) ? '' : `<div class="row ${e.pl ? '' : 'done'}" data-act="${e.adj ? 'unextra' : 'xedit'}" data-i="${i}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(e.name)}</span><span class="m">${e.adj ? 'Telafi' : e.pl ? 'Planlandı' : 'Plan dışı'}${KC ? ` · yaklaşık ${num(e.k)} kcal` : ''}</span></span></div>`).join('');
+  const noteBtn = note ? '' : `<button data-act="note" data-meal="${meal.id}">Not ekle</button>`;
   if (planned(meal, k)) return h + `<div class="actions" style="grid-template-columns:1fr"><button class="primary" data-act="plok" data-meal="${meal.id}">${ic('check')}Yedim</button></div>
-    <button class="textbtn" data-act="plno" data-meal="${meal.id}">Planı kaldır</button>`;
-  if (st.resolved) return h + `<button class="textbtn" data-act="clear" data-meal="${meal.id}">İşaretleri sıfırla</button>`;
+    <div class="tbtns"><button data-act="plno" data-meal="${meal.id}">Planı kaldır</button>${noteBtn}</div>`;
+  if (st.resolved) return h + `<div class="tbtns"><button data-act="clear" data-meal="${meal.id}">İşaretleri sıfırla</button>${noteBtn}</div>`;
   return h + `<div class="actions"><button class="primary" data-act="all" data-meal="${meal.id}">${ic('check')}${st.ok + st.skip ? 'Kalanını yedim' : 'Hepsini yedim'}</button>
       <button class="sq" data-act="photo" data-meal="${meal.id}" aria-label="Fotoğrafla kaydet">${ic('cam')}</button>
       <button class="sq" data-act="write" data-meal="${meal.id}" aria-label="Yazarak kaydet">${ic('pen')}</button></div>
-    <button class="textbtn" data-act="skipmeal" data-meal="${meal.id}">Bu öğünü atladım</button>`;
+    <div class="tbtns"><button data-act="skipmeal" data-meal="${meal.id}">Bu öğünü atladım</button>${noteBtn}</div>`;
 }
 function eventHTML({ id, cls, node, title, sub, right, panel, act }) {
   return `<div class="ev ${cls} ${panel ? 'open' : ''}"><span class="node">${ic(node)}</span><div>
@@ -340,8 +432,23 @@ function spSave() {
 function stepper(act, val, over) {
   return `<span class="stepper"><button data-act="${act}" data-n="-1" aria-label="Azalt">${ic('minus')}</button><b class="${over ? 'over' : ''}">${val}</b><button data-act="${act}" data-n="1" aria-label="Artır">${ic('plus')}</button></span>`;
 }
+/* Şeridin haftaları (pazartesileri): 26 hafta geri, 8 hafta ileri; seçili gün dışarıdaysa aralık genişler. */
+const AHEAD = 8 * 7;
+let stripLeft = null, stripTo = true;
+function stripWeeks() {
+  const t0 = weekOf(today)[0], s0 = weekOf(sel)[0];
+  let a = addDays(t0, -26 * 7), b = addDays(t0, 8 * 7); if (s0 < a) a = s0; if (s0 > b) b = s0;
+  const out = []; for (let k = a; k <= b; k = addDays(k, 7)) out.push(k); return out;
+}
+/* Yeniden çizimde şerit yerinde kalır; seçili gün başka yoldan değiştiyse o haftaya gider. */
+function placeStrip() {
+  const s = document.getElementById('strip'); if (!s) return;
+  if (stripTo || stripLeft == null) { const i = stripWeeks().indexOf(weekOf(sel)[0]); s.scrollLeft = i * s.clientWidth; stripTo = false; }
+  else s.scrollLeft = stripLeft;
+  stripLeft = s.scrollLeft;
+}
 function todayView() {
-  const d = peek(sel), st = dayStat(sel), A = adjust(sel), B = balance(sel), wk = weekOf(sel);
+  const d = peek(sel), fillPct = dayFill(sel), A = adjust(sel), B = balance(sel), wk = weekOf(sel);
   const next = sel === today ? nextMeal() : null, W = WORKOUTS[parse(sel).getDay()];
   const open = openEv[sel] !== undefined ? openEv[sel] : defOpen(sel);
   /* Takviyeler: öğüne bağlı olan öğünün ardından, saatli olan saatine göre, yatarken olan en sonda. */
@@ -349,15 +456,16 @@ function todayView() {
   const timed = G.filter(g => isHM(g.at)).sort((a, b) => a.at < b.at ? -1 : 1);
   const before = m => { if (!m.time) return ''; const t = timeOf(m, sel), out = timed.filter(g => !g.put && g.at < t); out.forEach(g => g.put = true); return out.map(g => supEvent(g, sel, open)).join(''); };
   const anytime = SUPS().filter(s => !anc(s));
-  const strip = wk.map(k => { const dt = parse(k);
-    return `<button class="day ${k === sel ? 'sel' : ''} ${k === today ? 'today' : ''}" data-act="day" data-k="${k}"><small>${DOW[dt.getDay()]}</small><span class="disc" style="--p:${dayStat(k).pct}"><b>${dt.getDate()}</b></span></button>`; }).join('');
+  /* Şerit: hafta hafta kayan sayfalar; geçmiş ve gelecek haftalar. */
+  const strip = stripWeeks().map(w => `<div class="wk">${weekOf(w).map(k => { const dt = parse(k);
+    return `<button class="day ${k === sel ? 'sel' : ''} ${k === today ? 'today' : ''} ${k > today ? 'fut' : ''}" data-act="day" data-k="${k}"><small>${DOW[dt.getDay()]}</small><span class="disc" style="--p:${dayFill(k)}"><b>${dt.getDate()}</b></span></button>`; }).join('')}</div>`).join('');
   const litres = (d.water * WATER_ML / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
   const tile = (name, val, unit, of, pct, color) => `<div class="tile"><div class="top"><span class="label">${name}</span>${ring(pct, 30, 4.5, color)}</div><strong>${val}${unit ? `<em>${unit}</em>` : ''}</strong><small>${of}</small></div>`;
   const walks = wk.filter(x => peek(x).walk).length, gyms = wk.filter(x => peek(x).gym).length;
   return `<header class="head"><div><p>${fmtLong(sel)}</p><h1>${sel === today ? 'Bugün' : parse(sel).toLocaleDateString('tr-TR', { weekday: 'long' })}</h1></div>
       <div class="hright"><button class="round" data-act="chat" aria-label="Asistana sor">${ic('chat')}</button>
-      ${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : `<div class="dayring">${ring(st.pct / 100, 54, 5, 'var(--accent)')}<b>%${st.pct}</b></div>`}</div></header>
-    <div class="strip">${strip}</div>
+      ${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : `<button class="dayring" data-act="score" aria-label="Uyum puanı">${ring(fillPct / 100, 54, 5, 'var(--accent)')}<b>%${fillPct}</b></button>`}</div></header>
+    <div class="strip" id="strip">${strip}</div>
     <div class="tiles">${KC ? tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)') : (() => { const ms = MEALS.filter(m => m.time), r = ms.filter(m => mealStat(m, sel).resolved).length; return tile('Öğün', r, '', `/ ${ms.length} öğün`, r / ms.length, 'var(--fg)'); })()}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', `/ ${WATER_L} L`, d.water / WATER_GOAL, 'var(--blue)')}</div>
     ${A.note ? `<p class="note">${A.note}</p>` : ''}
     <div class="tl">${MEALS.map(m => before(m) + mealEvent(m, sel, A, next, open) + sp(m.id) + (m.id === TRAIN.after && W ? gymEvent(sel, W, open) : '')).join('')}${timed.filter(g => !g.put).map(g => supEvent(g, sel, open)).join('')}${sp('yat')}</div>
@@ -365,13 +473,13 @@ function todayView() {
     <section class="card">
       <div class="row"><span class="b"><span class="n">Su</span><span class="m">${d.water} bardak · ${litres} / ${WATER_L} L</span></span>${stepper('water', d.water)}</div>
       <div class="row"><span class="b"><span class="n">Kahve</span><span class="m ${d.coffee > COFFEE_MAX ? 'over' : ''}">${d.coffee > COFFEE_MAX ? 'Günlük sınır aşıldı' : PLAN.daily.coffee.note}</span></span>${stepper('coffee', d.coffee, d.coffee > COFFEE_MAX)}</div>
-      <div class="row ${d.walk ? 'done' : ''}" data-act="walk"><span class="b"><span class="n">${PLAN.daily.walk.name}</span><span class="m">Bu hafta ${walks} / ${WALK_GOAL}</span></span><span class="chk">${ic('check')}</span></div>
+      ${!WALK_GOAL ? '' : `<div class="row ${d.walk ? 'done' : ''}" data-act="walk"><span class="b"><span class="n">${PLAN.daily.walk.name}</span><span class="m">Bu hafta ${walks} / ${WALK_GOAL}</span></span><span class="chk">${ic('check')}</span></div>`}
       ${anytime.map(s => `<div class="row ${supTaken(sel, s.id) ? 'done' : ''}" data-act="sup" data-id="${esc(s.id)}"><span class="b"><span class="n">${esc(s.n)}</span><span class="m">${esc(s.dose ? s.dose + ' · saat önemsiz' : 'Takviye · saat önemsiz')}</span></span><span class="chk">${ic('check')}</span></div>`).join('')}
-      ${W ? '' : `<div class="row ${d.gym ? 'done' : ''}" data-act="gym"><span class="b"><span class="n">Ağırlık antrenmanı</span><span class="m">Bugün planlı değil · bu hafta ${gyms} / ${GYM_GOAL}</span></span><span class="chk">${ic('check')}</span></div>`}
+      ${W || !GYM_GOAL ? '' : `<div class="row ${d.gym ? 'done' : ''}" data-act="gym"><span class="b"><span class="n">Ağırlık antrenmanı</span><span class="m">Bugün planlı değil · bu hafta ${gyms} / ${GYM_GOAL}</span></span><span class="chk">${ic('check')}</span></div>`}
     </section>`;
 }
 function weekView() {
-  const wk = weekOf(sel), stats = wk.map(dayStat), logged = stats.filter(s => s.ok > 0);
+  const wk = weekOf(sel), stats = wk.map(dayStat), sc = wk.map(dayScore), logged = sc.filter(Boolean);
   const avg = logged.length ? Math.round(logged.reduce((a, s) => a + s.pct, 0) / logged.length) : 0;
   const skipped = stats.reduce((a, s, i) => a + (wk[i] <= today && s.ok + s.skipped > 0 ? s.skipped : 0), 0);
   const bal = wk.filter(k => k <= today).map(balance).filter(b => b.any);
@@ -380,42 +488,109 @@ function weekView() {
   const waters = wk.map(k => peek(k).water).filter(Boolean), wavg = waters.length ? waters.reduce((a, b) => a + b, 0) / waters.length * WATER_ML / 1000 : 0;
   const walks = wk.filter(k => peek(k).walk).length, gyms = wk.filter(k => peek(k).gym).length;
   const dots = n => `<span class="dots">${[0, 1, 2].map(i => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
-  const ws = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1), last = ws[ws.length - 1], first = ws[0];
-  let spark = '';
-  if (ws.length > 1) { const v = ws.map(w => w.kg), mn = Math.min(...v), mx = Math.max(...v), r = mx - mn || 1;
-    spark = `<svg class="spark" viewBox="0 0 300 56" preserveAspectRatio="none"><polyline points="${ws.map((w, i) => `${4 + i * (292 / (ws.length - 1))},${6 + (1 - (w.kg - mn) / r) * 44}`).join(' ')}"/></svg>`; }
-  const diff = last && first && last !== first ? last.kg - first.kg : 0;
   const stat = (name, val, unit, sub) => `<div class="tile"><span class="label">${name}</span><strong style="margin-top:10px">${val}${unit ? `<em>${unit}</em>` : ''}</strong><small>${sub}</small></div>`;
   return `<header class="head"><div><p>${fmtDM(wk[0])} – ${fmtDM(wk[6])}</p><h1>Hafta</h1></div>
-      <div style="display:flex;gap:8px"><button class="round" data-act="week" data-n="-1" aria-label="Önceki hafta">${ic('left')}</button><button class="round" data-act="week" data-n="1" aria-label="Sonraki hafta" ${wk[6] >= today ? 'disabled' : ''}>${ic('right')}</button></div></header>
-    <section class="card pad"><div class="between"><div><span class="label">Ortalama uyum</span><div class="num">%${avg}</div></div><span class="pill">${logged.length} gün kayıtlı</span></div>
-      <div class="bars">${wk.map((k, i) => `<button class="barcol ${k === today ? 'today' : ''}" data-act="day" data-k="${k}" data-go="1" aria-label="${fmtDM(k)}"><span><u style="height:${stats[i].pct}%"></u></span><small>${DOW[parse(k).getDay()]}</small></button>`).join('')}</div></section>
+      <div style="display:flex;gap:8px"><button class="round" data-act="week" data-n="-1" aria-label="Önceki hafta">${ic('left')}</button><button class="round" data-act="week" data-n="1" aria-label="Sonraki hafta" ${wk[6] >= addDays(today, AHEAD) ? 'disabled' : ''}>${ic('right')}</button></div></header>
+    <section class="card pad"><div class="between"><div><span class="label">Ortalama uyum</span><div class="num">${logged.length ? '%' + avg : '—'}</div></div><span class="pill">${logged.length} gün kayıtlı</span></div>
+      <div class="bars">${wk.map((k, i) => `<button class="barcol ${k === today ? 'today' : ''}" data-act="day" data-k="${k}" data-go="1" aria-label="${fmtDM(k)}"><span><u style="height:${sc[i] ? sc[i].pct : 0}%"></u></span><small>${DOW[parse(k).getDay()]}</small></button>`).join('')}</div>
+      <button class="textbtn" data-act="score" data-k="${wk[0]}" style="margin-top:14px">Uyum nasıl hesaplanıyor?</button></section>
     <div class="tiles two">${KC ? stat('Kalori dengesi', Math.abs(gk) < 50 ? 'Dengede' : (gk > 0 ? '−' : '+') + num(Math.abs(gk)), Math.abs(gk) < 50 ? '' : 'kcal', Math.abs(gk) < 50 ? 'Plana göre' : gk > 0 ? 'Plandan eksik' : 'Plandan fazla')
         : stat('Plan dışı', wk.filter(k => k <= today).reduce((t, k) => t + (peek(k).extras || []).filter(e => !e.adj).length, 0), '', 'Bu hafta kayıt')}
       ${stat('Protein', pavg ? num(pavg) : '—', pavg ? 'g' : '', 'Günlük ortalama')}${stat('Atlanan öğün', skipped, '', 'Bu hafta')}${stat('Su', wavg ? wavg.toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : '—', wavg ? 'L' : '', 'Günlük ortalama')}</div>
-    <section class="card"><div class="kv"><span>Ağırlık antrenmanı</span><span style="display:flex;align-items:center;gap:10px">${gyms} / ${GYM_GOAL}${dots(gyms)}</span></div>
-      <div class="kv"><span>Yürüyüş</span><span style="display:flex;align-items:center;gap:10px">${walks} / ${WALK_GOAL}${dots(walks)}</span></div></section>
-    <div class="sect">Haftanın ana yemekleri</div>
+    ${GYM_GOAL || WALK_GOAL ? `<section class="card">${GYM_GOAL ? `<div class="kv"><span>Ağırlık antrenmanı</span><span style="display:flex;align-items:center;gap:10px">${gyms} / ${GYM_GOAL}${dots(gyms)}</span></div>` : ''}
+      ${WALK_GOAL ? `<div class="kv"><span>Yürüyüş</span><span style="display:flex;align-items:center;gap:10px">${walks} / ${WALK_GOAL}${dots(walks)}</span></div>` : ''}</section>` : ''}
+    ${MAIN_MEALS.length ? `<div class="sect">Haftanın ana yemekleri</div>
     <section class="card" style="padding:10px 8px"><div class="menu h"><span></span>${MAIN_MEALS.map(m => `<span>${m.title}</span>`).join('')}</div>
       ${wk.map(k => `<button class="menu ${k === today ? 'today' : k < today ? 'past' : ''}" data-act="day" data-k="${k}" data-go="1"><b>${DOW[parse(k).getDay()]}</b>${MAIN_MEALS.map(m => `<span>${mainFor(k, m.id).chip}</span>`).join('')}</button>`).join('')}</section>
-    <p class="note">Bir gün farklı yersen kalan günler kotaya göre yeniden dağıtılır.</p>
-    <div class="sect">Kilo</div>
-    <section class="card pad"><div class="between"><div><span class="label">Son ölçüm · ${last ? parse(last.d).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }) : ''}</span><div class="num">${last ? last.kg.toLocaleString('tr-TR') : '—'}<em>kg</em></div></div>
-      ${diff ? `<span class="pill">${diff > 0 ? '+' : '−'}${Math.abs(diff).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} kg</span>` : ''}</div>
-      ${spark}<div class="field" style="padding-bottom:0"><input id="kg" type="text" inputmode="decimal" placeholder="Bugünkü kilo"><button class="btn" data-act="weight">Kaydet</button></div></section>
-    <p class="note">Haftada bir, aynı saatte tartıl.</p>
-    <button class="primary" data-act="report" style="margin:8px 0 4px">${ic('up')}Haftalık raporu gönder</button>
-    <p class="note" style="text-align:center">Haftalık kontrolden önce diyetisyenine.</p>`;
+    <p class="note">Bir gün farklı yersen kalan günler kotaya göre yeniden dağıtılır.</p>` : ''}
+    <div class="sect">Diyetisyenine</div>
+    <section class="card"><button class="nav-row" data-act="report"><span class="ic">${ic('chat')}</span><span class="b"><span class="n">Haftalık rapor</span><span class="m">Kısa özet, WhatsApp mesajı olarak</span></span>${ic('right')}</button>
+      <button class="nav-row" data-act="dump"><span class="ic">${ic('doc')}</span><span class="b"><span class="n">Döküm</span><span class="m">Seçtiğin günlerde ne yediğin, PDF olarak</span></span>${ic('right')}</button></section>
+    <p class="note">Kontrole gitmeden önce gönder.</p>`;
+}
+/* ---------- İlerleme ----------
+   Uzun vadeli görünüm: son bir yılın uyum takvimi (sütunlar hafta, satırlar Pazartesi'den Pazar'a), son 30 gün,
+   aylar ve kilo. Seri ya da rozet yok; sade veri. */
+const lvl = s => !s ? 0 : s.pct < 50 ? 1 : s.pct < 75 ? 2 : s.pct < 90 ? 3 : 4;
+const avgOf = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+const MON = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+function weightCard() {
+  const ws = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1), last = ws[ws.length - 1], first = ws[0], goal = PLAN.goal.kg;
+  let chart = '';
+  if (ws.length > 1) {
+    const v = ws.map(w => w.kg), mn = Math.min(...v, goal || Infinity) - .5, mx = Math.max(...v, goal || -Infinity) + .5, r = mx - mn;
+    const t0 = parse(ws[0].d).getTime(), span = parse(last.d).getTime() - t0 || 1;
+    const X = w => 4 + (parse(w.d).getTime() - t0) / span * 292, Y = kg => 8 + (1 - (kg - mn) / r) * 104;
+    chart = `<svg class="wchart" viewBox="0 0 300 120" preserveAspectRatio="none">${goal ? `<line x1="0" x2="300" y1="${Y(goal)}" y2="${Y(goal)}"/>` : ''}<polyline points="${ws.map(w => `${X(w)},${Y(w.kg)}`).join(' ')}"/></svg>
+      <div class="between wlab"><span>${fmtDM(first.d)} · ${fmtNum1(first.kg)} kg</span>${goal ? `<span>Hedef ${fmtNum1(goal)} kg</span>` : ''}</div>`;
+  }
+  const diff = ws.length > 1 ? last.kg - first.kg : 0;
+  return `<section class="card pad"><div class="between"><div><span class="label">Son ölçüm${last ? ' · ' + fmtDM(last.d) : ''}</span><div class="num">${last ? fmtNum1(last.kg) : '—'}<em>kg</em></div></div>
+      ${diff ? `<span class="pill">Başlangıçtan ${diff > 0 ? '+' : '−'}${fmtNum1(Math.abs(diff))} kg</span>` : ''}</div>
+      ${chart}<div class="field" style="padding-bottom:0"><input id="kg" type="text" inputmode="decimal" placeholder="Bugünkü kilo"><button class="btn" data-act="weight">Kaydet</button></div></section>
+    <p class="note">Haftada bir, aynı saatte tartıl.</p>`;
+}
+function progressView() {
+  const t0 = weekOf(today)[0], first = addDays(t0, -52 * 7), cols = [];
+  for (let w = first; w <= t0; w = addDays(w, 7)) cols.push(weekOf(w));
+  const SC = {}; cols.flat().forEach(k => { if (k <= today) SC[k] = dayScore(k); });
+  /* Ay etiketleri: ayın ilk gününü içeren sütunun üstünde. */
+  const months = cols.map((w, i) => { const f = w.find(k => k.endsWith('-01')); return f ? `<span style="left:${i * 16}px">${MON[parse(f).getMonth()]}</span>` : ''; }).join('');
+  const grid = cols.map(w => `<div class="hcol">${w.map(k => k > today ? '<i class="hc fut"></i>'
+    : `<button class="hc l${lvl(SC[k])} ${k === today ? 'now' : ''}" data-act="day" data-k="${k}" data-go="1" aria-label="${fmtDM(k)}${SC[k] ? ', uyum %' + SC[k].pct : ''}"></button>`).join('')}</div>`).join('');
+  const all = Object.values(SC).filter(Boolean), yAvg = Math.round(avgOf(all.map(s => s.pct)));
+  /* Son 30 gün */
+  const last30 = Array.from({ length: 30 }, (_, i) => addDays(today, -i)), s30 = last30.map(k => SC[k] !== undefined ? SC[k] : dayScore(k)).filter(Boolean);
+  const full = last30.map(balance).filter(b => b.any && !b.open.length), pAvg = avgOf(full.map(b => b.ep));
+  const gyms = last30.filter(k => peek(k).gym).length, waters = last30.map(k => peek(k).water).filter(Boolean);
+  const stat = (name, val, unit, sub) => `<div class="tile"><span class="label">${name}</span><strong style="margin-top:10px">${val}${unit ? `<em>${unit}</em>` : ''}</strong><small>${sub}</small></div>`;
+  /* Aylar: son altı ay */
+  const mrows = Array.from({ length: 6 }, (_, i) => { const d = parse(today); d.setDate(1); d.setMonth(d.getMonth() - i); return key(d).slice(0, 7); }).map(m => {
+    const days = Object.keys(S.days).filter(k => k.startsWith(m) && k <= today), sc = days.map(dayScore).filter(Boolean);
+    const w = S.weights.filter(x => x.d.startsWith(m)).sort((a, b) => a.d < b.d ? -1 : 1).pop();
+    if (!sc.length && !w) return '';
+    const [y, mo] = m.split('-').map(Number);
+    return `<div class="mrow"><b>${MON[mo - 1]}${y !== parse(today).getFullYear() ? ' ' + y : ''}</b><span>${sc.length} gün</span><span>${sc.length ? '%' + Math.round(avgOf(sc.map(s => s.pct))) : '—'}</span><span>${GYM_GOAL ? days.filter(k => peek(k).gym).length : '—'}</span><span>${w ? fmtNum1(w.kg) : '—'}</span></div>`; }).join('');
+  return `<header class="head"><div><p>Son 12 ay</p><h1>İlerleme</h1></div></header>
+    <section class="card pad"><div class="between"><div><span class="label">Ortalama uyum</span><div class="num">${all.length ? '%' + yAvg : '—'}</div></div><span class="pill">${all.length} gün kayıtlı</span></div>
+      <div class="heat"><div class="hdays"><span>Pzt</span><span></span><span>Çar</span><span></span><span>Cum</span><span></span><span></span></div>
+        <div class="hscroll" id="heat"><div class="hmon">${months}</div><div class="hgrid">${grid}</div></div></div>
+      <div class="hleg"><button data-act="score">Nasıl hesaplanır?</button><span>Düşük<i class="hc l1"></i><i class="hc l2"></i><i class="hc l3"></i><i class="hc l4"></i>Yüksek</span></div></section>
+    <div class="sect">Son 30 gün</div>
+    <div class="tiles two">${stat('Uyum', s30.length ? '%' + Math.round(avgOf(s30.map(s => s.pct))) : '—', '', `${s30.length} / 30 gün kayıtlı`)}
+      ${stat('Protein', pAvg ? num(pAvg) : '—', pAvg ? 'g' : '', 'Günlük ortalama')}
+      ${GYM_GOAL ? stat('Antrenman', gyms, '', `Hedef ${Math.round(GYM_GOAL * 30 / 7)}`) : ''}
+      ${stat('Su', waters.length ? fmtNum1(avgOf(waters) * WATER_ML / 1000) : '—', waters.length ? 'L' : '', 'Günlük ortalama')}</div>
+    ${mrows ? `<div class="sect">Aylar</div><section class="card" style="padding:8px 14px"><div class="mrow h"><b></b><span>Kayıt</span><span>Uyum</span><span>Antr.</span><span>Kilo</span></div>${mrows}</section>` : ''}
+    <div class="sect">Kilo</div>${weightCard()}`;
+}
+/* Uyum puanının açıklaması; k verilirse o haftanın, yoksa seçili günün dökümü. */
+function scoreSheet(wk0) {
+  sheet = 'score';
+  const days = wk0 ? weekOf(wk0) : [sel], sc = days.map(dayScore).filter(Boolean);
+  const pc = x => '%' + Math.round(avgOf(sc.map(s => s[x])) * 100), n = TIMED.length;
+  const skipLoss = Math.round(SCORE.meal * 100 / n), swapLoss = Math.ceil(SCORE.meal * (1 - SCORE.other) * 100 / n);
+  const head = sc.length ? `<div class="group"><div class="kv"><span>Öğün düzeni</span><span>${pc('meal')}</span></div><div class="kv"><span>${KC ? 'Kalori' : 'Porsiyon'} dengesi</span><span>${pc('kcal')}</span></div><div class="kv"><span>Protein</span><span>${pc('prot')}</span></div>
+    <div class="kv"><span><b>Uyum</b></span><span><b>%${Math.round(avgOf(sc.map(s => s.pct)))}</b></span></div></div>` : '';
+  showSheet(`<h2>Uyum puanı</h2><p class="lead">${wk0 ? `${fmtDM(days[0])} – ${fmtDM(days[6])} haftası` : fmtLong(sel)}${sc.length ? '' : ' · henüz kayıt yok'}</p>${head}
+    <div class="group prose">
+      <p>Öğün düzeni · %${SCORE.meal * 100}<small>Plandaki gibi ya da programın kendi seçeneği veya muadiliyle yenen öğün tam puan alır. Başka bir şeyle değiştirilen öğün ¾ puan, atlanan öğün puan almaz.</small></p>
+      <p>${KC ? 'Kalori' : 'Porsiyon'} dengesi · %${SCORE.kcal * 100}<small>Yediğin günlük planın ±%${SCORE.kOk * 100}'u içindeyse tam puan; fark %${SCORE.kZero * 100}'a çıkana dek yavaş yavaş azalır.</small></p>
+      <p>Protein · %${SCORE.prot * 100}<small>Planın %${SCORE.pOk * 100}'ı ve üstü tam puan; %${SCORE.pZero * 100}'ye indikçe azalır.</small></p></div>
+    <div class="group prose"><p>Bir öğünü kaçırırsan<small>Kalorini ve proteinini günün kalanında tamamlarsan gün %${100 - skipLoss} olur. Kalan öğünlere eklenen telafi satırları bunun için.</small></p>
+      <p>Öğünü başka bir şeyle değiştirirsen<small>Kalori ve protein tutuyorsa kayıp %${swapLoss}'ü geçmez.</small></p>
+      <p>Kaydetmediğin öğün<small>Puanı düşürmez. Bugün ekranındaki gün halkaları ise günün ne kadarını plana uygun kaydettiğini gösterir.</small></p></div>
+    <button class="textbtn" data-act="close">Kapat</button>`);
 }
 const PROG = [['kurallar', 'list', 'Kurallar', `${RULES.length} madde`], ['saatler', 'clock', 'Öğün saatleri', 'Hafta içi ve hafta sonu'], ['muadil', 'swap', 'Muadiller', 'Neyin yerine ne yenir'], ['gidalar', 'ogle', 'Gıdalarım', ''], ['takviye', 'pill', 'Takviyeler', ''],
   ['antrenman', 'gym', 'Antrenman', Object.entries(WORKOUTS).map(([n, w]) => `${DOW[n]} ${w.name.toLocaleLowerCase('tr')}`).join(' · ')], ['vucut', 'person', 'Vücut analizi', `${fmtDM(PLAN.body.date)} ölçümü`], ['ai', 'chat', 'Yapay zekâ', ''], ['baglanti', 'link', 'Program bağlantısı', 'Yükle ya da paylaş'], ['veri', 'down', 'Yedek', 'İndir ya da geri yükle']];
 function planView() {
   const t = balance(today), last = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1).pop();
   return `<header class="head"><div><p>${esc(PLAN.dietitian.name || 'Diyetisyen programı')} · ${fmtDM(PLAN.date)}</p><h1>Program</h1></div></header>
-    <section class="card pad"><span class="label">Hedef</span><div class="num">${PLAN.goal.kg.toLocaleString('tr-TR')}<em>kg</em></div><p class="note" style="padding:8px 0 14px">${esc(PLAN.goal.text)}</p>
-      <div class="tiles two" style="margin:0"><div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Şu an</span><strong style="margin-top:8px">${last.kg.toLocaleString('tr-TR')}<em>kg</em></strong><small>${PLAN.body.fat} yağ</small></div>
+    <section class="card pad"><span class="label">Hedef</span><div class="num">${PLAN.goal.kg ? PLAN.goal.kg.toLocaleString('tr-TR') + '<em>kg</em>' : '—'}</div><p class="note" style="padding:8px 0 14px">${esc(PLAN.goal.text)}</p>
+      <div class="tiles two" style="margin:0"><div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Şu an</span><strong style="margin-top:8px">${last ? last.kg.toLocaleString('tr-TR') + '<em>kg</em>' : '—'}</strong><small>${PLAN.body.fat ? PLAN.body.fat + ' yağ' : 'Son tartı'}</small></div>
         <div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Günlük plan</span>${KC ? `<strong style="margin-top:8px">${num(t.tk)}<em>kcal</em></strong><small>${num(t.tp)} g protein</small>` : `<strong style="margin-top:8px">${num(t.tp)}<em>g</em></strong><small>protein</small>`}</div></div></section>
-    <section class="card">${PROG.map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiCode() ? 'Davet kodu kayıtlı' : aiKey() ? 'API anahtarı kayıtlı' : PROXY_URL ? 'Davet kodu gerekli' : 'API anahtarı gerekli') : id === 'gidalar' ? (Object.keys(S.foods || {}).length ? `${Object.keys(S.foods).length} gıda` : 'Kendi ürünlerin') : id === 'takviye' ? (SUPS().length ? `${SUPS().length} takviye` : 'Ne zaman alacağını hatırlat') : m}</span></span>${ic('right')}</button>`).join('')}</section>
+    <section class="card">${PROG.filter(([id]) => !(id === 'antrenman' && !Object.keys(WORKOUTS).length) && !(id === 'vucut' && !BODY.length) && !(id === 'muadil' && !SWAPS.length)).map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiCode() ? 'Davet kodu kayıtlı' : aiKey() ? 'API anahtarı kayıtlı' : PROXY_URL ? 'Davet kodu gerekli' : 'API anahtarı gerekli') : id === 'gidalar' ? (Object.keys(S.foods || {}).length ? `${Object.keys(S.foods).length} gıda` : 'Kendi ürünlerin') : id === 'takviye' ? (SUPS().length ? `${SUPS().length} takviye` : 'Ne zaman alacağını hatırlat') : m}</span></span>${ic('right')}</button>`).join('')}</section>
     <p class="note">Kayıtlar yalnızca bu cihazda tutulur. Kalori ve protein değerleri yaklaşık tahminlerdir.</p>`;
 }
 function progSheet(p) {
@@ -442,9 +617,11 @@ function progSheet(p) {
   showSheet(S2[p]());
 }
 function render() {
-  document.getElementById('app').innerHTML = tab === 'today' ? todayView() : tab === 'week' ? weekView() : planView();
-  document.getElementById('dock').innerHTML = `<div class="tabs">${[['today', 'today', 'Bugün'], ['week', 'week', 'Hafta'], ['plan', 'list', 'Program']].map(([t, i, n]) =>
-    `<button class="${tab === t ? 'on' : ''}" data-act="tab" data-t="${t}">${ic(i)}${n}</button>`).join('')}</div><button class="fab" data-act="quick" aria-label="Sıradaki öğünü fotoğrafla">${ic('cam')}</button>`;
+  document.getElementById('app').innerHTML = tab === 'today' ? todayView() : tab === 'week' ? weekView() : tab === 'progress' ? progressView() : planView();
+  document.getElementById('dock').innerHTML = `<div class="tabs">${[['today', 'today', 'Bugün'], ['week', 'week', 'Hafta'], ['progress', 'grid', 'İlerleme'], ['plan', 'list', 'Program']].map(([t, i, n]) =>
+    `<button class="${tab === t ? 'on' : ''}" data-act="tab" data-t="${t}">${ic(i)}${n}</button>`).join('')}</div>`;
+  placeStrip();
+  const h = document.getElementById('heat'); if (h) h.scrollLeft = h.scrollWidth;
 }
 
 /* ---------- Alt sayfalar ---------- */
@@ -452,20 +629,81 @@ const $sheet = () => document.getElementById('sheet');
 const showSheet = html => { $sheet().innerHTML = '<div class="grab"></div>' + html; $sheet().scrollTop = 0; document.body.classList.add('sheet-open'); };
 const closeSheet = () => { document.body.classList.remove('sheet-open'); sheet = null; pending = null; };
 function findItem(id) { const [mid, iid] = id.split('.'), meal = MEALS.find(m => m.id === mid); return [meal, itemsOf(meal, sel).find(i => i.id === iid)]; }
+/* ---------- Kalem sayfası ----------
+   Bir kalemde ne kadar ve ne yendiği. Her dokunuş hemen kaydedilir: seçenek (programın eşdeğerleri, muadiller,
+   uygulamanın önerdikleri, kütüphaneden ya da yazılan) ve porsiyon. Yenen değer: plan kalemi ve muadilleri için
+   planın değeri × porsiyon; kütüphaneden seçilen için kendi değeri × porsiyon.
+   Kayıt: done { o?: seçenek sırası, q?, k?, p? } · swap { sub: ölçekli ad, base?: ölçeksiz ad, alt?: programdan, q?, k, p, src? }. */
+let IT = null;   /* { id, c: { t: 'opt'|'sub'|'sugg'|'lib'|'txt', i, x, text }, q } */
 function openSheet(id) {
-  const [meal, it] = findItem(id), st = peek(sel).items[id], s = st ? st.s : ''; sheet = id;
-  const tick = on => on ? ic('check') : '';
-  const mains = it.id !== 'ana' ? '' : `<div class="sect">Ana yemeği değiştir</div><div class="group">${MAINS.map(m => { const q = GROUPS[m.g].perWeek, u = quotaUsed(sel, meal.id, m.g), cur = mainFor(sel, meal.id).id === m.id;
+  const [, it] = findItem(id), st = peek(sel).items[id];
+  let c = { t: 'opt', i: 0 }, q = 1;
+  if (st) {
+    q = st.q || (st.name && it.k ? Math.round(st.k / it.k * 4) / 4 || 1 : 1);
+    if (st.s === 'done' && st.o) c = { t: 'opt', i: st.o };
+    if (st.s === 'swap') { const b = st.base || st.sub, si = (it.subs || []).indexOf(b), gi = (it.sugg || []).indexOf(b);
+      c = si >= 0 ? { t: 'sub', i: si } : gi >= 0 ? { t: 'sugg', i: gi } : st.src ? { t: 'lib', x: { ...st.src } } : { t: 'txt', text: b };
+      if (!st.base && !st.src) q = 1; }   /* eski kayıtta ad zaten yenen miktardır */
+  }
+  IT = { id, c, q }; itemSheet();
+}
+/* Seçili seçeneğin ölçeksiz metni ve ayrıştırılmış miktarı. */
+const itBase = (it, c) => c.t === 'opt' ? (it.opts ? it.opts[c.i] : it.name) : c.t === 'sub' ? it.subs[c.i] : c.t === 'sugg' ? it.sugg[c.i] : c.t === 'lib' ? c.x.n : c.text;
+const itVal = (it, c, q) => c.t === 'lib' ? { k: Math.round(c.x.k * q), p: r1(c.x.p * q) } : { k: Math.round(it.k * q), p: r1(it.p * q) };
+function itemSheet() {
+  const [meal, it] = findItem(IT.id), st = peek(sel).items[IT.id], s = st ? st.s : ''; sheet = IT.id;
+  const c = IT.c, base = itBase(it, c), pa = c.t === 'lib' ? null : parseAmt(base), V = itVal(it, c, IT.q), P = itemView(it, null);
+  const now = pa ? amtText(pa, IT.q) : `${qLab(IT.q)} porsiyon`, nm = pa ? pa.rest : base;
+  const tick = on => `<span class="radio ${on ? 'on' : ''}">${on ? ic('check') : ''}</span>`;
+  const same = (t, i) => !!s && s !== 'skip' && c.t === t && c.i === i;
+  const opt = (t, i, text, sub) => `<button class="opt" data-act="it-o" data-t="${t}" data-i="${i}"><span>${esc(text)}<small>${sub}</small></span>${tick(same(t, i))}</button>`;
+  const plan = (it.opts || [it.name]).map((o, i) => opt('opt', i, o, i ? 'Programdaki seçenek' : 'Planlanan')).join('');
+  const subs = (it.subs || []).map((x, i) => opt('sub', i, x, 'Programdaki muadil')).join('');
+  const sugg = (it.sugg || []).map((x, i) => opt('sugg', i, x, 'Uygulamanın önerisi')).join('');
+  const own = (c.t === 'lib' || c.t === 'txt') && s === 'swap' ? `<div class="opt"><span>${esc(base)}<small>${c.t === 'lib' ? 'Kütüphaneden' : 'Kendi yazdığın'}</small></span>${tick(true)}</div>` : '';
+  const mains = it.id !== 'ana' ? '' : `<div class="sect">Bugünün ana yemeği</div><div class="group">${MAINS.map(m => { const q = GROUPS[m.g].perWeek, u = quotaUsed(sel, meal.id, m.g), cur = mainFor(sel, meal.id).id === m.id;
     return `<button class="opt" data-act="main" data-meal="${meal.id}" data-m="${m.id}"><span>${m.name}<small>Bu hafta ${u} / ${q}</small></span>${tick(cur)}</button>`; }).join('')}</div>`;
-  showSheet(`<h2>${esc(label(it))}</h2><p class="lead">${meal.title}${hint(it) ? ' · ' + esc(hint(it)) : ''}</p>
-    <div class="group"><button class="opt" data-act="s-done"><span>Yedim</span>${tick(s === 'done')}</button><button class="opt" data-act="s-skip"><span>Atladım</span>${tick(s === 'skip')}</button></div>
-    ${s === 'swap' && st.k != null ? `<div class="sect">${esc(st.src ? st.src.n : st.sub)}: ne kadar?</div>${qchips('sq', st.q || 1)}` : ''}
-    ${mains}<div class="sect">Yerine bunu yedim</div>
-    <div class="group">${(it.subs || []).map((x, i) => `<button class="opt" data-act="s-sub" data-i="${i}"><span>${esc(x)}</span>${tick(s === 'swap' && st.sub === x)}</button>`).join('')}
-      <div class="field"><input id="custom" type="text" placeholder="Başka bir şey… (ara ya da yaz)" enterkeyhint="done" autocomplete="off"><button class="btn" data-act="s-custom">Ekle</button></div><div id="csug"></div></div>
-    ${s ? `<button class="textbtn" data-act="s-clear">İşareti kaldır</button>` : ''}`);
+  showSheet(`<h2>${esc(cap(nm))}</h2><p class="lead">${meal.title} · planda ${esc(P.amt ? P.amt + ' ' + lc(P.n) : P.n)}${KC ? ` · yaklaşık ${num(it.k)} kcal` : ''}</p>
+    <div class="sect">Ne kadar yedin?</div>
+    <div class="amtbox"><button data-act="it-q" data-n="-1" aria-label="Azalt">${ic('minus')}</button><div><b>${esc(now)}</b><small>${KC ? `${num(V.k)} kcal · ` : ''}${num1(V.p)} g protein</small></div><button data-act="it-q" data-n="1" aria-label="Artır">${ic('plus')}</button></div>
+    ${mains}<div class="sect">Ne yedin?</div>
+    <div class="group">${plan}${subs}${sugg}${own}</div>
+    ${sugg ? `<p class="note">Uygulamanın önerileri aynı besin grubundan yaklaşık eşdeğerlerdir; programında yoksa diyetisyenine danış.</p>` : ''}
+    <div class="group"><div class="field"><input id="custom" type="text" placeholder="Başka bir şey… (ara ya da yaz)" enterkeyhint="done" autocomplete="off"><button class="btn" data-act="s-custom">Ekle</button></div><div id="csug"></div></div>
+    <button class="primary" data-act="it-ok">${ic('check')}${s && s !== 'skip' ? 'Tamam' : 'Yedim'}</button>
+    <div class="tbtns">${s === 'skip' ? '' : `<button data-act="s-skip">Atladım</button>`}${s ? `<button data-act="s-clear">İşareti kaldır</button>` : ''}</div>`);
+}
+/* Taslağı kayda geçirir. Planlanan seçenek tam porsiyonsa telafinin azalttığı değer korunur. */
+function itApply(A) {
+  const [meal, it] = findItem(IT.id), c = IT.c, q = IT.q, d = day(sel), V = itVal(it, c, q), sc = q === 1 ? {} : { q, k: V.k, p: V.p };
+  lockMain(sel, meal);
+  if (c.t === 'opt') { const o = A.over[IT.id]; d.items[IT.id] = q === 1 && !c.i && o ? { s: 'done', name: o.name, k: o.k, p: o.p } : { s: 'done', ...(c.i ? { o: c.i } : {}), ...sc }; }
+  else if (c.t === 'sub' || c.t === 'sugg') { const b = itBase(it, c); d.items[IT.id] = { s: 'swap', sub: scaleText(b, q), base: b, ...(c.t === 'sub' ? { alt: 1 } : {}), ...sc }; }
+  else if (c.t === 'lib') d.items[IT.id] = { s: 'swap', sub: q === 1 ? c.x.n : `${c.x.n} × ${qLab(q)}`, k: V.k, p: V.p, q, src: { n: c.x.n, k: c.x.k, p: c.x.p, u: c.x.u || '' } };
+  else d.items[IT.id] = { s: 'swap', sub: scaleText(c.text, q), base: c.text, ...sc };
 }
 function needKey() { progSheet('ai'); }
+
+/* ---------- Öğün notu ve fotoğraf açıklaması ----------
+   days[k].notes = { öğün: 'metin' }: isteğe bağlı açıklama; panelde görünür, haftalık rapora ve asistana gider.
+   Fotoğrafla kayıtta çekimden sonra açıklama sorulur; analizde hesaba katılır ve öğünün notu olur. */
+let NT = null, PH = null;   /* NT: notu düzenlenen öğün · PH: { meal, full } çekilen fotoğraf */
+function noteSheet(mealId) {
+  sheet = 'note'; NT = mealId;
+  const m = MEALS.find(x => x.id === mealId), v = (peek(sel).notes || {})[mealId] || '';
+  showSheet(`<h2>${m.title} notu</h2><p class="lead">İsteğe bağlı. Haftalık raporla diyetisyenine gider; örneğin dışarıda yedin, porsiyon büyüktü ya da canın istemedi.</p>
+    <textarea id="notetx" placeholder="Açıklama yaz">${esc(v)}</textarea>
+    <button class="primary" data-act="notesave">${ic('check')}Kaydet</button>${v ? `<button class="textbtn" data-act="notedel">Notu sil</button>` : `<button class="textbtn" data-act="close">Vazgeç</button>`}`);
+  setTimeout(() => { const t = document.getElementById('notetx'); if (t) t.focus(); }, 320);
+}
+function photoSheet() {
+  sheet = 'photo';
+  const m = MEALS.find(x => x.id === PH.meal);
+  showSheet(`<h2>${m.title}</h2><p class="lead">Fotoğrafta görünmeyen bir şey varsa yaz; analizde hesaba katılır ve öğünün notu olur.</p>
+    <img class="shot" src="data:image/jpeg;base64,${PH.full}" alt="">
+    <textarea id="phtx" placeholder="Açıklama (isteğe bağlı) · örn. yarısını yedim, sosu yoktu"></textarea>
+    <button class="primary" data-act="phgo">${ic('check')}Analiz et</button><button class="textbtn" data-act="close">Vazgeç</button>`);
+}
 
 /* ---------- Yapay zekâ bağlantısı ve rıza ----------
    Bütün çağrılar aiFetch'ten geçer. Bugün tarayıcıdan doğrudan Anthropic'e, kullanıcının anahtarıyla gider;
@@ -522,9 +760,9 @@ const SCHEMA = { type: 'object', additionalProperties: false, required: ['main',
     id: { type: 'string' }, status: { type: 'string', enum: ['done', 'skip', 'swap'] }, sub: { type: 'string' }, kcal: { type: 'number' }, protein: { type: 'number' } } } },
   extras: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'kcal', 'protein'], properties: { name: { type: 'string' }, kcal: { type: 'number' }, protein: { type: 'number' } } } },
   note: { type: 'string' } } };
-function shrink(file) {
+function shrink(file, max = 1280) {
   return new Promise((ok, no) => { const img = new Image(), url = URL.createObjectURL(file);
-    img.onload = () => { const r = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+    img.onload = () => { const r = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
       c.width = Math.round(img.width * r); c.height = Math.round(img.height * r); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.82).split(',')[1]); };
     img.onerror = () => no(new Error('Fotoğraf okunamadı')); img.src = url; });
@@ -543,13 +781,15 @@ Plandaki her kalem items listesinde tam bir kez yer almalı. Plandaki hiçbir ka
 
 Kimliği "ana" olan kalem ana yemektir. Yenen ana yemek şu seçeneklerden birine uyuyorsa main alanına onun kimliğini yaz ve kalemi "done" say: ${MAINS.map(m => m.ai ? `${m.id} (${m.ai})` : m.id).join(', ')}. Hiçbirine uymuyorsa main boş kalsın ve kalemi "swap" olarak işle. Plan "ana" kalemi içermiyorsa main boş kalsın.
 
+Fotoğrafla birlikte kullanıcının açıklaması gelirse onu da hesaba kat (ör. "yarısını yedim", "ekmeği yemedim", "sosu yoktu"); fotoğrafla çelişirse açıklamayı esas al.
+
 Emin olamadığın bir şey varsa note alanında tek cümleyle söyle; yoksa boş bırak.`;
   const content = [];
   if (image) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } });
-  content.push({ type: 'text', text: `Planlanan kalemler:\n${JSON.stringify(plan, null, 1)}${text ? `\n\nKullanıcının yazdığı:\n${text}` : ''}` });
+  content.push({ type: 'text', text: `Planlanan kalemler:\n${JSON.stringify(plan, null, 1)}${text ? `\n\n${image ? 'Kullanıcının açıklaması' : 'Kullanıcının yazdığı'}:\n${text}` : ''}` });
   try {
     const R = await aiJSON({ model: AI_MODEL, max_tokens: 16000, system, messages: [{ role: 'user', content }], output_config: { format: { type: 'json_schema', schema: SCHEMA } } }, 'Bu içerik analiz edilemedi.');
-    pending = { meal: mealId, R, its };
+    pending = { meal: mealId, R, its, note: image ? text : '' };
     resultSheet(meal);
   } catch (e) {
     showSheet(`<h2>Olmadı</h2><p class="err" style="padding-top:8px">${esc(e.message || 'Bağlantı kurulamadı.')}</p><button class="textbtn" data-act="close">Kapat</button>`);
@@ -566,8 +806,10 @@ function resultSheet(meal) {
     <button class="primary" data-act="applyai">${ic('check')}Kaydet</button><button class="textbtn" data-act="close">Vazgeç</button>`);
 }
 function applyAI() {
-  const { meal: mealId, R, its } = pending, d = day(sel), meal = MEALS.find(m => m.id === mealId);
+  const { meal: mealId, R, its, note } = pending, d = day(sel), meal = MEALS.find(m => m.id === mealId);
   if (meal.main) d.main[mealId] = R.main || mainFor(sel, mealId).id;
+  /* Fotoğrafa yazılan açıklama öğünün notu olur (varsa eskisinin yerine geçmez). */
+  if (note) { const n = d.notes || (d.notes = {}); if (!n[mealId]) n[mealId] = note; }
   its.forEach(it => { const x = R.items.find(a => a.id === it.id) || { status: 'skip' }, id = mealId + '.' + it.id;
     d.items[id] = x.status === 'done' ? { s: 'done' } : x.status === 'skip' ? { s: 'skip' } : { s: 'swap', sub: x.sub || 'Farklı bir şey', k: x.kcal, p: x.protein }; });
   d.extras = d.extras.filter(e => e.meal !== mealId || e.adj).concat(R.extras.map(e => ({ meal: mealId, name: e.name, k: e.kcal, p: e.protein })));
@@ -583,7 +825,7 @@ function applyAI() {
    böylece aynı şey ikinci kez çağrısız kaydedilir. */
 const fold = s => String(s).toLocaleLowerCase('tr').replace(/[çğıöşüâîû]/g, c => 'cgiosuaiu'['çğıöşüâîû'.indexOf(c)]).replace(/[^a-z0-9]+/g, ' ').trim();
 const QS = [.25, .5, .75, 1, 1.5, 2, 3];   /* porsiyon ölçekleri */
-const qLab = q => { const w = Math.floor(q), f = { .25: '¼', .5: '½', .75: '¾' }[q - w] || ''; return (w || '') + f || '0'; };
+const qLab = q => { q = Math.round(q * 4) / 4 || .25; const w = Math.floor(q), f = { .25: '¼', .5: '½', .75: '¾' }[q - w] || ''; return (w || '') + f || '0'; };
 /* Kullanıcının kendi kütüphanesi: k ve p bir porsiyon içindir; c kaç kez, t son tarih, m öğün başına sayı. */
 function remember(meal, n, k, p, u) {
   const id = fold(n); if (!id || !(k >= 0)) return;
@@ -782,6 +1024,19 @@ function planSheet() {
   sheet = 'plan';
   if (!PL.set) PL.set = { name: PLAN.dietitian.name || '', phone: PLAN.dietitian.phone || '', kcal: KC, tune: TUNE_ON };
   const P2 = PL.incoming, cur = PLAN;
+  if (P2 && PL.built) {
+    /* Fotoğraftan oluşturulan: yüklemeden önce öğün öğün gözden geçirilir. */
+    const tk = P2.meals.reduce((t, m) => t + m.items.reduce((a, id) => a + (P2.items[id].optional ? 0 : P2.items[id].k), 0), 0);
+    const tp = P2.meals.reduce((t, m) => t + m.items.reduce((a, id) => a + (P2.items[id].optional ? 0 : P2.items[id].p), 0), 0);
+    return showSheet(`<h2>Programın hazır</h2><p class="lead">Okuduklarım aşağıda. Yanlış ya da eksik bir şey varsa geri dönüp açıklamaya yaz, yeniden oluşturayım.</p>
+      ${PL.note ? `<p class="note" style="padding:0 6px 14px">${esc(PL.note)}</p>` : ''}
+      ${P2.meals.map(m => `<div class="sect">${esc(m.title)}${m.time ? ' · ' + m.time + (m.wknd !== m.time ? ` (hafta sonu ${m.wknd})` : '') : ''}</div><div class="group">${m.items.map(id => { const it = P2.items[id], alts = [...(it.opts || []).slice(1), ...(it.subs || [])], sg = it.sugg || [];
+        return `<div class="opt"><span>${esc(it.opts ? it.opts[0] : it.name)}<small>${esc([alts.length ? 'veya ' + alts.join(', ') : '', sg.length ? 'önerilen: ' + sg.join(', ') : '', it.optional ? 'isteğe bağlı' : ''].filter(Boolean).join(' · '))}</small></span><small>${num(it.k)} kcal</small></div>`; }).join('')}</div>`).join('')}
+      <div class="group"><div class="kv"><span>Günlük toplam</span><span>yaklaşık ${num(tk)} kcal · ${num(tp)} g protein</span></div>${P2.goal.kg ? `<div class="kv"><span>Hedef</span><span>${P2.goal.kg} kg</span></div>` : ''}
+        <div class="kv"><span>Kurallar</span><span>${P2.rules.length} madde</span></div><div class="kv"><span>Su</span><span>${P2.daily.water.goal} bardak</span></div></div>
+      <p class="note">Değerler tahmindir. Programı yükleyince kayıtların ve gıdaların silinmez.</p>
+      <button class="primary" data-act="planload">${ic('check')}Programı yükle</button><button class="textbtn" data-act="pbback">Geri dön, açıklama ekle</button>`);
+  }
   if (P2) {
     const meals = P2.meals.filter(m => m.time).map(m => m.title).join(' · ');
     return showSheet(`<h2>Yeni program</h2><p class="lead">Bu program yüklenirse şimdiki programın yerine geçer. Kayıtların ve gıdaların silinmez.</p>
@@ -795,6 +1050,7 @@ function planSheet() {
     <div class="sect">Program yükle</div>
     <div class="group"><div class="field"><input id="plink" type="text" autocomplete="off" placeholder="Bağlantıyı yapıştır"><button class="btn" data-act="planpaste">Aç</button></div></div>
     ${PL.err ? `<p class="err">${esc(PL.err)}</p>` : ''}
+    <div class="group"><button class="opt" data-act="build"><span>Kâğıttaki programı aktar<small>Sayfaların fotoğrafından oluştur</small></span>${ic('cam')}</button></div>
     <div class="sect">Diyetisyen ayarları</div>
     <div class="group form"><label class="fl"><span>Ad</span><input id="dname" value="${esc(PL.set.name)}" placeholder="Örn. Dyt. Ayşe Yılmaz" autocomplete="off"></label>
       <label class="fl"><span>Telefon</span><input id="dphone" value="${esc(PL.set.phone)}" inputmode="tel" placeholder="Haftalık rapor için" autocomplete="off"></label>
@@ -814,6 +1070,92 @@ async function planFromHash() {
   catch (e) { PL = { err: e.message }; planSheet(); history.replaceState(null, '', location.pathname + location.search); }
 }
 
+/* ---------- Fotoğraftan program ----------
+   Diyetisyen programı bağlantıyla gelmediyse kullanıcı kâğıttaki programın sayfalarını çeker ve açıklama ekler;
+   yapay zekâ bunu plan biçimine çıkarır, kullanıcı yüklemeden önce gözden geçirir. Ana yemek dönüşümü, antrenman ve
+   telafi kuralları üretilmez (onlar diyetisyenin ayarı). sugg: programda olmayan, uygulamanın önerdiği muadiller. */
+const SETUPKEY = 'diyet-setup';
+let PB = null;   /* { pics: [{ img, full }], text, busy, err } */
+const setupDone = () => { try { localStorage.setItem(SETUPKEY, today); } catch (e) {} };
+/* İlk açılış: kayıt da yüklenmiş program da yoksa nasıl başlanacağı sorulur. */
+function welcomeSheet() {
+  sheet = 'welcome';
+  const o = (w, icn, n, m) => `<button class="nav-row" data-act="welcome" data-w="${w}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${m}</span></span>${ic('right')}</button>`;
+  showSheet(`<h2>Hoş geldin</h2><p class="lead">Önce diyetisyeninin programını ekleyelim. Öğünlerin, saatlerin ve muadillerin buradan gelir.</p>
+    <div class="group">${o('link', 'link', 'Diyetisyenim bağlantı gönderdi', 'Bağlantıyı yapıştır, program hazır gelir')}${o('photo', 'cam', 'Kâğıttaki programımı aktar', 'Sayfaların fotoğrafını çek, eklemek istediklerini yaz')}${o('demo', 'list', 'Örnek programla bak', 'Sonra Program sekmesinden değiştirebilirsin')}</div>`);
+}
+const pbSync = () => { const t = document.getElementById('pbtx'); if (t && PB) PB.text = t.value; };
+function buildSheet() {
+  sheet = 'build'; if (!PB) PB = { pics: [], text: '' };
+  if (PB.busy) return showSheet(`<div class="busy"><div class="spin"></div>Programı okuyorum… Birkaç sayfa bir dakikayı bulabilir.</div>`);
+  showSheet(`<h2>Programını aktar</h2><p class="lead">Diyetisyeninin verdiği programın her sayfasını çek. Kâğıtta olmayanları ya da değişenleri altına yaz.</p>
+    <div class="pages">${PB.pics.map((p, i) => `<button class="pg" data-act="pbx" data-i="${i}" aria-label="Sayfayı çıkar"><img src="${p.img}" alt=""><i>${ic('x')}</i></button>`).join('')}
+      ${PB.pics.length < 6 ? `<button class="pg add" data-act="pbadd" aria-label="Sayfa ekle">${ic('cam')}<small>${PB.pics.length ? 'Sayfa ekle' : 'Fotoğraf çek'}</small></button>` : ''}</div>
+    <textarea id="pbtx" placeholder="Ek açıklama (isteğe bağlı) · örn. kahvaltı 09:00, öğle 13:00; hafta sonu bir saat geç. Hedefim 80 kg. Ara öğünde muz yemiyorum.">${esc(PB.text)}</textarea>
+    ${PB.err ? `<p class="err">${esc(PB.err)}</p>` : ''}
+    <button class="primary" data-act="pbgo" ${PB.pics.length || PB.text.trim() ? '' : 'disabled'}>${ic('check')}Programı oluştur</button>
+    <p class="note" style="padding-top:12px;text-align:center">Yapay zekâ okur; yüklemeden önce sonucu kontrol edersin. Kalori ve protein değerleri tahmindir.</p>`);
+}
+const PB_SCHEMA = { type: 'object', additionalProperties: false, required: ['dietitian', 'meals', 'rules', 'swaps', 'goal', 'water', 'note'], properties: {
+  dietitian: { type: 'string' },
+  meals: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['title', 'time', 'wknd', 'items'], properties: {
+    title: { type: 'string' }, time: { type: 'string' }, wknd: { type: 'string' },
+    items: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'chip', 'opts', 'subs', 'sugg', 'meta', 'kcal', 'protein', 'optional'], properties: {
+      name: { type: 'string' }, chip: { type: 'string' }, opts: { type: 'array', items: { type: 'string' } }, subs: { type: 'array', items: { type: 'string' } },
+      sugg: { type: 'array', items: { type: 'string' } }, meta: { type: 'string' }, kcal: { type: 'number' }, protein: { type: 'number' }, optional: { type: 'boolean' } } } } } } },
+  rules: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['text', 'note'], properties: { text: { type: 'string' }, note: { type: 'string' } } } },
+  swaps: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['from', 'to'], properties: { from: { type: 'string' }, to: { type: 'string' } } } },
+  goal: { type: 'object', additionalProperties: false, required: ['kg', 'text'], properties: { kg: { type: 'number' }, text: { type: 'string' } } },
+  water: { type: 'number' }, note: { type: 'string' } } };
+const PB_SYSTEM = `Bir diyet takip uygulamasına diyetisyen programı aktarılıyor. Programın sayfalarının fotoğrafları ve/veya kullanıcının açıklaması verilir. Programı uygulamanın biçimine çıkar. Programda olmayan öğün ya da yiyecek uydurma. Kullanıcının açıklaması programla çelişirse açıklamayı esas al.
+
+- meals: öğünler günün sırasıyla. title kısa ve Türkçe ("Kahvaltı", "Ara öğün", "Öğle", "İkindi", "Akşam", "Gece"); aynı adı iki kez kullanma. time hafta içi saati "SS:DD"; programda yoksa açıklamadan al, o da yoksa öğünün olağan saatini tahmin et. Yalnızca uyanınca içilen su gibi tek kalemli bir adımın time'ı boş olabilir. wknd hafta sonu saati; farklı değilse time ile aynı.
+- items: öğündeki her ayrı yiyecek bir kalem. name programda yazdığı gibi miktarıyla başlasın ("2 dilim tam buğday ekmeği", "150 g tavuk", "1 su bardağı ayran").
+- opts: programda "veya / ya da" ile verilen eşdeğer seçenekler, programın yazdığı sırayla, her biri miktarıyla. Seçenek varsa name grubun kısa adı olsun ("Peynir"); yoksa opts boş.
+- subs: programda "yerine", "muadil", "değişim" diye verilen alternatifler, miktarıyla. Yoksa boş.
+- sugg: kalemde programın verdiği hiçbir alternatif yoksa ve kalem yaygın bir besin grubundansa (ekmek ve tahıl, et-tavuk-balık-yumurta, peynir, süt ve yoğurt, meyve, yağlı tohum) aynı gruptan 2-4 yaygın yaklaşık eşdeğer, miktarıyla. Programda yazanı buraya koyma; emin değilsen boş bırak.
+- chip: 1-2 kelimelik kısa ad ("Ekmek", "Yumurta").
+- meta: kalemin yanındaki kısa not ("tuzsuz", "yağsız"); yoksa boş.
+- kcal ve protein: kalemin bir porsiyonu için Türkiye'deki tipik ürünlere göre gerçekçi tahmin; opts varsa ilk seçeneğin değeri.
+- optional: programda isteğe bağlı denmişse ya da kalorisiz içecekse (şekersiz çay, sade kahve, su) true.
+- rules: programdaki genel kurallar ve notlar; text kısa kural, note açıklaması ya da boş.
+- swaps: programda ayrı bir değişim ya da muadil tablosu varsa satırları (from → to); yoksa boş.
+- goal: hedef kilo yazıyorsa kg, yoksa 0; text kısa hedef cümlesi ya da boş.
+- water: günlük su hedefi, bardak (250 ml) olarak; yoksa 10.
+- dietitian: diyetisyenin adı yazıyorsa; yoksa boş.
+- note: okunamayan, emin olmadığın ya da tahmin ettiğin önemli bir şey varsa bir-iki cümleyle; yoksa boş.`;
+/* Yapay zekânın çıktısını plan biçimine çevirir; kimlikler addan türetilir. */
+function toPlan(R) {
+  const used = new Set(['ana', 'yat', 'gym']), uid = (s, pre) => { const b = fold(s).replace(/ /g, '-').slice(0, 18) || pre; let x = b, i = 2; while (used.has(x)) x = b + '-' + i++; used.add(x); return x; };
+  const items = {}, meals = []; let prev = '';
+  R.meals.filter(m => m.items.length).forEach((m, mi) => {
+    let time = isHM(m.time) ? m.time : '';
+    /* Saatsiz çok kalemli öğün zaman çizelgesinde düzgün çalışmaz: öncekinin 2,5 saat sonrasına yerleşir. */
+    if (!time && (m.items.length > 1 || mi > 0)) { const t = prev ? hm(prev) + 150 : 8 * 60; time = `${pad(Math.floor(t / 60) % 24)}:${pad(t % 60)}`; }
+    if (time) prev = time;
+    const ids = m.items.map(x => { const id = uid(x.chip || x.name, 'kalem'), opts = x.opts.filter(Boolean);
+      items[id] = { k: Math.max(0, Math.round(x.kcal) || 0), p: Math.max(0, r1(x.protein) || 0), name: x.name.trim(), ...(x.chip ? { chip: x.chip } : {}), ...(opts.length > 1 ? { opts } : {}),
+        ...(x.meta ? { meta: x.meta } : {}), ...(x.subs.length ? { subs: x.subs } : {}), ...(x.sugg.length ? { sugg: x.sugg } : {}), ...(x.optional ? { optional: true } : {}) };
+      return id; });
+    meals.push({ id: uid(m.title, 'ogun'), title: m.title.trim(), ...(time ? { time, wknd: isHM(m.wknd) ? m.wknd : time } : {}), items: ids });
+  });
+  return { v: 1, id: 'plan-' + today, date: today, src: 'foto', dietitian: { name: R.dietitian || '', phone: '' }, prefs: { kcal: true, tune: false }, client: { name: '' },
+    goal: { kg: R.goal.kg > 30 ? R.goal.kg : 0, text: R.goal.text || '' }, items, mains: [], groups: {}, rota: {}, meals,
+    rules: R.rules.map(r => [r.text, r.note]), swaps: R.swaps.map(s => [s.from, s.to]), body: { date: today, fat: '', rows: [] },
+    daily: { water: { goal: Math.round(R.water) > 0 ? Math.round(R.water) : 10, ml: 250 }, coffee: { max: 2, note: '' }, walk: { perWeek: 0, name: 'Yürüyüş' } },
+    training: { perWeek: 0, time: '', after: '', lead: '', notes: {}, days: {} }, tune: { protein: [], cuts: [] } };
+}
+async function buildAI() {
+  PB.busy = true; PB.err = ''; buildSheet();
+  const content = PB.pics.map(p => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: p.full } }));
+  content.push({ type: 'text', text: (PB.pics.length ? `Programın ${PB.pics.length} sayfası yukarıda.` : 'Fotoğraf yok; program yalnızca açıklamada.') + (PB.text.trim() ? `\n\nKullanıcının açıklaması:\n${PB.text.trim()}` : '') });
+  try {
+    const R = await aiJSON({ model: AI_MODEL, max_tokens: 16000, system: PB_SYSTEM, messages: [{ role: 'user', content }], output_config: { format: { type: 'json_schema', schema: PB_SCHEMA } } }, 'Program okunamadı.');
+    const p = toPlan(R), err = planCheck(p); if (err) throw new Error(err + ' Sayfaları daha net çekip yeniden dene.');
+    PB.busy = false; PL = { incoming: p, built: true, note: R.note }; planSheet();
+  } catch (e) { PB.busy = false; PB.err = e.message || 'Bağlantı kurulamadı.'; if (sheet === 'build') buildSheet(); }
+}
+
 /* ---------- Haftalık rapor ----------
    Diyetisyenin haftalık kontrolü için, kâğıt takip tablolarının yerine. Yerelde üretilir (yapay zekâ yok);
    WhatsApp biçimiyle (*kalın*) düz metin. Telefon numarası varsa doğrudan diyetisyenin sohbetine açılır. */
@@ -823,7 +1165,7 @@ function weekReport(k0) {
   const L = [`*Haftalık rapor · ${fmtD(wk[0])} – ${fmtD(wk[6])}*`];
   if (PLAN.client && PLAN.client.name) L.push(PLAN.client.name);
   const rec = k => { const d = peek(k); return Object.keys(d.items).length || (d.extras || []).length || d.water || d.gym || d.walk; };
-  const logged = past.filter(rec), stats = logged.map(dayStat);
+  const logged = past.filter(rec), stats = logged.map(dayScore).filter(Boolean);
   /* Kilo: haftanın ilk ve son tartısı */
   const ws = [...S.weights].filter(w => wk.includes(w.d)).sort((a, b) => a.d < b.d ? -1 : 1);
   const before = [...S.weights].filter(w => w.d < wk[0]).sort((a, b) => a.d < b.d ? -1 : 1).pop();
@@ -852,9 +1194,14 @@ function weekReport(k0) {
     MEALS.filter(m => m.time).forEach(m => {
       const st = mealStat(m, k), ex = (d.extras || []).filter(e => e.meal === m.id && !e.adj), names = ex.map(e => e.name + (e.pl ? ' (planlandı)' : '')).join(', ');
       const sw = itemsOf(m, k).map(it => stOf(d, m, it)).filter(s => s && s.s === 'swap').map(s => s.sub);
+      /* Porsiyonu değişen kalemler: "Ekmek 1 dilim (plan 2 dilim)". */
+      const pq = itemsOf(m, k).map(it => [it, stOf(d, m, it)]).filter(([, s]) => s && s.s === 'done' && s.q && s.q !== 1)
+        .map(([it, s]) => { const v = itemView(it, s), p = itemView(it, null); return `${short(it)} ${v.amt || ''} (plan ${p.amt || '1 porsiyon'})`; });
       if (st.resolved && st.skip === st.total) notes.push(ex.length ? `${m.title} yerine ${names}` : `${m.title} atlandı`);
       else { if (st.skip && st.skip < st.total) notes.push(`${m.title}: ${st.skip} kalem atlandı`); if (ex.length) notes.push(`${m.title}: +${names}`); }
       if (sw.length) notes.push(`${m.title}: ${sw.join(', ')} (muadil)`);
+      if (pq.length) notes.push(`${m.title}: ${pq.join(', ')}`);
+      if ((d.notes || {})[m.id]) notes.push(`${m.title} notu: "${d.notes[m.id]}"`);
       if (!st.resolved && k < today && st.ok + st.skip === 0 && !ex.length) notes.push(`${m.title} işaretlenmemiş`);
     });
     L.push(`${DOW[parse(k).getDay()]} ${parse(k).getDate()}: ${notes.length ? notes.join(' · ') : 'plana uygun'}`);
@@ -862,6 +1209,86 @@ function weekReport(k0) {
   L.push('', '_Diyet uygulamasından_');
   return L.join('\n');
 }
+/* ---------- Döküm ----------
+   Seçilen günlerde ne yenip içildiğinin, kalem kalem dökümü. Yazdırılabilir sayfa olarak #print içine basılır ve
+   tarayıcının yazdır penceresi açılır; oradan PDF kaydedilir ya da paylaşılır. Yerelde üretilir, yapay zekâ yok. */
+let DK = null;   /* { a, b }: başlangıç ve bitiş günü */
+const DK_MAX = 62;
+const hasRec = k => { const d = S.days[k]; return !!d && (Object.keys(d.items || {}).length || (d.extras || []).length || d.water || d.coffee || d.gym || d.walk || Object.keys(d.supps || {}).length || S.weights.some(w => w.d === k)); };
+const dkDays = () => { const out = []; for (let k = DK.a; k <= DK.b; k = addDays(k, 1)) out.push(k); return out; };
+function dumpSheet() {
+  sheet = 'dump';
+  if (!DK) { const wk = weekOf(sel); DK = { a: wk[0], b: wk[6] < today ? wk[6] : today }; }
+  const wk = weekOf(today), prev = weekOf(addDays(today, -7));
+  const P = [['Bu hafta', wk[0], today], ['Geçen hafta', prev[0], prev[6]], ['Son 7 gün', addDays(today, -6), today], ['Son 14 gün', addDays(today, -13), today], ['Son 30 gün', addDays(today, -29), today]];
+  const days = dkDays(), n = days.filter(hasRec).length;
+  showSheet(`<h2>Döküm</h2><p class="lead">Seçtiğin günlerde ne yediğin, ne içtiğin, antrenmanın ve tartın; öğün öğün. PDF olarak kaydedip diyetisyenine gönder.</p>
+    <div class="chips pick">${P.map(([t, a, b]) => `<button class="${DK.a === a && DK.b === b ? 'on' : ''}" data-act="dkp" data-a="${a}" data-b="${b}">${t}</button>`).join('')}</div>
+    <div class="group form"><label class="fl"><span>Başlangıç</span><input id="dka" type="date" value="${DK.a}" max="${today}"></label>
+      <label class="fl"><span>Bitiş</span><input id="dkb" type="date" value="${DK.b}" max="${today}"></label></div>
+    <p class="note">${days.length} gün · ${n ? `${n} günde kayıt var` : 'bu aralıkta kayıt yok'}</p>
+    <button class="primary" data-act="dkgo" ${n ? '' : 'disabled'}>${ic('doc')}PDF oluştur</button>
+    <p class="note" style="padding-top:12px;text-align:center">Yazdır penceresi açılır. Bilgisayarda “PDF olarak kaydet”i seç; iPhone'da önizlemeye iki parmakla dokunup büyüt, sonra paylaş düğmesiyle gönder.</p>`);
+}
+/* Tarih alanları: aralık en çok DK_MAX gün, bitiş bugünden sonra olamaz. */
+function dkSet(a, b) {
+  if (!/^\d{4}-\d\d-\d\d$/.test(a) || !/^\d{4}-\d\d-\d\d$/.test(b)) return;
+  if (b > today) b = today; if (a > b) [a, b] = [b, a];
+  if (addDays(a, DK_MAX - 1) < b) a = addDays(b, -(DK_MAX - 1));
+  DK = { a, b };
+}
+/* Bir kalemin dökümdeki satırı. */
+function dumpItem(m, it, s, k) {
+  const plan = viewText(it, null);
+  if (!s) return it.optional ? '' : `<li class="un"><span>${esc(plan)}</span><em>işaretlenmedi</em></li>`;
+  if (s.s === 'skip') return `<li class="sk"><span>${esc(plan)}</span><em>${s.pl ? 'yerine başka şey planlandı' : 'atlandı'}</em></li>`;
+  const tag = s.s === 'swap' ? `${plan} yerine` : s.q && s.q !== 1 ? `planda ${itemView(it, null).amt || '1 porsiyon'}` : s.name ? 'azaltılmış porsiyon' : '';
+  return `<li><span>${esc(viewText(it, s))}</span>${tag ? `<em>${esc(tag)}</em>` : ''}${KC && (s.k ?? it.k) ? `<b>${num(s.k ?? it.k)}</b>` : ''}</li>`;
+}
+function dumpDay(k) {
+  const d = peek(k), B = balance(k), sc = dayScore(k), w = S.weights.find(x => x.d === k), W = WORKOUTS[parse(k).getDay()];
+  const title = parse(k).toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
+  if (!hasRec(k)) return `<section class="pday empty"><h2>${title}</h2><p>Kayıt yok.</p></section>`;
+  const sup = list => list.filter(s => supTaken(k, s.id)).map(s => s.n + (s.dose ? ' ' + s.dose : ''));
+  const meals = MEALS.map(m => {
+    const its = itemsOf(m, k), ex = (d.extras || []).filter(e => e.meal === m.id), st = mealStat(m, k), note = (d.notes || {})[m.id];
+    const sp = sup(supList(m.id)), head = `<h3>${m.title}${m.time ? `<small>${timeOf(m, k)}</small>` : ''}</h3>`;
+    let body;
+    if (!st.ok && !st.skip && !ex.length) body = `<p class="un">İşaretlenmedi</p>`;
+    else if (st.resolved && st.skip === st.total && !ex.length) body = `<p class="sk">Atlandı</p>`;
+    else body = `<ul>${its.map(it => dumpItem(m, it, stOf(d, m, it), k)).join('')}${ex.map(e => `<li><span>${esc(e.name)}</span><em>${e.adj ? 'telafi' : e.pl ? 'planlandı, yenmedi' : 'plan dışı'}</em>${KC ? `<b>${num(e.k)}</b>` : ''}</li>`).join('')}</ul>`;
+    return `<div class="pmeal">${head}${body}${sp.length ? `<p class="ps">Takviye: ${esc(sp.join(', '))}</p>` : ''}${note ? `<p class="pn">Not: ${esc(note)}</p>` : ''}</div>`;
+  }).join('');
+  const other = [...sup(supList('yat')), ...sup(SUPS().filter(s => isHM(anc(s)) || !anc(s)))];
+  const facts = [[`Su`, `${fmtNum1(d.water * WATER_ML / 1000)} L (${d.water} bardak)`], d.coffee ? ['Kahve', `${d.coffee} fincan`] : null,
+    W || d.gym ? ['Antrenman', d.gym ? `yapıldı${W ? ' · ' + W.name : ''}${d.z2 ? ' · sonrası kardiyo' : ''}` : `yapılmadı (${W.name} günü)`] : null,
+    WALK_GOAL || d.walk ? ['Yürüyüş', d.walk ? 'yapıldı' : 'yapılmadı'] : null, w ? ['Tartı', fmtNum1(w.kg) + ' kg'] : null,
+    other.length ? ['Takviye', other.join(', ')] : null].filter(Boolean);
+  const sum = [sc ? `uyum %${sc.pct}` : '', KC ? `${num(B.ek)} / ${num(B.tk)} kcal` : '', `${num(B.ep)} / ${num(B.tp)} g protein`].filter(Boolean).join(' · ');
+  return `<section class="pday"><h2>${title}<small>${sum}</small></h2>${meals}<dl>${facts.map(([a, b]) => `<dt>${a}</dt><dd>${esc(b)}</dd>`).join('')}</dl></section>`;
+}
+function dumpHTML() {
+  const days = dkDays(), rec = days.filter(hasRec), fmt = k => parse(k).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+  const rows = days.map(k => { if (!hasRec(k)) return `<tr class="un"><td>${DOW[parse(k).getDay()]} ${parse(k).getDate()}.${pad(parse(k).getMonth() + 1)}</td><td colspan="${KC ? 6 : 5}">kayıt yok</td></tr>`;
+    const d = peek(k), B = balance(k), sc = dayScore(k), w = S.weights.find(x => x.d === k);
+    return `<tr><td>${DOW[parse(k).getDay()]} ${parse(k).getDate()}.${pad(parse(k).getMonth() + 1)}</td><td>${sc ? '%' + sc.pct : '—'}</td>${KC ? `<td>${num(B.ek)}</td>` : ''}<td>${num(B.ep)} g</td><td>${fmtNum1(d.water * WATER_ML / 1000)} L</td><td>${d.gym ? 'var' : '—'}</td><td>${w ? fmtNum1(w.kg) : '—'}</td></tr>`; }).join('');
+  const who = [PLAN.client && PLAN.client.name, PLAN.dietitian.name && 'Diyetisyen: ' + PLAN.dietitian.name].filter(Boolean).join(' · ');
+  const B0 = balance(today);
+  return `<div class="pd"><header><h1>Beslenme dökümü</h1><p>${fmt(DK.a)} – ${fmt(DK.b)} · ${rec.length} / ${days.length} gün kayıtlı${who ? ' · ' + esc(who) : ''}</p>
+      <p>Günlük plan: ${KC ? `yaklaşık ${num(B0.tk)} kcal, ` : ''}${num(B0.tp)} g protein, ${WATER_L} L su${GYM_GOAL ? `, haftada ${GYM_GOAL} antrenman` : ''}.</p></header>
+    <table><thead><tr><th>Gün</th><th>Uyum</th>${KC ? '<th>kcal</th>' : ''}<th>Protein</th><th>Su</th><th>Antr.</th><th>Kilo</th></tr></thead><tbody>${rows}</tbody></table>
+    ${days.map(dumpDay).join('')}
+    <footer>Diyet uygulamasından · ${fmt(today)}. Kalori ve protein değerleri yaklaşık tahminlerdir${KC ? '; satır sonundaki sayılar kcal' : ''}.</footer></div>`;
+}
+function dumpPrint() {
+  const el = document.getElementById('print'); el.innerHTML = dumpHTML();
+  const t = document.title, back = () => { document.title = t; window.removeEventListener('afterprint', back); };
+  /* PDF'in dosya adı başlıktan gelir. */
+  document.title = `Diyet dökümü ${parse(DK.a).getDate()} ${MON[parse(DK.a).getMonth()]} - ${parse(DK.b).getDate()} ${MON[parse(DK.b).getMonth()]}`;
+  window.addEventListener('afterprint', back); setTimeout(back, 60000);
+  window.print();
+}
+
 const waNum = t => { let x = String(t || '').replace(/\D/g, ''); if (x.startsWith('0')) x = '9' + x; if (x.length === 10 && x[0] === '5') x = '90' + x; return x.length >= 11 ? x : ''; };
 function reportSheet() {
   sheet = 'report';
@@ -907,7 +1334,7 @@ Nasıl cevap verirsin:
 ${KC ? `- Kalori ve protein söylerken <durum>daki değerleri kullan. Kendin tahmin ediyorsan "yaklaşık" de.` : `- Diyetisyen bu danışanın kalori sayılarını görmesini istemiyor. Kalori sayısı söyleme; porsiyon, öğün ve protein diliyle konuş. <durum>daki kalorileri yalnızca kendi muhakemen için kullan.`}
 - Dışarıda yemek, davet, tatil gibi durumlarda suçlama yok. En iyi seçeneği söyle, günün kalanının nasıl dengeleneceğini anlat: tek bir öğün günü bozmaz, kalan öğünlere devam etmek önemli.
 - Tıbbi bir şikâyet, ilaç, hastalık, hamilelik ya da yeme bozukluğu işareti varsa diyetisyenine veya doktoruna yönlendir.
-- Kayıt yapamazsın. Kullanıcı bir şey yediğini söylerse uygulamada nasıl kaydedeceğini kısaca hatırlat: öğüne dokununca kalemler açılır; "Hepsini yedim" hepsini işaretler; satırdaki üç nokta muadil seçtirir; kalem düğmesi yenen şeyi aratır ya da yazdırır; kamera fotoğraftan kaydeder. Plandan sapınca kalan öğünlere telafi satırları kendiliğinden eklenir.
+- Kayıt yapamazsın. Kullanıcı bir şey yediğini söylerse uygulamada nasıl kaydedeceğini kısaca hatırlat: öğüne dokununca kalemler açılır; "Hepsini yedim" hepsini işaretler; satırın sağındaki miktar düğmesi porsiyonu değiştirir ve muadil seçtirir; kalem düğmesi yenen şeyi aratır ya da yazdırır; kamera fotoğraftan kaydeder. Plandan sapınca kalan öğünlere telafi satırları kendiliğinden eklenir.
 
 Program:
 ${JSON.stringify(PLAN)}`;
@@ -925,7 +1352,8 @@ function dayContext() {
       if (!s) return `  - ${ov ? ov.name + ' (bugün için azaltıldı)' : nm}: açık · ${ov ? ov.k : it.k} kcal`;
       if (s.s === 'skip') return `  - ${nm}: atlandı`;
       if (s.s === 'swap') return `  - ${nm} yerine ${s.sub}${s.k != null ? ` · ${s.k} kcal, ${s.p} g protein` : ''}`;
-      return `  - ${s.name || nm}: yendi`; });
+      return `  - ${s.name || (s.q || s.o ? viewText(it, s) : nm)}: yendi${s.q && s.q !== 1 ? ` (planda ${itemView(it, null).amt || '1 porsiyon'})` : ''}`; });
+    if ((d.notes || {})[m.id]) rows.push(`  - kullanıcının notu: ${d.notes[m.id]}`);
     (d.extras || []).filter(e => e.meal === m.id).forEach(e => rows.push(`  - ${e.adj ? 'telafi' : e.pl ? 'planlandı, henüz yenmedi' : 'plan dışı'}: ${e.name} · ${num(e.k)} kcal, ${num(e.p)} g protein`));
     A.adds.filter(a => a.meal === m.id && a.xi < 0).forEach(a => rows.push(`  - uygulamanın telafi önerisi: ${a.name} · ${a.k} kcal`));
     lines.push(head, ...rows);
@@ -1008,9 +1436,9 @@ document.addEventListener('click', e => {
   const setAll = (m, fn) => itemsOf(m, sel).forEach(i => { const k = m.id + '.' + i.id, v = fn(d.items[k], i, k); v ? d.items[k] = v : delete d.items[k]; });
   switch (a) {
     case 'tab': tab = el.dataset.t; window.scrollTo(0, 0); break;
-    case 'day': sel = el.dataset.k; if (el.dataset.go) { tab = 'today'; window.scrollTo(0, 0); } break;
-    case 'week': sel = addDays(sel, 7 * +el.dataset.n); if (sel > today) sel = today; break;
-    case 'gotoday': sel = today; break;
+    case 'day': sel = el.dataset.k; if (el.dataset.go) { tab = 'today'; stripTo = true; window.scrollTo(0, 0); } break;
+    case 'week': { sel = addDays(sel, 7 * +el.dataset.n); const max = addDays(today, AHEAD); if (sel > max) sel = max; stripTo = true; break; }
+    case 'gotoday': sel = today; stripTo = true; break;
     case 'ev': { const cur = openEv[sel] !== undefined ? openEv[sel] : defOpen(sel); openEv[sel] = cur === el.dataset.id ? '' : el.dataset.id; break; }
     case 'sup': { const s = d.supps || (d.supps = {}), id = el.dataset.id, x = SUPS().find(y => y.id === id); if (!x) return;
       if (s[id]) delete s[id]; else s[id] = 1;
@@ -1032,21 +1460,38 @@ document.addEventListener('click', e => {
     case 'xsave': { xSync(); const e = d.extras[XE.i]; if (!e) return closeSheet();
       Object.assign(e, scaled({ n: XE.n, k: XE.bk, p: XE.bp, u: XE.u }, XE.q)); learn(XE.n, XE.bk, XE.bp, XE.u); XE = null; closeSheet(); buzz(); break; }
     case 'xdel': d.extras.splice(XE.i, 1); XE = null; closeSheet(); break;
-    case 'sq': { const st = d.items[sheet], b = baseOf(st.sub, st), x = scaled(b, +el.dataset.v);
-      d.items[sheet] = { s: 'swap', sub: x.name, k: x.k, p: x.p, q: x.q, src: x.src }; save(); render(); openSheet(sheet); buzz(); return; }
-    case 's-food': { const x = CS[+el.dataset.i], meal2 = sheet.split('.')[0];
-      d.items[sheet] = { s: 'swap', sub: x.n, k: x.k, p: x.p, q: 1, src: { n: x.n, k: x.k, p: x.p, u: x.u || '' } }; remember(meal2, x.n, x.k, x.p, x.u); closeSheet(); buzz(); break; }
+    case 'it-o': IT.c = { t: el.dataset.t, i: +el.dataset.i }; IT.q = 1; itApply(A); save(); render(); itemSheet(); buzz(); return;
+    case 'it-q': { const [, it] = findItem(IT.id), st = stepOf(IT.c.t === 'lib' ? null : parseAmt(itBase(it, IT.c)));
+      IT.q = Math.round(Math.max(st, Math.min(3, Math.round((IT.q + st * +el.dataset.n) / st) * st)) * 1000) / 1000;
+      itApply(A); save(); render(); itemSheet(); buzz(); return; }
+    case 'it-ok': if (!d.items[sheet] || d.items[sheet].s === 'skip') itApply(A); IT = null; closeSheet(); buzz(); break;
+    case 's-food': { const x = CS[+el.dataset.i]; IT.c = { t: 'lib', x: { n: x.n, k: x.k, p: x.p, u: x.u || '' } }; IT.q = 1; itApply(A);
+      remember(sheet.split('.')[0], x.n, x.k, x.p, x.u); save(); render(); itemSheet(); buzz(); return; }
     case 'sheet': openSheet(el.dataset.id); return;
+    case 'score': scoreSheet(el.dataset.k || ''); return;
+    case 'note': noteSheet(el.dataset.meal); return;
+    case 'notesave': case 'notedel': { const v = a === 'notesave' ? document.getElementById('notetx').value.trim() : '', n = d.notes || (d.notes = {});
+      if (v) n[NT] = v; else delete n[NT]; closeSheet(); break; }
+    case 'phgo': { const t = document.getElementById('phtx').value.trim(), p = PH; PH = null; analyze(p.meal, { image: p.full, text: t }); return; }
+    case 'welcome': setupDone(); { const w = el.dataset.w; if (w === 'link') { PL = {}; return planSheet(); } if (w === 'photo') return buildSheet(); } closeSheet(); return;
+    case 'build': return buildSheet();
+    case 'pbadd': pbSync(); if (PB.pics.length < 6) document.getElementById('pages').click(); return;
+    case 'pbx': pbSync(); PB.pics.splice(+el.dataset.i, 1); return buildSheet();
+    case 'pbgo': pbSync(); if (!PB.pics.length && !PB.text.trim()) return; if (aiReady(buildAI)) buildAI(); return;
+    case 'pbback': PL = null; return buildSheet();
     case 'prog': if (el.dataset.p === 'gidalar') return foodsSheet(); if (el.dataset.p === 'takviye') return supsSheet(); if (el.dataset.p === 'baglanti') { PL = {}; return planSheet(); } progSheet(el.dataset.p); if (el.dataset.p === 'ai' && aiCode()) loadMe().then(() => { if (sheet === 'ai') progSheet('ai'); }); return;
     case 'planpaste': { const v = document.getElementById('plink').value.trim(); if (!v) return;
       unpackPlan(v).then(p2 => { PL = { incoming: p2 }; planSheet(); }).catch(x => { PL = { err: x.message || 'Bağlantı okunamadı.' }; planSheet(); }); return; }
-    case 'planload': try { localStorage.setItem(PLANKEY, JSON.stringify(PL.incoming)); } catch (x) { PL = { err: 'Program kaydedilemedi.' }; return planSheet(); } reloadClean(); return;
+    case 'planload': try { localStorage.setItem(PLANKEY, JSON.stringify(PL.incoming)); } catch (x) { PL = { err: 'Program kaydedilemedi.' }; return planSheet(); } setupDone(); reloadClean(); return;
     case 'plannot': PL = null; history.replaceState(null, '', location.pathname + location.search); closeSheet(); return;
     case 'pswi': plSync(); PL.set[el.dataset.k] = !PL.set[el.dataset.k]; PL.dirty = true; planSheet(); return;
     case 'pset': { plSync(); const p2 = JSON.parse(JSON.stringify(PLAN));
       p2.dietitian = { ...(p2.dietitian || {}), name: PL.set.name.trim(), phone: PL.set.phone.trim() }; p2.prefs = { ...(p2.prefs || {}), kcal: PL.set.kcal, tune: PL.set.tune };
       if (planCheck(p2)) return; try { localStorage.setItem(PLANKEY, JSON.stringify(p2)); } catch (x) { return; } reloadClean(); return; }
     case 'report': reportSheet(); return;
+    case 'dump': DK = null; dumpSheet(); return;
+    case 'dkp': dkSet(el.dataset.a, el.dataset.b); dumpSheet(); return;
+    case 'dkgo': dumpPrint(); return;
     case 'repshare': { const text = weekReport(sel);
       if (navigator.share) navigator.share({ text }).catch(() => {});
       else if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => { el.textContent = 'Kopyalandı'; }).catch(() => {});
@@ -1067,7 +1512,6 @@ document.addEventListener('click', e => {
     case 'clear': setAll(meal, () => null); d.extras = d.extras.filter(x => x.meal !== meal.id); openEv[sel] = meal.id; break;
     case 'mode': d.mode[meal.id] = +el.dataset.i; break;
     case 'main': d.main[meal.id] = el.dataset.m; closeSheet(); break;
-    case 'quick': { const m = nextMeal(); sel = today; tab = 'today'; render(); if (!m) return; const go = () => { camMeal = m.id; document.getElementById('cam').click(); }; if (aiReady(go)) go(); return; }
     case 'photo': { const go = () => { camMeal = meal.id; document.getElementById('cam').click(); }; if (aiReady(go)) go(); return; }
     case 'aiok': { try { localStorage.setItem(OKKEY, today); } catch (x) {} const f = afterOk; afterOk = null; closeSheet(); if (f) f(); return; }
     case 'aino': try { localStorage.removeItem(OKKEY); } catch (x) {} progSheet('ai'); return;
@@ -1107,11 +1551,9 @@ document.addEventListener('click', e => {
     case 'z2': d.z2 = !d.z2; break;
     case 'weight': { const v = parseFloat(document.getElementById('kg').value.replace(',', '.'));
       if (!(v > 30 && v < 300)) return; S.weights = S.weights.filter(w => w.d !== today).concat({ d: today, kg: v }); break; }
-    case 's-done': d.items[sheet] = { s: 'done' }; closeSheet(); break;
-    case 's-skip': d.items[sheet] = { s: 'skip' }; closeSheet(); break;
-    case 's-clear': delete d.items[sheet]; closeSheet(); break;
-    case 's-sub': d.items[sheet] = { s: 'swap', sub: findItem(sheet)[1].subs[+el.dataset.i] }; closeSheet(); break;
-    case 's-custom': { const v = document.getElementById('custom').value.trim(); if (!v) return; d.items[sheet] = { s: 'swap', sub: v }; closeSheet(); break; }
+    case 's-skip': lockMain(sel, MEALS.find(x => x.id === sheet.split('.')[0])); d.items[sheet] = { s: 'skip' }; IT = null; closeSheet(); break;
+    case 's-clear': delete d.items[sheet]; IT = null; closeSheet(); break;
+    case 's-custom': { const v = document.getElementById('custom').value.trim(); if (!v) return; IT.c = { t: 'txt', text: v }; IT.q = 1; itApply(A); IT = null; closeSheet(); break; }
     case 'export': { const u = URL.createObjectURL(new Blob([JSON.stringify(PLAN_CUSTOM ? { ...S, plan: PLAN } : S)], { type: 'application/json' }));
       const l = document.createElement('a'); l.href = u; l.download = `diyet-yedek-${today}.json`; l.click(); return; }
     case 'import': document.getElementById('file').click(); return;
@@ -1119,11 +1561,15 @@ document.addEventListener('click', e => {
   save(); render();
 });
 document.addEventListener('change', e => {
+  if ((e.target.id === 'dka' || e.target.id === 'dkb') && DK) { dkSet(document.getElementById('dka').value, document.getElementById('dkb').value); return dumpSheet(); }
   const f = e.target.files && e.target.files[0]; if (!f) return;
   if (e.target.id === 'pic' && FD) { e.target.value = '';
     Promise.all([thumb(f), shrink(f)]).then(([img, full]) => { FD.img = img; FD.full = full; FD.err = ''; if (sheet !== 'food') return; if (aiAuth() && aiOk()) foodAI(); else foodForm(); })
       .catch(x => { FD.err = x.message; foodForm(); }); return; }
-  if (e.target.id === 'cam') { e.target.value = ''; shrink(f).then(image => analyze(camMeal, { image })).catch(() => {}); }
+  if (e.target.id === 'cam') { e.target.value = ''; shrink(f).then(full => { PH = { meal: camMeal, full }; photoSheet(); }).catch(() => {}); }
+  if (e.target.id === 'pages' && PB) { const fs = [...e.target.files].slice(0, 6 - PB.pics.length); e.target.value = '';
+    Promise.all(fs.map(x => Promise.all([thumb(x, 200), shrink(x, 1600)]))).then(r => { r.forEach(([img, full]) => PB.pics.push({ img, full })); PB.err = ''; if (sheet === 'build') buildSheet(); })
+      .catch(x => { PB.err = x.message; if (sheet === 'build') buildSheet(); }); return; }
   if (e.target.id === 'file') f.text().then(t => { const o = JSON.parse(t); if (!o || !o.days) return;
     /* Yedekte bağlantıyla yüklenmiş bir program varsa o da geri gelir. */
     const p2 = o.plan; delete o.plan; S = o; save();
@@ -1149,9 +1595,12 @@ document.addEventListener('visibilitychange', () => {
   if (t !== today) { if (sel === today) sel = t; today = t; } if (!document.body.classList.contains('sheet-open')) render();
 });
 setInterval(() => { if (!document.hidden && tab === 'today' && !document.body.classList.contains('sheet-open')) render(); }, 60000);
+document.addEventListener('scroll', e => { if (e.target.id === 'strip') stripLeft = e.target.scrollLeft; }, true);
 render();
 planFromHash();
 window.addEventListener('hashchange', planFromHash);
+/* İlk açılış: kayıt, yüklenmiş program ve gelen bağlantı yoksa nasıl başlanacağını sor. */
+try { if (!localStorage.getItem(KEY) && !localStorage.getItem(PLANKEY) && !localStorage.getItem(SETUPKEY) && !location.hash.startsWith('#plan=')) welcomeSheet(); } catch (e) {}
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   /* Yeni sürüm devreye girince sayfayı bir kez yenile. */
   const had = !!navigator.serviceWorker.controller; let done = false;
