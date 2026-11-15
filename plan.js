@@ -11,7 +11,10 @@ const PLAN_DEFAULT = {
   v: 1,
   id: 'plan-2026-11-13',
   date: '2026-11-13',
-  dietitian: { name: '' },
+  dietitian: { name: '', phone: '' },
+  /* Diyetisyenin danışan için seçtikleri. kcal: danışan kalori sayılarını görür mü (motor her durumda hesaplar).
+     tune: plandan sapınca kalan öğünlere telafi önerilsin mi. */
+  prefs: { kcal: true, tune: true },
   client: { name: '' },
   goal: { kg: 85, text: 'Göbeksiz, kas ağırlıklı. Önce yağ ver, sonra kaloriyi artırıp tırman.' },
 

@@ -7,7 +7,7 @@ function planCheck(p) {
   if (!p || p.v !== 1) return 'Program biçimi tanınmadı.';
   if (!p.items || !Array.isArray(p.meals) || !p.meals.length) return 'Programda öğün yok.';
   p.mains = p.mains || []; p.groups = p.groups || {}; p.rota = p.rota || {}; p.rules = p.rules || []; p.swaps = p.swaps || [];
-  p.dietitian = p.dietitian || { name: '' }; p.client = p.client || { name: '' }; p.goal = p.goal || { kg: 0, text: '' };
+  p.dietitian = { name: '', phone: '', ...(p.dietitian || {}) }; p.prefs = { kcal: true, tune: true, ...(p.prefs || {}) }; p.client = p.client || { name: '' }; p.goal = p.goal || { kg: 0, text: '' };
   p.body = p.body || { date: p.date, fat: '', rows: [] };
   p.daily = { water: { goal: 10, ml: 250 }, coffee: { max: 2, note: '' }, walk: { perWeek: 0, name: 'Yürüyüş' }, ...(p.daily || {}) };
   p.training = { perWeek: 0, time: '', after: '', lead: '', notes: {}, days: {}, ...(p.training || {}) };
@@ -25,6 +25,8 @@ function loadPlan() {
   return PLAN_DEFAULT;
 }
 const PLAN = loadPlan(), PLAN_CUSTOM = PLAN !== PLAN_DEFAULT;
+/* Diyetisyen ayarları: KC kalori sayıları görünür mü, TUNE_ON telafi önerilir mi. */
+const KC = !PLAN.prefs || PLAN.prefs.kcal !== false, TUNE_ON = !PLAN.prefs || PLAN.prefs.tune !== false;
 const item = id => ({ id, ...PLAN.items[id] });
 const MAINS = PLAN.mains, GROUPS = PLAN.groups, ROTA = PLAN.rota, RULES = PLAN.rules, SWAPS = PLAN.swaps, BODY = PLAN.body.rows;
 const MEALS = PLAN.meals.map(m => ({ ...m, items: m.items.map(item), alt: m.alt && m.alt.map(item) }));
@@ -136,7 +138,7 @@ function balance(k) {
 }
 function adjust(k) {
   const b = balance(k), out = { over: {}, adds: [], why: '', note: '' };
-  if (k !== today || !b.any) return out;
+  if (k !== today || !b.any || !TUNE_ON) return out;
   let { gk, gp } = b;
   const meals = [...new Set(b.open.map(o => o.m))].filter(m => m.time);
   if (!meals.length) return out;
@@ -197,7 +199,10 @@ const ring = (pct, size, w, color) => { const r = (size - w) / 2, C = 2 * Math.P
 const label = it => it.opts ? it.opts[0] : it.name;
 const hint = it => it.opts ? 'veya ' + it.opts.slice(1).join(' · ') : it.meta || '';
 const short = it => it.chip || it.name;
-const nextMeal = () => MEALS.find(m => m.time && !mealStat(m, today).resolved);
+/* Önceden planlanmış sapma: henüz yenmemiş, plan dışı bir öğün. extras ve atlanan kalemler pl: true taşır;
+   motor onları yenmiş sayar ki gün yemekten önce dengelensin. Kullanıcı yiyince "Yedim" ile onaylar. */
+const planned = (m, k) => (peek(k).extras || []).some(e => e.meal === m.id && e.pl);
+const nextMeal = () => MEALS.find(m => m.time && (!mealStat(m, today).resolved || planned(m, today)));
 const openEv = {};
 
 function rowHTML(meal, it, d, ov) {
@@ -206,7 +211,7 @@ function rowHTML(meal, it, d, ov) {
   if (!s && ov) { n = ov.name; m = 'Bugün için azaltıldı'; }
   if (s === 'done' && st.name) { n = st.name; m = 'Azaltılmış porsiyon'; }
   if (s === 'swap') { n = st.sub; m = label(it) + ' yerine'; }
-  if (s === 'skip') m = 'Atlandı';
+  if (s === 'skip') m = st.pl ? 'Yerine başka şey planlandı' : 'Atlandı';
   return `<div class="row ${s}" data-act="toggle" data-id="${id}"><span class="chk">${ic(s === 'skip' ? 'dash' : s === 'swap' ? 'swap' : 'check')}</span>
     <span class="b"><span class="n">${esc(n)}</span>${m ? `<span class="m">${esc(m)}</span>` : ''}</span>
     <button class="more" data-act="sheet" data-id="${id}" aria-label="Seçenekler">${ic('dots')}</button></div>`;
@@ -218,7 +223,9 @@ function mealPanel(meal, k, A, st) {
   if (meal.modes) h += `<div class="seg">${meal.modes.map((m, i) => `<button class="${(d.mode[meal.id] || 0) === i ? 'on' : ''}" data-act="mode" data-meal="${meal.id}" data-i="${i}">${m}</button>`).join('')}</div>`;
   h += itemsOf(meal, k).map(it => rowHTML(meal, it, d, A.over[meal.id + '.' + it.id])).join('');
   h += A.adds.filter(a => a.meal === meal.id).map(a => `<div class="row ${a.xi >= 0 ? 'done' : 'plus'}" data-act="add" data-i="${A.adds.indexOf(a)}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(a.name)}</span><span class="m">${A.why}</span></span></div>`).join('');
-  h += (d.extras || []).map((e, i) => e.meal !== meal.id || (e.adj && A.adds.some(a => a.xi === i)) ? '' : `<div class="row done" data-act="unextra" data-i="${i}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(e.name)}</span><span class="m">${e.adj ? 'Telafi' : 'Plan dışı'} · yaklaşık ${num(e.k)} kcal</span></span></div>`).join('');
+  h += (d.extras || []).map((e, i) => e.meal !== meal.id || (e.adj && A.adds.some(a => a.xi === i)) ? '' : `<div class="row ${e.pl ? '' : 'done'}" data-act="unextra" data-i="${i}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(e.name)}</span><span class="m">${e.adj ? 'Telafi' : e.pl ? 'Planlandı' : 'Plan dışı'}${KC ? ` · yaklaşık ${num(e.k)} kcal` : ''}</span></span></div>`).join('');
+  if (planned(meal, k)) return h + `<div class="actions" style="grid-template-columns:1fr"><button class="primary" data-act="plok" data-meal="${meal.id}">${ic('check')}Yedim</button></div>
+    <button class="textbtn" data-act="plno" data-meal="${meal.id}">Planı kaldır</button>`;
   if (st.resolved) return h + `<button class="textbtn" data-act="clear" data-meal="${meal.id}">İşaretleri sıfırla</button>`;
   return h + `<div class="actions"><button class="primary" data-act="all" data-meal="${meal.id}">${ic('check')}${st.ok + st.skip ? 'Kalanını yedim' : 'Hepsini yedim'}</button>
       <button class="sq" data-act="photo" data-meal="${meal.id}" aria-label="Fotoğrafla kaydet">${ic('cam')}</button>
@@ -231,18 +238,20 @@ function eventHTML({ id, cls, node, title, sub, right, panel, act }) {
 }
 function mealEvent(meal, k, A, next, open) {
   const d = peek(k), st = mealStat(meal, k), ate = (d.extras || []).filter(e => e.meal === meal.id && !e.adj), allSkip = st.skip === st.total && !ate.length, isNow = meal === next;
-  const cls = st.resolved ? (allSkip ? 'skipd' : 'done') : isNow ? 'now' : '';
-  let sub = st.resolved ? (allSkip ? 'Atlandı' : st.skip === st.total ? ate.map(e => e.name).join(' · ') : st.skip ? `${st.ok} / ${st.total} kalem` : 'Tamam')
+  const pl = planned(meal, k), done = st.resolved && !pl;
+  const cls = done ? (allSkip ? 'skipd' : 'done') : isNow ? 'now' : '';
+  let sub = pl ? 'Planlandı · ' + ate.filter(e => e.pl).map(e => e.name).join(' · ')
+    : st.resolved ? (allSkip ? 'Atlandı' : st.skip === st.total ? ate.map(e => e.name).join(' · ') : st.skip ? `${st.ok} / ${st.total} kalem` : 'Tamam')
     : itemsOf(meal, k).filter(i => !i.optional).map(short).join(' · ') + (A.adds.some(a => a.meal === meal.id) ? ' · + telafi' : '');
   let right = meal.time ? `<span class="t">${timeOf(meal, k)}</span>` : '';
-  if (open === meal.id && !st.resolved) sub = itemsOf(meal, k).filter(i => !i.optional).length + ' kalem';
+  if (open === meal.id && !st.resolved && !pl) sub = itemsOf(meal, k).filter(i => !i.optional).length + ' kalem';
   if (isNow) { const mt = minsTo(meal, k); sub = timeOf(meal, k) + ' · ' + sub;
     right = `<span class="pill ${mt < -90 ? 'late' : mt <= 30 ? 'hot' : ''}">${mt > 0 ? (mt >= 60 ? `${Math.floor(mt / 60)} sa ${mt % 60} dk` : `${mt} dk`) : mt > -90 ? 'Şimdi' : 'Gecikti'}</span>`; }
   else if (isLate(meal, k)) right = `<span class="pill late">Gecikti</span>`;
   if (!meal.time) { const it = meal.items[0], id = meal.id + '.' + it.id, s = d.items[id];   /* saatsiz tek kalem: satıra dokunmak yeter */
     const sub = [label(it), it.meta && it.meta[0].toLocaleLowerCase('tr') + it.meta.slice(1)].filter(Boolean).join(', ');
     return eventHTML({ cls, node: s ? 'check' : meal.id, title: meal.title, sub: s ? 'Tamam' : sub, right: '', act: `data-act="toggle" data-id="${id}"` }); }
-  return eventHTML({ cls, node: st.resolved ? (allSkip ? 'dash' : 'check') : meal.id, title: meal.title, sub, right,
+  return eventHTML({ cls, node: done ? (allSkip ? 'dash' : 'check') : meal.id, title: meal.title, sub, right,
     act: `data-act="ev" data-id="${meal.id}"`, panel: open === meal.id ? mealPanel(meal, k, A, st) : '' });
 }
 function gymEvent(k, W, open) {
@@ -268,7 +277,7 @@ function todayView() {
       <div class="hright"><button class="round" data-act="chat" aria-label="Asistana sor">${ic('chat')}</button>
       ${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : `<div class="dayring">${ring(st.pct / 100, 54, 5, 'var(--accent)')}<b>%${st.pct}</b></div>`}</div></header>
     <div class="strip">${strip}</div>
-    <div class="tiles">${tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)')}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', `/ ${WATER_L} L`, d.water / WATER_GOAL, 'var(--blue)')}</div>
+    <div class="tiles">${KC ? tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)') : (() => { const ms = MEALS.filter(m => m.time), r = ms.filter(m => mealStat(m, sel).resolved).length; return tile('Öğün', r, '', `/ ${ms.length} öğün`, r / ms.length, 'var(--fg)'); })()}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', `/ ${WATER_L} L`, d.water / WATER_GOAL, 'var(--blue)')}</div>
     ${A.note ? `<p class="note">${A.note}</p>` : ''}
     <div class="tl">${MEALS.map(m => mealEvent(m, sel, A, next, open) + (m.id === TRAIN.after && W ? gymEvent(sel, W, open) : '')).join('')}</div>
     <div class="sect">Gün boyu</div>
@@ -299,7 +308,8 @@ function weekView() {
       <div style="display:flex;gap:8px"><button class="round" data-act="week" data-n="-1" aria-label="Önceki hafta">${ic('left')}</button><button class="round" data-act="week" data-n="1" aria-label="Sonraki hafta" ${wk[6] >= today ? 'disabled' : ''}>${ic('right')}</button></div></header>
     <section class="card pad"><div class="between"><div><span class="label">Ortalama uyum</span><div class="num">%${avg}</div></div><span class="pill">${logged.length} gün kayıtlı</span></div>
       <div class="bars">${wk.map((k, i) => `<button class="barcol ${k === today ? 'today' : ''}" data-act="day" data-k="${k}" data-go="1" aria-label="${fmtDM(k)}"><span><u style="height:${stats[i].pct}%"></u></span><small>${DOW[parse(k).getDay()]}</small></button>`).join('')}</div></section>
-    <div class="tiles two">${stat('Kalori dengesi', Math.abs(gk) < 50 ? 'Dengede' : (gk > 0 ? '−' : '+') + num(Math.abs(gk)), Math.abs(gk) < 50 ? '' : 'kcal', Math.abs(gk) < 50 ? 'Plana göre' : gk > 0 ? 'Plandan eksik' : 'Plandan fazla')}
+    <div class="tiles two">${KC ? stat('Kalori dengesi', Math.abs(gk) < 50 ? 'Dengede' : (gk > 0 ? '−' : '+') + num(Math.abs(gk)), Math.abs(gk) < 50 ? '' : 'kcal', Math.abs(gk) < 50 ? 'Plana göre' : gk > 0 ? 'Plandan eksik' : 'Plandan fazla')
+        : stat('Plan dışı', wk.filter(k => k <= today).reduce((t, k) => t + (peek(k).extras || []).filter(e => !e.adj).length, 0), '', 'Bu hafta kayıt')}
       ${stat('Protein', pavg ? num(pavg) : '—', pavg ? 'g' : '', 'Günlük ortalama')}${stat('Atlanan öğün', skipped, '', 'Bu hafta')}${stat('Su', wavg ? wavg.toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : '—', wavg ? 'L' : '', 'Günlük ortalama')}</div>
     <section class="card"><div class="kv"><span>Ağırlık antrenmanı</span><span style="display:flex;align-items:center;gap:10px">${gyms} / ${GYM_GOAL}${dots(gyms)}</span></div>
       <div class="kv"><span>Yürüyüş</span><span style="display:flex;align-items:center;gap:10px">${walks} / ${WALK_GOAL}${dots(walks)}</span></div></section>
@@ -311,7 +321,9 @@ function weekView() {
     <section class="card pad"><div class="between"><div><span class="label">Son ölçüm · ${last ? parse(last.d).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }) : ''}</span><div class="num">${last ? last.kg.toLocaleString('tr-TR') : '—'}<em>kg</em></div></div>
       ${diff ? `<span class="pill">${diff > 0 ? '+' : '−'}${Math.abs(diff).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} kg</span>` : ''}</div>
       ${spark}<div class="field" style="padding-bottom:0"><input id="kg" type="text" inputmode="decimal" placeholder="Bugünkü kilo"><button class="btn" data-act="weight">Kaydet</button></div></section>
-    <p class="note">Haftada bir, aynı saatte tartıl.</p>`;
+    <p class="note">Haftada bir, aynı saatte tartıl.</p>
+    <button class="primary" data-act="report" style="margin:8px 0 4px">${ic('up')}Haftalık raporu gönder</button>
+    <p class="note" style="text-align:center">Haftalık kontrolden önce diyetisyenine.</p>`;
 }
 const PROG = [['kurallar', 'list', 'Kurallar', `${RULES.length} madde`], ['saatler', 'clock', 'Öğün saatleri', 'Hafta içi ve hafta sonu'], ['muadil', 'swap', 'Muadiller', 'Neyin yerine ne yenir'], ['gidalar', 'ogle', 'Gıdalarım', ''],
   ['antrenman', 'gym', 'Antrenman', Object.entries(WORKOUTS).map(([n, w]) => `${DOW[n]} ${w.name.toLocaleLowerCase('tr')}`).join(' · ')], ['vucut', 'person', 'Vücut analizi', `${fmtDM(PLAN.body.date)} ölçümü`], ['ai', 'chat', 'Yapay zekâ', ''], ['baglanti', 'link', 'Program bağlantısı', 'Yükle ya da paylaş'], ['veri', 'down', 'Yedek', 'İndir ya da geri yükle']];
@@ -320,7 +332,7 @@ function planView() {
   return `<header class="head"><div><p>${esc(PLAN.dietitian.name || 'Diyetisyen programı')} · ${fmtDM(PLAN.date)}</p><h1>Program</h1></div></header>
     <section class="card pad"><span class="label">Hedef</span><div class="num">${PLAN.goal.kg.toLocaleString('tr-TR')}<em>kg</em></div><p class="note" style="padding:8px 0 14px">${esc(PLAN.goal.text)}</p>
       <div class="tiles two" style="margin:0"><div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Şu an</span><strong style="margin-top:8px">${last.kg.toLocaleString('tr-TR')}<em>kg</em></strong><small>${PLAN.body.fat} yağ</small></div>
-        <div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Günlük plan</span><strong style="margin-top:8px">${num(t.tk)}<em>kcal</em></strong><small>${num(t.tp)} g protein</small></div></div></section>
+        <div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Günlük plan</span>${KC ? `<strong style="margin-top:8px">${num(t.tk)}<em>kcal</em></strong><small>${num(t.tp)} g protein</small>` : `<strong style="margin-top:8px">${num(t.tp)}<em>g</em></strong><small>protein</small>`}</div></div></section>
     <section class="card">${PROG.map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiKey() ? 'API anahtarı kayıtlı' : 'API anahtarı gerekli') : id === 'gidalar' ? (Object.keys(S.foods || {}).length ? `${Object.keys(S.foods).length} gıda` : 'Kendi ürünlerin') : m}</span></span>${ic('right')}</button>`).join('')}</section>
     <p class="note">Kayıtlar yalnızca bu cihazda tutulur. Kalori ve protein değerleri yaklaşık tahminlerdir.</p>`;
 }
@@ -336,7 +348,8 @@ function progSheet(p) {
     vucut: () => `<h2>Vücut analizi</h2><p class="lead">${parse(PLAN.body.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })} ölçümü.</p>${kv(BODY)}`,
     ai: () => `<h2>Yapay zekâ</h2><p class="lead">Fotoğraftan ya da yazıdan kayıt ve asistan için bir Anthropic API anahtarı gerekir. Kütüphanede ve geçmişinde bulunanlar anahtarsız kaydedilir. Anahtar yalnızca bu cihazda saklanır, fotoğraflar analiz için doğrudan Anthropic'e gider.</p>
       <div class="group"><div class="kv"><span>Durum</span><span>${aiKey() ? 'Anahtar kayıtlı' : 'Anahtar yok'}</span></div><div class="field"><input id="aikey" type="password" autocomplete="off" placeholder="sk-ant-…"><button class="btn" data-act="savekey">Kaydet</button></div></div>
-      ${usageRows()}${aiKey() ? `<button class="textbtn" data-act="delkey">Anahtarı sil</button>` : ''}`,
+      <div class="group"><div class="kv"><span>Veri paylaşım onayı</span><span>${aiOk() ? fmtDM(aiOk()) : 'Verilmedi'}</span></div></div>
+      ${usageRows()}${aiOk() ? `<button class="textbtn" data-act="aino">Onayı geri al</button>` : ''}${aiKey() ? `<button class="textbtn" data-act="delkey">Anahtarı sil</button>` : ''}`,
     veri: () => `<h2>Yedek</h2><p class="lead">Kayıtların bu cihazda durur. Telefon değiştirmeden önce yedek al.</p><div class="group"><button class="opt" data-act="export"><span>Yedeği indir</span>${ic('down')}</button><button class="opt" data-act="import"><span>Yedekten yükle</span>${ic('right')}</button></div>`,
   };
   showSheet(S2[p]());
@@ -365,6 +378,41 @@ function openSheet(id) {
     ${s ? `<button class="textbtn" data-act="s-clear">İşareti kaldır</button>` : ''}`);
 }
 function needKey() { progSheet('ai'); }
+
+/* ---------- Yapay zekâ bağlantısı ve rıza ----------
+   Bütün çağrılar aiFetch'ten geçer. Bugün tarayıcıdan doğrudan Anthropic'e, kullanıcının anahtarıyla gider;
+   sunucu vekiline geçişte değişecek tek yer burası. Sağlık verisi yurt dışına gittiği için ilk kullanımdan önce
+   açık rıza alınır (diyet-ai-ok); rıza yoksa yapay zekâ özellikleri çalışmaz, geri kalan her şey çalışır. */
+const AI_URL = 'https://api.anthropic.com/v1/messages', OKKEY = 'diyet-ai-ok';
+const aiFetch = body => fetch(AI_URL, { method: 'POST', body: JSON.stringify(body),
+  headers: { 'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' } });
+const aiErr = (r, j) => new Error(r.status === 401 ? 'API anahtarı geçersiz. Program sekmesinden yenisini gir.' : r.status === 429 ? 'Çok fazla istek; biraz sonra yeniden dene.'
+  : r.status === 529 ? 'Servis şu an yoğun; biraz sonra yeniden dene.' : (j && j.error && j.error.message) || 'İstek başarısız oldu.');
+/* Yapılandırılmış çıktılı tek istek; sonucu nesne olarak döndürür. */
+async function aiJSON(body, refusal) {
+  const r = await aiFetch(body), j = await r.json().catch(() => ({}));
+  if (!r.ok) throw aiErr(r, j);
+  track(body.model, j.usage);
+  if (j.stop_reason === 'refusal') throw new Error(refusal);
+  return JSON.parse((j.content || []).find(b => b.type === 'text').text);
+}
+const aiOk = () => { try { return localStorage.getItem(OKKEY) || ''; } catch (e) { return ''; } };
+let afterOk = null;
+/* Yapay zekâ kapısı: anahtar yoksa ayar sayfası, rıza yoksa aydınlatma metni açılır; onaydan sonra then çalışır. */
+function aiReady(then) {
+  if (!aiKey()) { needKey(); return false; }
+  if (!aiOk()) { afterOk = then; consentSheet(); return false; }
+  return true;
+}
+function consentSheet() {
+  sheet = 'consent';
+  showSheet(`<h2>Yapay zekâ ve verilerin</h2><p class="lead">Fotoğraftan ya da yazıdan kayıt, etiket okuma ve asistan çalışırken bazı bilgiler yanıt üretilmesi için Anthropic'e (ABD) gönderilir.</p>
+    <div class="group prose"><p>Gönderilenler<small>Çektiğin fotoğraf ya da yazdığın metin ve ilgili öğünün planı. Asistanda ayrıca programın ve günün kaydı: yediklerin, su, antrenman, son tartın.</small></p>
+      <p>Neden önemli<small>Bunlar sağlıkla ilgili kişisel veri sayılır ve yurt dışına aktarılır. Bu yüzden onayın gerekiyor.</small></p>
+      <p>Nerede durur<small>Uygulamanın kendi sunucusu yok; kayıtların yalnızca bu cihazda. Anthropic'in ticari koşullarına göre API ile gönderilen veriler model eğitiminde kullanılmaz.</small></p>
+      <p>Onay vermezsen<small>Yapay zekâ özellikleri kapalı kalır; geri kalan her şey çalışır. Onayını Program → Yapay zekâ bölümünden geri alabilirsin.</small></p></div>
+    <button class="primary" data-act="aiok">${ic('check')}Onaylıyorum</button><button class="textbtn" data-act="close">Şimdi değil</button>`);
+}
 
 /* ---------- Claude ile analiz ---------- */
 const SCHEMA = { type: 'object', additionalProperties: false, required: ['main', 'items', 'extras', 'note'], properties: {
@@ -399,14 +447,7 @@ Emin olamadığın bir şey varsa note alanında tek cümleyle söyle; yoksa bo�
   if (image) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } });
   content.push({ type: 'text', text: `Planlanan kalemler:\n${JSON.stringify(plan, null, 1)}${text ? `\n\nKullanıcının yazdığı:\n${text}` : ''}` });
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: AI_MODEL, max_tokens: 16000, system, messages: [{ role: 'user', content }], output_config: { format: { type: 'json_schema', schema: SCHEMA } } }) });
-    const j = await r.json();
-    if (r.ok) track(AI_MODEL, j.usage);
-    if (!r.ok) throw new Error(r.status === 401 ? 'API anahtarı geçersiz. Program sekmesinden yenisini gir.' : r.status === 429 ? 'Çok fazla istek; biraz sonra yeniden dene.' : (j.error && j.error.message) || 'İstek başarısız oldu.');
-    if (j.stop_reason === 'refusal') throw new Error('Bu içerik analiz edilemedi.');
-    const R = JSON.parse((j.content || []).find(b => b.type === 'text').text);
+    const R = await aiJSON({ model: AI_MODEL, max_tokens: 16000, system, messages: [{ role: 'user', content }], output_config: { format: { type: 'json_schema', schema: SCHEMA } } }, 'Bu içerik analiz edilemedi.');
     pending = { meal: mealId, R, its };
     resultSheet(meal);
   } catch (e) {
@@ -417,8 +458,8 @@ function resultSheet(meal) {
   const { R, its } = pending, lab = { done: 'Yedin', skip: 'Yok' };
   const rows = its.map(it => { const x = R.items.find(a => a.id === it.id) || { status: 'skip', kcal: 0 };
     const nm = it.id === 'ana' && R.main ? mainById(R.main).name : label(it);
-    return `<div class="opt"><span>${esc(x.status === 'swap' ? x.sub : nm)}<small>${x.status === 'swap' ? esc(label(it)) + ' yerine' : lab[x.status]}</small></span><small>${x.status === 'skip' ? '—' : num(x.kcal) + ' kcal'}</small></div>`; }).join('');
-  const ex = R.extras.map(e => `<div class="opt"><span>${esc(e.name)}<small>Plan dışı</small></span><small>${num(e.kcal)} kcal</small></div>`).join('');
+    return `<div class="opt"><span>${esc(x.status === 'swap' ? x.sub : nm)}<small>${x.status === 'swap' ? esc(label(it)) + ' yerine' : lab[x.status]}</small></span><small>${x.status === 'skip' ? '—' : KC ? num(x.kcal) + ' kcal' : ''}</small></div>`; }).join('');
+  const ex = R.extras.map(e => `<div class="opt"><span>${esc(e.name)}<small>Plan dışı</small></span><small>${KC ? num(e.kcal) + ' kcal' : ''}</small></div>`).join('');
   showSheet(`<h2>${meal.title}</h2><p class="lead">Gördüklerim doğruysa kaydet; değilse kaydettikten sonra satırlardan düzeltebilirsin.</p>
     <div class="group">${rows}${ex}</div>${R.note ? `<p class="note">${esc(R.note)}</p>` : ''}
     <button class="primary" data-act="applyai">${ic('check')}Kaydet</button><button class="textbtn" data-act="close">Vazgeç</button>`);
@@ -481,23 +522,27 @@ function qPaint() {
   const meal = MEALS.find(m => m.id === Q.meal), inp = document.getElementById('q'), q = inp ? inp.value.trim() : '';
   const tk = Q.tray.reduce((t, x) => t + x.k * x.q, 0), tp = Q.tray.reduce((t, x) => t + x.p * x.q, 0), mode = qMode(), open = qOpen(meal);
   document.getElementById('qtray').innerHTML = !Q.tray.length ? '' : `<div class="group" style="margin-top:12px">${Q.tray.map((x, i) =>
-    `<div class="trow"><div class="row"><span class="b"><span class="n">${esc(x.n)}</span><span class="m">${esc(x.u ? x.u + ' · ' : '')}${num(x.k * x.q)} kcal · ${num1(x.p * x.q)} g protein</span></span>${x.img ? `<img class="th" src="${x.img}" alt="">` : ''}<button class="more" data-act="qx" data-i="${i}" aria-label="Çıkar">${ic('x')}</button></div>
+    `<div class="trow"><div class="row"><span class="b"><span class="n">${esc(x.n)}</span><span class="m">${esc(x.u ? x.u + ' · ' : '')}${KC ? num(x.k * x.q) + ' kcal · ' : ''}${num1(x.p * x.q)} g protein</span></span>${x.img ? `<img class="th" src="${x.img}" alt="">` : ''}<button class="more" data-act="qx" data-i="${i}" aria-label="Çıkar">${ic('x')}</button></div>
       <div class="qchips">${QS.map(v => `<button class="${v === x.q ? 'on' : ''}" data-act="qq" data-i="${i}" data-v="${v}">${qLab(v)}</button>`).join('')}</div></div>`).join('')}</div>
     ${open.length ? `<div class="seg" style="margin:0 0 6px"><button class="${mode === 'yerine' ? 'on' : ''}" data-act="qmode" data-m="yerine">Planın yerine</button><button class="${mode === 'ek' ? 'on' : ''}" data-act="qmode" data-m="ek">Plana ek</button></div>
       <p class="note" style="padding:6px 6px 12px">${mode === 'yerine' ? `Öğünün işaretlenmemiş kalemleri atlandı sayılır; kalan öğünler buna göre dengelenir.` : `Öğünün planı olduğu gibi kalır; bu, üstüne eklenir.`}</p>` : ''}
-    <button class="primary" data-act="qsave">${ic('check')}Kaydet · ${num(tk)} kcal</button>`;
+    ${qLater(meal) ? `<button class="primary" data-act="qsave" data-pl="1">${ic('clock')}Planla${KC ? ` · ${num(tk)} kcal` : ''}</button>
+      <p class="note" style="padding:10px 6px 0;text-align:center">Gün şimdiden buna göre dengelenir; yiyince onaylarsın.</p><button class="textbtn" data-act="qsave">Yedim, kaydet</button>`
+    : `<button class="primary" data-act="qsave">${ic('check')}Kaydet${KC ? ` · ${num(tk)} kcal` : ''}</button>`}`;
   Q.res = qFind(meal.id, q).filter(x => !Q.tray.some(t => t.id === x.id));
-  const rows = Q.res.map((x, i) => `<button class="opt" data-act="qadd" data-i="${i}"><span>${esc(x.n)}<small>${esc(x.u ? x.u + ' · ' : '')}${num(x.k)} kcal${x.mine ? ' · senin' : ''}</small></span><span class="fi">${x.img ? `<img class="th" src="${x.img}" alt="">` : ''}${ic('plus')}</span></button>`).join('');
+  const rows = Q.res.map((x, i) => `<button class="opt" data-act="qadd" data-i="${i}"><span>${esc(x.n)}<small>${esc(x.u || '')}${KC ? `${x.u ? ' · ' : ''}${num(x.k)} kcal` : ''}${x.mine ? ' · senin' : ''}</small></span><span class="fi">${x.img ? `<img class="th" src="${x.img}" alt="">` : ''}${ic('plus')}</span></button>`).join('');
   const add = `<button class="opt" data-act="fnew" data-ret="${meal.id}" data-q="${esc(q)}"><span>Yeni gıda ekle<small>Kendi ürününü fotoğrafla ya da elle kaydet</small></span>${ic('cam')}</button>`;
   const ai = q ? `<button class="opt" data-act="qai"><span>“${esc(q)}”<small>Yapay zekâyla işle${aiKey() ? '' : ' · API anahtarı gerekli'}</small></span>${ic('pen')}</button>` : '';
   document.getElementById('qres').innerHTML = !q && !Q.res.length
     ? (Q.tray.length ? '' : `<p class="lead" style="padding-top:14px">Yediğin şeyi ara. Kaydettiklerin burada birikir; bir dahakine tek dokunuşla eklersin.</p><div class="group">${add}</div>`)
     : `<div class="sect">${q ? 'Sonuçlar' : 'Senin gıdaların'}</div><div class="group">${rows}${ai}${add}</div>${q && !Q.res.length ? `<p class="note">Kütüphanede yok. Yapay zekâ işlerse ya da kendin eklersen bir dahakine burada çıkar.</p>` : ''}`;
 }
-function qSave() {
-  const d = day(sel), meal = MEALS.find(m => m.id === Q.meal), mode = qMode();
-  Q.tray.forEach(x => { d.extras.push({ meal: meal.id, name: x.q === 1 ? x.n : `${x.n} × ${qLab(x.q)}`, k: Math.round(x.k * x.q), p: Math.round(x.p * x.q * 10) / 10 }); remember(meal.id, x.n, x.k, x.p, x.u); });
-  if (mode === 'yerine') { lockMain(sel, meal); qOpen(meal).forEach(it => d.items[meal.id + '.' + it.id] = { s: 'skip' }); }
+/* Öğünün saati daha gelmediyse (30 dakikadan uzak ya da ileri bir gün) kayıt planlama olur. */
+const qLater = meal => sel > today || (sel === today && !!meal.time && minsTo(meal, sel) > 30);
+function qSave(pl) {
+  const d = day(sel), meal = MEALS.find(m => m.id === Q.meal), mode = qMode(), f = pl ? { pl: true } : {};   /* src: ölçeksiz değerler, onayda kütüphaneye */
+  Q.tray.forEach(x => { d.extras.push({ meal: meal.id, name: x.q === 1 ? x.n : `${x.n} × ${qLab(x.q)}`, k: Math.round(x.k * x.q), p: Math.round(x.p * x.q * 10) / 10, ...(pl ? { pl: true, src: { n: x.n, k: x.k, p: x.p, u: x.u } } : {}) }); if (!pl) remember(meal.id, x.n, x.k, x.p, x.u); });
+  if (mode === 'yerine') { lockMain(sel, meal); qOpen(meal).forEach(it => d.items[meal.id + '.' + it.id] = { s: 'skip', ...f }); }
   if (mealStat(meal, sel).resolved) delete openEv[sel];
 }
 
@@ -518,7 +563,7 @@ function foodsSheet() {
   const list = Object.entries(S.foods || {}).sort(([, a], [, b]) => (b.t || '').localeCompare(a.t || '') || b.c - a.c);
   showSheet(`<div class="between" style="align-items:center;padding-right:6px"><h2>Gıdalarım</h2><button class="pill" data-act="fnew">${ic('plus')}Yeni</button></div>
     <p class="lead">Kendi ürünlerin ve daha önce kaydettiklerin. Öğüne eklerken aramada önce bunlar çıkar.</p>
-    ${list.length ? `<div class="group">${list.map(([id, f]) => `<button class="opt" data-act="fedit" data-id="${esc(id)}"><span class="fi">${tile(f)}<span>${esc(f.n)}<small>${esc(f.u ? f.u + ' · ' : '')}${num(f.k)} kcal · ${num1(f.p)} g protein</small></span></span>${ic('right')}</button>`).join('')}</div>`
+    ${list.length ? `<div class="group">${list.map(([id, f]) => `<button class="opt" data-act="fedit" data-id="${esc(id)}"><span class="fi">${tile(f)}<span>${esc(f.n)}<small>${esc(f.u ? f.u + ' · ' : '')}${KC ? num(f.k) + ' kcal · ' : ''}${num1(f.p)} g protein</small></span></span>${ic('right')}</button>`).join('')}</div>`
       : `<button class="primary" data-act="fnew">${ic('plus')}İlk gıdanı ekle</button><p class="note" style="padding-top:12px">Örneğin kendi whey proteinin ya da her zaman aldığın protein bar. Etiketin fotoğrafını çekersen değerleri yapay zekâ doldurur.</p>`}`);
 }
 function foodForm() {
@@ -562,14 +607,7 @@ async function foodAI() {
   if (FD.full) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: FD.full } });
   content.push({ type: 'text', text: text || 'Fotoğraftaki ürün.' });
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: AI_MODEL, max_tokens: 16000, system, messages: [{ role: 'user', content }], output_config: { format: { type: 'json_schema', schema: FOOD_SCHEMA } } }) });
-    const j = await r.json();
-    if (r.ok) track(AI_MODEL, j.usage);
-    if (!r.ok) throw new Error(r.status === 401 ? 'API anahtarı geçersiz. Program sekmesinden yenisini gir.' : r.status === 429 ? 'Çok fazla istek; biraz sonra yeniden dene.' : (j.error && j.error.message) || 'İstek başarısız oldu.');
-    if (j.stop_reason === 'refusal') throw new Error('Bu içerik okunamadı.');
-    const R = JSON.parse((j.content || []).find(b => b.type === 'text').text);
+    const R = await aiJSON({ model: AI_MODEL, max_tokens: 16000, system, messages: [{ role: 'user', content }], output_config: { format: { type: 'json_schema', schema: FOOD_SCHEMA } } }, 'Bu içerik okunamadı.');
     if (!FD.n.trim()) FD.n = R.name; FD.u = R.portion || FD.u; FD.k = String(Math.round(R.kcal)); FD.p = String(Math.round(R.protein * 10) / 10).replace('.', ',');
     FD.note = R.note || 'Değerleri etiketle karşılaştırıp kaydet.';
   } catch (e) { FD.err = e.message || 'Bağlantı kurulamadı.'; }
@@ -596,9 +634,12 @@ async function unpackPlan(text) {
   return p;
 }
 const planLink = code => location.origin + location.pathname + '#plan=' + code;
-let PL = null;   /* program sayfası: { link, err, incoming } */
+let PL = null;   /* program sayfası: { link, err, incoming, set: ayar taslağı, dirty } */
+const swi = (k, on) => `<button class="sw ${on ? 'on' : ''}" data-act="pswi" data-k="${k}" role="switch" aria-checked="${on}" aria-label="${k}"><i></i></button>`;
+const plSync = () => { const n = document.getElementById('dname'), t = document.getElementById('dphone'); if (n) PL.set.name = n.value; if (t) PL.set.phone = t.value; };
 function planSheet() {
   sheet = 'plan';
+  if (!PL.set) PL.set = { name: PLAN.dietitian.name || '', phone: PLAN.dietitian.phone || '', kcal: KC, tune: TUNE_ON };
   const P2 = PL.incoming, cur = PLAN;
   if (P2) {
     const meals = P2.meals.filter(m => m.time).map(m => m.title).join(' · ');
@@ -613,6 +654,13 @@ function planSheet() {
     <div class="sect">Program yükle</div>
     <div class="group"><div class="field"><input id="plink" type="text" autocomplete="off" placeholder="Bağlantıyı yapıştır"><button class="btn" data-act="planpaste">Aç</button></div></div>
     ${PL.err ? `<p class="err">${esc(PL.err)}</p>` : ''}
+    <div class="sect">Diyetisyen ayarları</div>
+    <div class="group form"><label class="fl"><span>Ad</span><input id="dname" value="${esc(PL.set.name)}" placeholder="Örn. Dyt. Ayşe Yılmaz" autocomplete="off"></label>
+      <label class="fl"><span>Telefon</span><input id="dphone" value="${esc(PL.set.phone)}" inputmode="tel" placeholder="Haftalık rapor için" autocomplete="off"></label>
+      <div class="fl"><span class="wide">Danışan kaloriyi görsün</span>${swi('kcal', PL.set.kcal)}</div>
+      <div class="fl"><span class="wide">Telafi önerileri</span>${swi('tune', PL.set.tune)}</div></div>
+    <p class="note">Normalde diyetisyen belirler; programla birlikte paylaşılır. Kalori gizlense de uygulama arka planda hesaplamaya devam eder.</p>
+    <button class="primary" data-act="pset" style="margin-bottom:14px" ${PL.dirty ? '' : 'disabled'}>${ic('check')}Ayarları kaydet</button>
     <div class="sect">Paylaş</div>
     <div class="group"><button class="opt" data-act="planshare"><span>Bu programın bağlantısı<small>${PL.link ? 'Kopyalandı · ' + num(PL.link.length) + ' karakter' : 'Paylaş ya da kopyala'}</small></span>${ic('right')}</button></div>
     ${PLAN_CUSTOM ? `<button class="textbtn" data-act="planreset">Uygulamayla gelen programa dön</button>` : ''}`);
@@ -623,6 +671,64 @@ async function planFromHash() {
   if (!location.hash.startsWith('#plan=')) return;
   try { PL = { incoming: await unpackPlan(location.hash) }; planSheet(); }
   catch (e) { PL = { err: e.message }; planSheet(); history.replaceState(null, '', location.pathname + location.search); }
+}
+
+/* ---------- Haftalık rapor ----------
+   Diyetisyenin haftalık kontrolü için, kâğıt takip tablolarının yerine. Yerelde üretilir (yapay zekâ yok);
+   WhatsApp biçimiyle (*kalın*) düz metin. Telefon numarası varsa doğrudan diyetisyenin sohbetine açılır. */
+const fmtNum1 = n => n.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+function weekReport(k0) {
+  const wk = weekOf(k0), past = wk.filter(k => k <= today), fmtD = k => parse(k).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+  const L = [`*Haftalık rapor · ${fmtD(wk[0])} – ${fmtD(wk[6])}*`];
+  if (PLAN.client && PLAN.client.name) L.push(PLAN.client.name);
+  const rec = k => { const d = peek(k); return Object.keys(d.items).length || (d.extras || []).length || d.water || d.gym || d.walk; };
+  const logged = past.filter(rec), stats = logged.map(dayStat);
+  /* Kilo: haftanın ilk ve son tartısı */
+  const ws = [...S.weights].filter(w => wk.includes(w.d)).sort((a, b) => a.d < b.d ? -1 : 1);
+  const before = [...S.weights].filter(w => w.d < wk[0]).sort((a, b) => a.d < b.d ? -1 : 1).pop();
+  const w0 = ws[0] || before, w1 = ws[ws.length - 1];
+  L.push('');
+  if (w1) L.push(`*Kilo:* ${w0 && w0 !== w1 ? `${fmtNum1(w0.kg)} → ${fmtNum1(w1.kg)} kg (${w1.kg - w0.kg > 0 ? '+' : '−'}${fmtNum1(Math.abs(w1.kg - w0.kg))})` : fmtNum1(w1.kg) + ' kg'}`);
+  else if (before) L.push(`*Kilo:* bu hafta tartı yok (son: ${fmtNum1(before.kg)} kg, ${fmtD(before.d)})`);
+  L.push(`*Kayıtlı gün:* ${logged.length} / ${past.length}`);
+  if (stats.length) L.push(`*Öğünlere uyum:* %${Math.round(stats.reduce((a, s) => a + s.pct, 0) / stats.length)}`);
+  const full = logged.map(balance).filter(b => b.any && !b.open.length);
+  /* Tamamlanmış günlerin ortalaması; plan değeri de aynı günlerin ortalaması (ana yemeğe göre gün gün değişir). */
+  const av = f => num(full.reduce((a, b) => a + f(b), 0) / full.length);
+  if (full.length) L.push(KC ? `*Ortalama:* ${av(b => b.ek)} kcal (plan ${av(b => b.tk)}) · ${av(b => b.ep)} g protein (plan ${av(b => b.tp)})`
+    : `*Ortalama protein:* ${av(b => b.ep)} g (plan ${av(b => b.tp)})`);
+  const waters = past.map(k => peek(k).water).filter(Boolean);
+  if (waters.length) L.push(`*Su:* günde ortalama ${fmtNum1(waters.reduce((a, b) => a + b, 0) / waters.length * WATER_ML / 1000)} L (hedef ${WATER_L} L)`);
+  const gyms = wk.filter(k => peek(k).gym).length, walks = wk.filter(k => peek(k).walk).length;
+  L.push(`*Antrenman:* ${gyms} / ${GYM_GOAL} · *Yürüyüş:* ${walks} / ${WALK_GOAL}`);
+  const cof = past.map(k => peek(k).coffee).filter(Boolean); if (cof.some(c => c > COFFEE_MAX)) L.push(`*Kahve:* ${cof.filter(c => c > COFFEE_MAX).length} gün sınırın üstünde`);
+  /* Günler: yalnızca plandan farklı olanlar yazılır, gerisi "plana uygun". */
+  L.push('', '*Günler*');
+  past.forEach(k => {
+    const d = peek(k), notes = [];
+    if (!rec(k)) { L.push(`${DOW[parse(k).getDay()]} ${parse(k).getDate()}: kayıt yok`); return; }
+    MEALS.filter(m => m.time).forEach(m => {
+      const st = mealStat(m, k), ex = (d.extras || []).filter(e => e.meal === m.id && !e.adj), names = ex.map(e => e.name + (e.pl ? ' (planlandı)' : '')).join(', ');
+      const sw = itemsOf(m, k).map(it => stOf(d, m, it)).filter(s => s && s.s === 'swap').map(s => s.sub);
+      if (st.resolved && st.skip === st.total) notes.push(ex.length ? `${m.title} yerine ${names}` : `${m.title} atlandı`);
+      else { if (st.skip && st.skip < st.total) notes.push(`${m.title}: ${st.skip} kalem atlandı`); if (ex.length) notes.push(`${m.title}: +${names}`); }
+      if (sw.length) notes.push(`${m.title}: ${sw.join(', ')} (muadil)`);
+      if (!st.resolved && k < today && st.ok + st.skip === 0 && !ex.length) notes.push(`${m.title} işaretlenmemiş`);
+    });
+    L.push(`${DOW[parse(k).getDay()]} ${parse(k).getDate()}: ${notes.length ? notes.join(' · ') : 'plana uygun'}`);
+  });
+  L.push('', '_Diyet uygulamasından_');
+  return L.join('\n');
+}
+const waNum = t => { let x = String(t || '').replace(/\D/g, ''); if (x.startsWith('0')) x = '9' + x; if (x.length === 10 && x[0] === '5') x = '90' + x; return x.length >= 11 ? x : ''; };
+function reportSheet() {
+  sheet = 'report';
+  const text = weekReport(sel), wa = waNum(PLAN.dietitian.phone), who = PLAN.dietitian.name || 'diyetisyenine';
+  const html = esc(text).replace(/\*(.+?)\*/g, '<b>$1</b>').replace(/_(.+?)_/g, '<i>$1</i>');
+  showSheet(`<h2>Haftalık rapor</h2><p class="lead">Haftalık kontrolden önce ${esc(who)} gönder. Gönderilen, aşağıdaki metnin aynısı.</p>
+    <div class="report">${html}</div>
+    ${wa ? `<a class="primary" href="https://wa.me/${wa}?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">${ic('chat')}WhatsApp'ta gönder</a><button class="textbtn" data-act="repshare">Başka yolla paylaş</button>`
+      : `<button class="primary" data-act="repshare">${ic('up')}Paylaş</button><p class="note" style="padding-top:10px;text-align:center">Diyetisyenin telefonu Program → Program bağlantısı bölümünde girilirse WhatsApp sohbeti doğrudan açılır.</p>`}`);
 }
 
 /* ---------- Kullanım sayacı ----------
@@ -656,7 +762,7 @@ const CHAT_SYSTEM = () => `Bu bir diyet takip uygulamasının içindeki asistans
 Nasıl cevap verirsin:
 - Türkçe, kısa ve doğrudan. Cevap telefonda okunacak; çoğu cevap 2-5 cümle. Liste gerekiyorsa satır başına "- " koy. Başlık, tablo, kalın yazı kullanma.
 - Program diyetisyenindir. Programı değiştirmeyi, öğün atlamayı ya da kaloriyi daha da kısmayı önerme. Sapmayı programın kendi muadilleriyle (swaps, kalemlerin subs alanı) ve uygulamanın telafi önerileriyle dengele. Programda karşılığı olmayan bir şey için yaklaşık bir öneri ver ve diyetisyenine danışmasını söyle.
-- Kalori ve protein söylerken <durum>daki değerleri kullan. Kendin tahmin ediyorsan "yaklaşık" de.
+${KC ? `- Kalori ve protein söylerken <durum>daki değerleri kullan. Kendin tahmin ediyorsan "yaklaşık" de.` : `- Diyetisyen bu danışanın kalori sayılarını görmesini istemiyor. Kalori sayısı söyleme; porsiyon, öğün ve protein diliyle konuş. <durum>daki kalorileri yalnızca kendi muhakemen için kullan.`}
 - Dışarıda yemek, davet, tatil gibi durumlarda suçlama yok. En iyi seçeneği söyle, günün kalanının nasıl dengeleneceğini anlat: tek bir öğün günü bozmaz, kalan öğünlere devam etmek önemli.
 - Tıbbi bir şikâyet, ilaç, hastalık, hamilelik ya da yeme bozukluğu işareti varsa diyetisyenine veya doktoruna yönlendir.
 - Kayıt yapamazsın. Kullanıcı bir şey yediğini söylerse uygulamada nasıl kaydedeceğini kısaca hatırlat: öğüne dokununca kalemler açılır; "Hepsini yedim" hepsini işaretler; satırdaki üç nokta muadil seçtirir; kalem düğmesi yenen şeyi aratır ya da yazdırır; kamera fotoğraftan kaydeder. Plandan sapınca kalan öğünlere telafi satırları kendiliğinden eklenir.
@@ -678,7 +784,7 @@ function dayContext() {
       if (s.s === 'skip') return `  - ${nm}: atlandı`;
       if (s.s === 'swap') return `  - ${nm} yerine ${s.sub}${s.k != null ? ` · ${s.k} kcal, ${s.p} g protein` : ''}`;
       return `  - ${s.name || nm}: yendi`; });
-    (d.extras || []).filter(e => e.meal === m.id).forEach(e => rows.push(`  - ${e.adj ? 'telafi' : 'plan dışı'}: ${e.name} · ${num(e.k)} kcal, ${num(e.p)} g protein`));
+    (d.extras || []).filter(e => e.meal === m.id).forEach(e => rows.push(`  - ${e.adj ? 'telafi' : e.pl ? 'planlandı, henüz yenmedi' : 'plan dışı'}: ${e.name} · ${num(e.k)} kcal, ${num(e.p)} g protein`));
     A.adds.filter(a => a.meal === m.id && a.xi < 0).forEach(a => rows.push(`  - uygulamanın telafi önerisi: ${a.name} · ${a.k} kcal`));
     lines.push(head, ...rows);
   });
@@ -710,7 +816,7 @@ function chatSheet() {
 }
 const grow = t => { t.style.height = 'auto'; t.style.height = Math.min(120, t.scrollHeight) + 'px'; };
 function openChat() {
-  if (!aiKey()) return needKey();
+  if (!aiReady(openChat)) return;
   chatLoad(); chatErr = ''; chatSheet();
   if (!CHAT.length) setTimeout(() => { const t = document.getElementById('said2'); t && t.focus(); }, 320);
 }
@@ -721,13 +827,10 @@ async function chatSend(text) {
   CHAT.push(q, a); const t0 = document.getElementById('said2'); if (t0) t0.value = ''; chatSheet();
   const paint = () => { const el = document.getElementById('live'); if (el) { el.innerHTML = fmtMsg(a.content); $sheet().scrollTop = $sheet().scrollHeight; } };
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: CHAT_MODEL, max_tokens: 4000, stream: true, thinking: { type: 'disabled' }, output_config: { effort: 'low' },
-        system: [{ type: 'text', text: CHAT_SYSTEM(), cache_control: { type: 'ephemeral' } }],
-        messages: CHAT.slice(0, -1).map(({ role, content }) => ({ role, content })) }) });
-    if (!r.ok) { const j = await r.json().catch(() => ({}));
-      throw new Error(r.status === 401 ? 'API anahtarı geçersiz. Program sekmesinden yenisini gir.' : r.status === 429 ? 'Çok fazla istek; biraz sonra yeniden dene.' : r.status === 529 ? 'Servis şu an yoğun; biraz sonra yeniden dene.' : (j.error && j.error.message) || 'İstek başarısız oldu.'); }
+    const r = await aiFetch({ model: CHAT_MODEL, max_tokens: 4000, stream: true, thinking: { type: 'disabled' }, output_config: { effort: 'low' },
+      system: [{ type: 'text', text: CHAT_SYSTEM(), cache_control: { type: 'ephemeral' } }],
+      messages: CHAT.slice(0, -1).map(({ role, content }) => ({ role, content })) });
+    if (!r.ok) throw aiErr(r, await r.json().catch(() => ({})));
     const rd = r.body.getReader(), dec = new TextDecoder(), usage = {}; let buf = '', stop = '';
     for (;;) {
       const { done, value } = await rd.read(); if (done) break;
@@ -777,6 +880,15 @@ document.addEventListener('click', e => {
       unpackPlan(v).then(p2 => { PL = { incoming: p2 }; planSheet(); }).catch(x => { PL = { err: x.message || 'Bağlantı okunamadı.' }; planSheet(); }); return; }
     case 'planload': try { localStorage.setItem(PLANKEY, JSON.stringify(PL.incoming)); } catch (x) { PL = { err: 'Program kaydedilemedi.' }; return planSheet(); } reloadClean(); return;
     case 'plannot': PL = null; history.replaceState(null, '', location.pathname + location.search); closeSheet(); return;
+    case 'pswi': plSync(); PL.set[el.dataset.k] = !PL.set[el.dataset.k]; PL.dirty = true; planSheet(); return;
+    case 'pset': { plSync(); const p2 = JSON.parse(JSON.stringify(PLAN));
+      p2.dietitian = { ...(p2.dietitian || {}), name: PL.set.name.trim(), phone: PL.set.phone.trim() }; p2.prefs = { ...(p2.prefs || {}), kcal: PL.set.kcal, tune: PL.set.tune };
+      if (planCheck(p2)) return; try { localStorage.setItem(PLANKEY, JSON.stringify(p2)); } catch (x) { return; } reloadClean(); return; }
+    case 'report': reportSheet(); return;
+    case 'repshare': { const text = weekReport(sel);
+      if (navigator.share) navigator.share({ text }).catch(() => {});
+      else if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => { el.textContent = 'Kopyalandı'; }).catch(() => {});
+      return; }
     case 'planreset': try { localStorage.removeItem(PLANKEY); } catch (x) {} reloadClean(); return;
     case 'planshare': packPlan(PLAN).then(code => { const url = planLink(code); PL.link = url;
       if (navigator.share) navigator.share({ title: 'Diyet programı', url }).catch(() => {});
@@ -793,8 +905,10 @@ document.addEventListener('click', e => {
     case 'clear': setAll(meal, () => null); d.extras = d.extras.filter(x => x.meal !== meal.id); openEv[sel] = meal.id; break;
     case 'mode': d.mode[meal.id] = +el.dataset.i; break;
     case 'main': d.main[meal.id] = el.dataset.m; closeSheet(); break;
-    case 'quick': { const m = nextMeal(); sel = today; tab = 'today'; render(); if (!m) return; if (!aiKey()) return needKey(); camMeal = m.id; document.getElementById('cam').click(); return; }
-    case 'photo': if (!aiKey()) return needKey(); camMeal = meal.id; document.getElementById('cam').click(); return;
+    case 'quick': { const m = nextMeal(); sel = today; tab = 'today'; render(); if (!m) return; const go = () => { camMeal = m.id; document.getElementById('cam').click(); }; if (aiReady(go)) go(); return; }
+    case 'photo': { const go = () => { camMeal = meal.id; document.getElementById('cam').click(); }; if (aiReady(go)) go(); return; }
+    case 'aiok': { try { localStorage.setItem(OKKEY, today); } catch (x) {} const f = afterOk; afterOk = null; closeSheet(); if (f) f(); return; }
+    case 'aino': try { localStorage.removeItem(OKKEY); } catch (x) {} progSheet('ai'); return;
     case 'write': quickSheet(meal); return;
     case 'qadd': { const x = Q.res[+el.dataset.i], had = Q.tray.find(t => t.id === x.id); if (had) had.q += 1; else Q.tray.push({ ...x, q: 1 });
       const t = document.getElementById('q'); t.value = ''; qPaint(); buzz(); return; }
@@ -803,15 +917,21 @@ document.addEventListener('click', e => {
     case 'fnew': FD = { n: el.dataset.q || '', u: '', k: '', p: '', img: '', ret: el.dataset.ret || '' }; foodForm(); return;
     case 'fedit': { const f = S.foods[el.dataset.id]; FD = { id: el.dataset.id, n: f.n, u: f.u || '', k: String(f.k), p: String(f.p).replace('.', ','), img: f.img || '' }; foodForm(); return; }
     case 'fpic': fSync(); document.getElementById('pic').click(); return;
-    case 'fai': fSync(); if (!aiKey()) { FD.err = 'Yapay zekâ için Program → Yapay zekâ bölümünden API anahtarı gir. Değerleri elle de girebilirsin.'; return foodForm(); } foodAI(); return;
+    case 'fai': fSync(); if (!aiKey()) { FD.err = 'Yapay zekâ için Program → Yapay zekâ bölümünden API anahtarı gir. Değerleri elle de girebilirsin.'; return foodForm(); }
+      if (aiReady(foodAI)) foodAI(); return;
     case 'fdel': if (!FD.del) { FD.del = true; fSync(); return foodForm(); } delete S.foods[FD.id]; FD = null; foodsSheet(); break;
     case 'fback': if (FD && FD.ret) { const m = MEALS.find(x => x.id === FD.ret); FD = null; quickSheet(m, true); return; } FD = null; foodsSheet(); return;
     case 'fsave': { fSync(); const id = fSave(); if (!id) return; const ret = FD.ret; FD = null;
       if (ret) { const f = S.foods[id], m = MEALS.find(x => x.id === ret); if (!Q.tray.some(t => t.id === id)) Q.tray.push({ id, n: f.n, u: f.u, k: f.k, p: f.p, img: f.img, mine: true, q: 1 }); save(); quickSheet(m, true); return; }
       foodsSheet(); break; }
     case 'qmode': Q.mode = el.dataset.m; qPaint(); return;
-    case 'qai': { const v = document.getElementById('q').value.trim(); if (!v) return; if (!aiKey()) return needKey(); analyze(Q.meal, { text: v }); return; }
-    case 'qsave': if (!Q.tray.length) return; qSave(); closeSheet(); buzz(); break;
+    case 'qai': { const v = document.getElementById('q').value.trim(); if (!v) return; const go = () => analyze(Q.meal, { text: v }); if (aiReady(go)) go(); return; }
+    case 'qsave': if (!Q.tray.length) return; qSave(!!el.dataset.pl); closeSheet(); buzz(); break;
+    case 'plok': { /* plan gerçekleşti: işaretler kalkar, yenenler kütüphaneye girer */
+      d.extras.forEach(e => { if (e.meal === meal.id && e.pl) { delete e.pl; if (e.src) remember(meal.id, e.src.n, e.src.k, e.src.p, e.src.u); delete e.src; } });
+      Object.entries(d.items).forEach(([k, v]) => { if (k.startsWith(meal.id + '.') && v.pl) delete v.pl; }); delete openEv[sel]; buzz(); break; }
+    case 'plno': d.extras = d.extras.filter(e => !(e.meal === meal.id && e.pl));
+      Object.entries(d.items).forEach(([k, v]) => { if (k.startsWith(meal.id + '.') && v.pl) delete d.items[k]; }); break;
     case 'applyai': applyAI(); closeSheet(); buzz(); break;
     case 'savekey': { const v = document.getElementById('aikey').value.trim(); if (!v) return; try { localStorage.setItem(AIKEY, v); } catch (x) {} closeSheet(); break; }
     case 'delkey': try { localStorage.removeItem(AIKEY); } catch (x) {} closeSheet(); break;
@@ -836,7 +956,7 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const f = e.target.files && e.target.files[0]; if (!f) return;
   if (e.target.id === 'pic' && FD) { e.target.value = '';
-    Promise.all([thumb(f), shrink(f)]).then(([img, full]) => { FD.img = img; FD.full = full; FD.err = ''; if (sheet !== 'food') return; if (aiKey()) foodAI(); else foodForm(); })
+    Promise.all([thumb(f), shrink(f)]).then(([img, full]) => { FD.img = img; FD.full = full; FD.err = ''; if (sheet !== 'food') return; if (aiKey() && aiOk()) foodAI(); else foodForm(); })
       .catch(x => { FD.err = x.message; foodForm(); }); return; }
   if (e.target.id === 'cam') { e.target.value = ''; shrink(f).then(image => analyze(camMeal, { image })).catch(() => {}); }
   if (e.target.id === 'file') f.text().then(t => { const o = JSON.parse(t); if (!o || !o.days) return;
@@ -851,6 +971,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && e.target.id === 'said2') { e.preventDefault(); document.querySelector('[data-act="chatsend"]').click(); }
 });
 document.addEventListener('input', e => {
+  if ((e.target.id === 'dname' || e.target.id === 'dphone') && PL) { PL.dirty = true; const b = document.querySelector('[data-act="pset"]'); if (b) b.disabled = false; }
   if (e.target.id === 'said2') grow(e.target);
   if (e.target.id === 'q') qPaint();
   if (e.target.id === 'fn' || e.target.id === 'fk') { const n = document.getElementById('fn').value.trim(), k = document.getElementById('fk').value.trim(), b = document.querySelector('[data-act="fsave"]');
