@@ -630,8 +630,9 @@ function progSheet(p) {
   showSheet(S2[p]());
 }
 function render() {
-  document.getElementById('app').innerHTML = tab === 'today' ? todayView() : tab === 'week' ? weekView() : tab === 'chat' ? chatView() : tab === 'progress' ? progressView() : planView();
-  document.body.classList.toggle('on-chat', tab === 'chat'); document.getElementById('ask').hidden = tab !== 'chat';
+  const B0 = blank();
+  document.getElementById('app').innerHTML = B0 ? blankView() : tab === 'today' ? todayView() : tab === 'week' ? weekView() : tab === 'chat' ? chatView() : tab === 'progress' ? progressView() : planView();
+  document.body.classList.toggle('on-chat', !B0 && tab === 'chat'); document.getElementById('ask').hidden = B0 || tab !== 'chat';
   document.getElementById('dock').innerHTML = `<div class="tabs">${[['today', 'today', 'Bugün'], ['week', 'week', 'Hafta'], ['chat', 'chat', 'Asistan'], ['progress', 'grid', 'İlerleme'], ['plan', 'list', 'Program']].map(([t, i, n]) =>
     `<button class="${tab === t ? 'on' : ''}" data-act="tab" data-t="${t}">${ic(i)}${n}</button>`).join('')}</div>`;
   const h = document.getElementById('heat'); if (h) h.scrollLeft = h.scrollWidth;
@@ -1129,12 +1130,22 @@ async function planFromHash() {
 const SETUPKEY = 'diyet-setup';
 let PB = null;   /* { pics: [{ img, full }], text, busy, err } */
 const setupDone = () => { try { localStorage.setItem(SETUPKEY, today); } catch (e) {} };
-/* Karşılamayı görmüş ama kendi programını yüklememiş kişi örnek programdadır; Bugün'ün başında bunu söyleyen satır durur.
-   Karşılamayı hiç görmemiş eski kullanıcıda (varsayılan program kendi programı) görünmez. */
-const sample = () => { if (PLAN_CUSTOM) return false; try { return !!localStorage.getItem(SETUPKEY); } catch (e) { return false; } };
+/* Yeni kişi (karşılamayı görmüş, kendi programı yok): varsayılan program başkasının gerçek programıdır, gösterilmez;
+   bütün sekmelerde "Programını ekle" ekranı durur. Örnek programı kendisi seçtiyse (NEWKEY = 'demo') program görünür,
+   Bugün'ün başında örnek olduğunu söyleyen satırla. Karşılamayı hiç görmemiş eski kullanıcıda ikisi de görünmez. */
+const NEWKEY = 'diyet-new';
+const newState = () => { if (PLAN_CUSTOM) return ''; try { return localStorage.getItem(NEWKEY) || (localStorage.getItem(SETUPKEY) ? 'demo' : ''); } catch (e) { return ''; } };
+const blank = () => !!newState() && newState() !== 'demo', sample = () => newState() === 'demo';
+function blankView() {
+  return `<header class="head"><div><p>${fmtLong(today)}</p><h1>Hoş geldin</h1></div></header>
+    <section class="card blank"><span class="bic">${ic('list')}</span><h2>Programını ekle</h2>
+      <p>Öğünlerin, saatlerin ve muadillerin diyetisyeninin programından gelir. Yüklediğinde burada görünür.</p>
+      <button class="primary" data-act="setup">${ic('cam')}Programını ekle</button><button class="textbtn" data-act="welcome" data-w="demo">Örnek programla bak</button></section>`;
+}
 /* İlk açılış: kayıt da yüklenmiş program da yoksa nasıl başlanacağı sorulur. */
 function welcomeSheet() {
   sheet = 'welcome'; setupDone();
+  try { if (!PLAN_CUSTOM && !localStorage.getItem(NEWKEY)) { localStorage.setItem(NEWKEY, 'new'); render(); } } catch (e) {}
   const o = (w, icn, n, m) => `<button class="nav-row" data-act="welcome" data-w="${w}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${m}</span></span>${ic('right')}</button>`;
   showSheet(`<h2>Hoş geldin</h2><p class="lead">Önce diyetisyeninin programını ekleyelim. Öğünlerin, saatlerin ve muadillerin buradan gelir.</p>
     <div class="group">${o('link', 'link', 'Diyetisyenim bağlantı gönderdi', 'Bağlantıyı yapıştır, program hazır gelir')}${o('photo', 'cam', 'Kâğıttaki programımı aktar', 'Sayfaları çek ya da galeriden seç')}${o('demo', 'list', 'Örnek programla bak', 'Sonra Program sekmesinden değiştirebilirsin')}</div>`);
@@ -1578,7 +1589,8 @@ document.addEventListener('click', e => {
       if (v) n[NT] = v; else delete n[NT]; closeSheet(); break; }
     case 'phgo': { const t = document.getElementById('phtx').value.trim(), p = PH; PH = null; analyze(p.meal, { image: p.full, text: t }); return; }
     case 'setup': return welcomeSheet();
-    case 'welcome': { const w = el.dataset.w; if (w === 'link') { PL = {}; return planSheet(); } if (w === 'photo') return buildSheet(); } closeSheet(); return;
+    case 'welcome': { const w = el.dataset.w; if (w === 'link') { PL = {}; return planSheet(); } if (w === 'photo') return buildSheet();
+      if (w === 'demo') try { localStorage.setItem(NEWKEY, 'demo'); } catch (x) {} } closeSheet(); render(); return;
     case 'build': return buildSheet();
     case 'pbadd': pbSync(); if (PB.pics.length < 6) document.getElementById('pages').click(); return;
     case 'pbx': pbSync(); PB.pics.splice(+el.dataset.i, 1); return buildSheet();
