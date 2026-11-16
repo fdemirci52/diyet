@@ -316,10 +316,12 @@ function mealPanel(meal, k, A, st) {
   h += itemsOf(meal, k).map(it => rowHTML(meal, it, d, A.over[meal.id + '.' + it.id])).join('');
   h += A.adds.filter(a => a.meal === meal.id).map(a => `<div class="row ${a.xi >= 0 ? 'done' : 'plus'}" data-act="add" data-i="${A.adds.indexOf(a)}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(a.name)}</span><span class="m">${A.why}</span></span></div>`).join('');
   h += (d.extras || []).map((e, i) => e.meal !== meal.id || (e.adj && A.adds.some(a => a.xi === i)) ? '' : `<div class="row ${e.pl ? '' : 'done'}" data-act="${e.adj ? 'unextra' : 'xedit'}" data-i="${i}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(e.name)}</span><span class="m">${e.adj ? 'Telafi' : e.pl ? 'Planlandı' : 'Plan dışı'}${KC ? ` · yaklaşık ${num(e.k)} kcal` : ''}</span></span></div>`).join('');
+  const sups = meal.time ? supList(meal.id) : [], left = supLeft(meal, k).length;
+  if (sups.length) h += `<p class="rsect">Takviye · öğünden sonra</p>` + sups.map(s => supRow(s, k)).join('');
   const noteBtn = note ? '' : `<button data-act="note" data-meal="${meal.id}">Not ekle</button>`;
   if (planned(meal, k)) return h + `<div class="actions" style="grid-template-columns:1fr"><button class="primary" data-act="plok" data-meal="${meal.id}">${ic('check')}Yedim</button></div>
     <div class="tbtns"><button data-act="plno" data-meal="${meal.id}">Planı kaldır</button>${noteBtn}</div>`;
-  if (st.resolved) return h + `<div class="tbtns"><button data-act="clear" data-meal="${meal.id}">İşaretleri sıfırla</button>${noteBtn}</div>`;
+  if (st.resolved) return h + (left ? `<div class="actions" style="grid-template-columns:1fr"><button class="primary" data-act="supall" data-at="${meal.id}">${ic('check')}${left > 1 ? 'Takviyeleri aldım' : 'Takviyeyi aldım'}</button></div>` : '') + `<div class="tbtns"><button data-act="clear" data-meal="${meal.id}">İşaretleri sıfırla</button>${noteBtn}</div>`;
   return h + `<div class="actions"><button class="primary" data-act="all" data-meal="${meal.id}">${ic('check')}${st.ok + st.skip ? 'Kalanını yedim' : 'Hepsini yedim'}</button>
       <button class="sq" data-act="photo" data-meal="${meal.id}" aria-label="Fotoğrafla kaydet">${ic('cam')}</button>
       <button class="sq" data-act="write" data-meal="${meal.id}" aria-label="Yazarak kaydet">${ic('pen')}</button></div>
@@ -332,10 +334,12 @@ function eventHTML({ id, cls, node, title, sub, right, panel, act }) {
 function mealEvent(meal, k, A, next, open) {
   const d = peek(k), st = mealStat(meal, k), ate = (d.extras || []).filter(e => e.meal === meal.id && !e.adj), allSkip = st.skip === st.total && !ate.length, isNow = meal === next;
   const pl = planned(meal, k), done = st.resolved && !pl;
-  const cls = done ? (allSkip ? 'skipd' : 'done') : isNow ? 'now' : '';
+  const wait = done && k <= today ? supLeft(meal, k) : [];   /* öğün bitti, takviyesi duruyor */
+  const cls = wait.length ? '' : done ? (allSkip ? 'skipd' : 'done') : isNow ? 'now' : '';
   let sub = pl ? 'Planlandı · ' + ate.filter(e => e.pl).map(e => e.name).join(' · ')
     : st.resolved ? (allSkip ? 'Atlandı' : st.skip === st.total ? ate.map(e => e.name).join(' · ') : st.skip ? `${st.ok} / ${st.total} kalem` : 'Tamam')
     : itemsOf(meal, k).filter(i => !i.optional).map(short).join(' · ') + (A.adds.some(a => a.meal === meal.id) ? ' · + telafi' : '');
+  if (wait.length) sub = 'Takviye bekliyor · ' + wait.map(s => s.n).join(' · ');
   let right = meal.time ? `<span class="t">${timeOf(meal, k)}</span>` : '';
   if (open === meal.id && !st.resolved && !pl) sub = itemsOf(meal, k).filter(i => !i.optional).length + ' kalem';
   if (isNow) { const mt = minsTo(meal, k); sub = timeOf(meal, k) + ' · ' + sub;
@@ -344,7 +348,7 @@ function mealEvent(meal, k, A, next, open) {
   if (!meal.time) { const it = meal.items[0], id = meal.id + '.' + it.id, s = d.items[id];   /* saatsiz tek kalem: satıra dokunmak yeter */
     const sub = [label(it), it.meta && it.meta[0].toLocaleLowerCase('tr') + it.meta.slice(1)].filter(Boolean).join(', ');
     return eventHTML({ cls, node: s ? 'check' : meal.id, title: meal.title, sub: s ? 'Tamam' : sub, right: '', act: `data-act="toggle" data-id="${id}"` }); }
-  return eventHTML({ cls, node: done ? (allSkip ? 'dash' : 'check') : meal.id, title: meal.title, sub, right,
+  return eventHTML({ cls, node: wait.length ? 'pill' : done ? (allSkip ? 'dash' : 'check') : meal.id, title: meal.title, sub, right,
     act: `data-act="ev" data-id="${meal.id}"`, panel: open === meal.id ? mealPanel(meal, k, A, st) : '' });
 }
 function gymEvent(k, W, open) {
@@ -369,6 +373,9 @@ const supAt = at => at === 'yat' ? 'Yatmadan önce' : isHM(at) ? 'Saat ' + at : 
 const hm = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const supRank = at => at === 'yat' ? 3000 : isHM(at) ? hm(at) : !at ? 4000 : (m => m.time ? hm(m.time) + 1 : 0)(MEALS.find(m => m.id === at));
 const supList = at => SUPS().filter(s => anc(s) === at);
+/* Saatli öğüne bağlı takviye öğünün kendi listesinde durur; yatmadan önce alınan Gün boyu bölümünde. */
+const inMeal = at => MEALS.some(m => m.id === at && m.time);
+const supLeft = (meal, k) => meal.time ? supList(meal.id).filter(s => !supTaken(k, s.id)) : [];
 /* Zaman çizelgesindeki gruplar; saat önemsizler Gün boyu bölümünde. */
 const supGroups = () => [...new Set(SUPS().map(anc))].filter(Boolean).map(at => ({ at, list: supList(at) }));
 function supDue(at, k) {
@@ -382,8 +389,8 @@ function supDue(at, k) {
    ile gecikmiş sayılana kadar) öğün açılır. */
 function defOpen(k) {
   if (k !== today) return '';
-  const next = nextMeal(), g = supGroups().find(g => supDue(g.at, k) && g.list.some(s => !supTaken(k, s.id))), mt = next ? minsTo(next, k) : 0;
-  if (g && (!next || mt > 30 || mt < -90)) return 'sp:' + g.at;
+  const next = nextMeal(), g = supGroups().find(g => g.at !== 'yat' && supDue(g.at, k) && g.list.some(s => !supTaken(k, s.id))), mt = next ? minsTo(next, k) : 0;
+  if (g && (!next || mt > 30 || mt < -90)) return inMeal(g.at) ? g.at : 'sp:' + g.at;
   return next ? next.id : '';
 }
 const supRow = (s, k) => `<div class="row ${supTaken(k, s.id) ? 'done' : ''}" data-act="sup" data-id="${esc(s.id)}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(s.n)}</span>${s.dose ? `<span class="m">${esc(s.dose)}</span>` : ''}</span></div>`;
@@ -400,7 +407,7 @@ function supsSheet() {
   sheet = 'sups';
   const L = [...SUPS()].sort((a, b) => supRank(anc(a)) - supRank(anc(b)));
   showSheet(`<div class="between" style="align-items:center;padding-right:6px"><h2>Takviyeler</h2>${L.length ? `<button class="pill" data-act="spnew">${ic('plus')}Yeni</button>` : ''}</div>
-    <p class="lead">Aldığın takviyeler ve ne zaman aldığın. Öğüne bağlı olanlar öğünün hemen ardından çıkar; öğünü işaretleyince sırada onlar olur.</p>
+    <p class="lead">Aldığın takviyeler ve ne zaman aldığın. Öğüne bağlı olanlar o öğünün listesinde, yatmadan önce alınanlar Gün boyu bölümünde çıkar.</p>
     ${L.length ? `<div class="group">${L.map(s => `<button class="opt" data-act="spedit" data-id="${esc(s.id)}"><span>${esc(s.n)}<small>${[s.dose, supAt(anc(s))].filter(Boolean).map(esc).join(' · ')}</small></span>${ic('right')}</button>`).join('')}</div>`
       : `<button class="primary" data-act="spnew">${ic('plus')}İlk takviyeni ekle</button><p class="note" style="padding-top:12px">Örneğin omega 3 kahvaltıdan sonra, magnezyum yatmadan önce, kreatin günün herhangi bir saatinde.</p>`}
     <p class="note">Bu liste senin kaydın; diyetisyenin programını değiştirmez. Yeni bir takviyeye başlamadan önce ona danış.</p>`);
@@ -410,8 +417,8 @@ function supForm() {
   const f = SP, at = f.at, kind = isHM(at) ? 'saat' : at;
   const ch = (v, n) => `<button class="${kind === v ? 'on' : ''}" data-act="spat" data-at="${v}">${n}</button>`;
   const m = MEALS.find(x => x.id === at);
-  const how = at === 'yat' ? 'Günün sonunda, gece öğününden sonra hatırlatılır.' : isHM(at) ? 'Zaman çizelgesinde bu saate yerleşir.'
-    : !at ? 'Gün boyu bölümünde durur; ne zaman alırsan işaretle.' : `${m.title} işaretlenince sırada bu olur.`;
+  const how = at === 'yat' ? 'Gün boyu bölümünde, su ve kahvenin yanında durur.' : isHM(at) ? 'Zaman çizelgesinde bu saate yerleşir.'
+    : !at ? 'Gün boyu bölümünde durur; ne zaman alırsan işaretle.' : (m.time ? `${m.title} listesinin sonunda çıkar; alınana kadar öğün tamamlanmış görünmez.` : `${m.title} işaretlenince sırada bu olur.`);
   showSheet(`<h2>${f.id ? 'Takviyeyi düzenle' : 'Yeni takviye'}</h2>
     <div class="group form" style="margin-top:12px"><label class="fl"><span>Ad</span><input id="spn" value="${esc(f.n)}" placeholder="Örn. Omega 3" autocomplete="off"></label>
       <label class="fl"><span>Miktar</span><input id="spd" value="${esc(f.dose)}" placeholder="Örn. 1 kapsül, 3 damla, 5 g" autocomplete="off"></label></div>
@@ -455,7 +462,7 @@ function todayView() {
   const G = supGroups(), sp = at => G.filter(g => g.at === at).map(g => supEvent(g, sel, open)).join('');
   const timed = G.filter(g => isHM(g.at)).sort((a, b) => a.at < b.at ? -1 : 1);
   const before = m => { if (!m.time) return ''; const t = timeOf(m, sel), out = timed.filter(g => !g.put && g.at < t); out.forEach(g => g.put = true); return out.map(g => supEvent(g, sel, open)).join(''); };
-  const anytime = SUPS().filter(s => !anc(s));
+  const anytime = [...SUPS().filter(s => !anc(s)), ...supList('yat')];
   /* Şerit: hafta hafta kayan sayfalar; geçmiş ve gelecek haftalar. */
   const strip = stripWeeks().map(w => `<div class="wk">${weekOf(w).map(k => { const dt = parse(k);
     return `<button class="day ${k === sel ? 'sel' : ''} ${k === today ? 'today' : ''} ${k > today ? 'fut' : ''}" data-act="day" data-k="${k}"><small>${DOW[dt.getDay()]}</small><span class="disc" style="--p:${dayFill(k)}"><b>${dt.getDate()}</b></span></button>`; }).join('')}</div>`).join('');
@@ -463,19 +470,19 @@ function todayView() {
   const tile = (name, val, unit, of, pct, color) => `<div class="tile"><div class="top"><span class="label">${name}</span>${ring(pct, 30, 4.5, color)}</div><strong>${val}${unit ? `<em>${unit}</em>` : ''}</strong><small>${of}</small></div>`;
   const walks = wk.filter(x => peek(x).walk).length, gyms = wk.filter(x => peek(x).gym).length;
   return `<header class="head"><div><p>${fmtLong(sel)}</p><h1>${sel === today ? 'Bugün' : parse(sel).toLocaleDateString('tr-TR', { weekday: 'long' })}</h1></div>
-      <div class="hright"><button class="round" data-act="chat" aria-label="Asistana sor">${ic('chat')}</button>
-      ${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : `<button class="dayring" data-act="score" aria-label="Uyum puanı">${ring(fillPct / 100, 54, 5, 'var(--accent)')}<b>%${fillPct}</b></button>`}</div></header>
+      <div class="hright">${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : `<button class="dayring" data-act="score" aria-label="Uyum puanı">${ring(fillPct / 100, 54, 5, 'var(--accent)')}<b>%${fillPct}</b></button>`}</div></header>
     <div class="strip" id="strip">${strip}</div>
     <div class="tiles">${KC ? tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)') : (() => { const ms = MEALS.filter(m => m.time), r = ms.filter(m => mealStat(m, sel).resolved).length; return tile('Öğün', r, '', `/ ${ms.length} öğün`, r / ms.length, 'var(--fg)'); })()}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', `/ ${WATER_L} L`, d.water / WATER_GOAL, 'var(--blue)')}</div>
     ${A.note ? `<p class="note">${A.note}</p>` : ''}
-    <div class="tl">${MEALS.map(m => before(m) + mealEvent(m, sel, A, next, open) + sp(m.id) + (m.id === TRAIN.after && W ? gymEvent(sel, W, open) : '')).join('')}${timed.filter(g => !g.put).map(g => supEvent(g, sel, open)).join('')}${sp('yat')}</div>
+    <div class="tl">${MEALS.map(m => before(m) + mealEvent(m, sel, A, next, open) + (m.time ? '' : sp(m.id)) + (m.id === TRAIN.after && W ? gymEvent(sel, W, open) : '')).join('')}${timed.filter(g => !g.put).map(g => supEvent(g, sel, open)).join('')}</div>
     <div class="sect">Gün boyu</div>
     <section class="card">
       <div class="row"><span class="b"><span class="n">Su</span><span class="m">${d.water} bardak · ${litres} / ${WATER_L} L</span></span>${stepper('water', d.water)}</div>
       <div class="row"><span class="b"><span class="n">Kahve</span><span class="m ${d.coffee > COFFEE_MAX ? 'over' : ''}">${d.coffee > COFFEE_MAX ? 'Günlük sınır aşıldı' : PLAN.daily.coffee.note}</span></span>${stepper('coffee', d.coffee, d.coffee > COFFEE_MAX)}</div>
       ${!WALK_GOAL ? '' : `<div class="row ${d.walk ? 'done' : ''}" data-act="walk"><span class="b"><span class="n">${PLAN.daily.walk.name}</span><span class="m">Bu hafta ${walks} / ${WALK_GOAL}</span></span><span class="chk">${ic('check')}</span></div>`}
-      ${anytime.map(s => `<div class="row ${supTaken(sel, s.id) ? 'done' : ''}" data-act="sup" data-id="${esc(s.id)}"><span class="b"><span class="n">${esc(s.n)}</span><span class="m">${esc(s.dose ? s.dose + ' · saat önemsiz' : 'Takviye · saat önemsiz')}</span></span><span class="chk">${ic('check')}</span></div>`).join('')}
+      ${anytime.map(s => `<div class="row ${supTaken(sel, s.id) ? 'done' : ''}" data-act="sup" data-id="${esc(s.id)}"><span class="b"><span class="n">${esc(s.n)}</span><span class="m">${esc((s.dose || 'Takviye') + (anc(s) === 'yat' ? ' · yatmadan önce' : ' · saat önemsiz'))}</span></span><span class="chk">${ic('check')}</span></div>`).join('')}
       ${W || !GYM_GOAL ? '' : `<div class="row ${d.gym ? 'done' : ''}" data-act="gym"><span class="b"><span class="n">Ağırlık antrenmanı</span><span class="m">Bugün planlı değil · bu hafta ${gyms} / ${GYM_GOAL}</span></span><span class="chk">${ic('check')}</span></div>`}
+      <div class="row goto" data-act="prog" data-p="takviye" role="button"><span class="b"><span class="n">Takviyeler</span><span class="m">${SUPS().length ? 'Ekle ya da düzenle' : 'Unutmamak için ekle: öğününde ya da burada hatırlatılır'}</span></span>${ic('right')}</div>
     </section>`;
 }
 function weekView() {
@@ -582,7 +589,7 @@ function scoreSheet(wk0) {
       <p>Kaydetmediğin öğün<small>Puanı düşürmez. Bugün ekranındaki gün halkaları ise günün ne kadarını plana uygun kaydettiğini gösterir.</small></p></div>
     <button class="textbtn" data-act="close">Kapat</button>`);
 }
-const PROG = [['kurallar', 'list', 'Kurallar', `${RULES.length} madde`], ['saatler', 'clock', 'Öğün saatleri', 'Hafta içi ve hafta sonu'], ['muadil', 'swap', 'Muadiller', 'Neyin yerine ne yenir'], ['gidalar', 'ogle', 'Gıdalarım', ''], ['takviye', 'pill', 'Takviyeler', ''],
+const PROG = [['kurallar', 'list', 'Kurallar', `${RULES.length} madde`], ['saatler', 'clock', 'Öğün saatleri', 'Hafta içi ve hafta sonu'], ['muadil', 'swap', 'Muadiller', 'Neyin yerine ne yenir'], ['gidalar', 'ogle', 'Gıdalarım', ''], ['takviye', 'pill', 'Takviyeler', ''], ['gorunum', 'sabah', 'Görünüm', ''],
   ['antrenman', 'gym', 'Antrenman', Object.entries(WORKOUTS).map(([n, w]) => `${DOW[n]} ${w.name.toLocaleLowerCase('tr')}`).join(' · ')], ['vucut', 'person', 'Vücut analizi', `${fmtDM(PLAN.body.date)} ölçümü`], ['ai', 'chat', 'Yapay zekâ', ''], ['baglanti', 'link', 'Program bağlantısı', 'Yükle ya da paylaş'], ['veri', 'down', 'Yedek', 'İndir ya da geri yükle']];
 function planView() {
   const t = balance(today), last = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1).pop();
@@ -590,7 +597,7 @@ function planView() {
     <section class="card pad"><span class="label">Hedef</span><div class="num">${PLAN.goal.kg ? PLAN.goal.kg.toLocaleString('tr-TR') + '<em>kg</em>' : '—'}</div><p class="note" style="padding:8px 0 14px">${esc(PLAN.goal.text)}</p>
       <div class="tiles two" style="margin:0"><div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Şu an</span><strong style="margin-top:8px">${last ? last.kg.toLocaleString('tr-TR') + '<em>kg</em>' : '—'}</strong><small>${PLAN.body.fat ? PLAN.body.fat + ' yağ' : 'Son tartı'}</small></div>
         <div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Günlük plan</span>${KC ? `<strong style="margin-top:8px">${num(t.tk)}<em>kcal</em></strong><small>${num(t.tp)} g protein</small>` : `<strong style="margin-top:8px">${num(t.tp)}<em>g</em></strong><small>protein</small>`}</div></div></section>
-    <section class="card">${PROG.filter(([id]) => !(id === 'antrenman' && !Object.keys(WORKOUTS).length) && !(id === 'vucut' && !BODY.length) && !(id === 'muadil' && !SWAPS.length)).map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiCode() ? 'Davet kodu kayıtlı' : aiKey() ? 'API anahtarı kayıtlı' : PROXY_URL ? 'Davet kodu gerekli' : 'API anahtarı gerekli') : id === 'gidalar' ? (Object.keys(S.foods || {}).length ? `${Object.keys(S.foods).length} gıda` : 'Kendi ürünlerin') : id === 'takviye' ? (SUPS().length ? `${SUPS().length} takviye` : 'Ne zaman alacağını hatırlat') : m}</span></span>${ic('right')}</button>`).join('')}</section>
+    <section class="card">${PROG.filter(([id]) => !(id === 'antrenman' && !Object.keys(WORKOUTS).length) && !(id === 'vucut' && !BODY.length) && !(id === 'muadil' && !SWAPS.length)).map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiCode() ? 'Davet kodu kayıtlı' : aiKey() ? 'API anahtarı kayıtlı' : PROXY_URL ? 'Davet kodu gerekli' : 'API anahtarı gerekli') : id === 'gidalar' ? (Object.keys(S.foods || {}).length ? `${Object.keys(S.foods).length} gıda` : 'Kendi ürünlerin') : id === 'gorunum' ? ({ light: 'Açık', dark: 'Koyu' }[theme()] || 'Sistemle aynı') : id === 'takviye' ? (SUPS().length ? `${SUPS().length} takviye` : 'Ne zaman alacağını hatırlat') : m}</span></span>${ic('right')}</button>`).join('')}</section>
     <p class="note">Kayıtlar yalnızca bu cihazda tutulur. Kalori ve protein değerleri yaklaşık tahminlerdir.</p>`;
 }
 function progSheet(p) {
@@ -612,22 +619,54 @@ function progSheet(p) {
       <div class="group"><div class="kv"><span>API anahtarı</span><span>${aiKey() ? 'Kayıtlı' : 'Yok'}</span></div><div class="field"><input id="aikey" type="password" autocomplete="off" placeholder="sk-ant-…"><button class="btn" data-act="savekey">Kaydet</button></div></div>
       <div class="group"><div class="kv"><span>Veri paylaşım onayı</span><span>${aiOk() ? fmtDM(aiOk()) : 'Verilmedi'}</span></div></div>
       ${usageRows()}${aiOk() ? `<button class="textbtn" data-act="aino">Onayı geri al</button>` : ''}${aiKey() ? `<button class="textbtn" data-act="delkey">Anahtarı sil</button>` : ''}`,
+    gorunum: () => `<h2>Görünüm</h2><p class="lead">Açık ya da koyu tema. Sistemle aynı seçiliyken telefonun ayarını izler.</p>
+      <div class="group">${[['', 'Sistemle aynı'], ['light', 'Açık'], ['dark', 'Koyu']].map(([v, n]) => `<button class="opt" data-act="theme" data-v="${v}"><span>${n}</span>${theme() === v ? ic('check') : ''}</button>`).join('')}</div>`,
     veri: () => `<h2>Yedek</h2><p class="lead">Kayıtların bu cihazda durur. Telefon değiştirmeden önce yedek al.</p><div class="group"><button class="opt" data-act="export"><span>Yedeği indir</span>${ic('down')}</button><button class="opt" data-act="import"><span>Yedekten yükle</span>${ic('right')}</button></div>`,
   };
   showSheet(S2[p]());
 }
 function render() {
   document.getElementById('app').innerHTML = tab === 'today' ? todayView() : tab === 'week' ? weekView() : tab === 'progress' ? progressView() : planView();
-  document.getElementById('dock').innerHTML = `<div class="tabs">${[['today', 'today', 'Bugün'], ['week', 'week', 'Hafta'], ['progress', 'grid', 'İlerleme'], ['plan', 'list', 'Program']].map(([t, i, n]) =>
-    `<button class="${tab === t ? 'on' : ''}" data-act="tab" data-t="${t}">${ic(i)}${n}</button>`).join('')}</div>`;
+  document.getElementById('dock').innerHTML = `<div class="tabs">${[['today', 'today', 'Bugün'], ['week', 'week', 'Hafta'], ['chat', 'chat', 'Asistan'], ['progress', 'grid', 'İlerleme'], ['plan', 'list', 'Program']].map(([t, i, n]) =>
+    t === 'chat' ? `<button data-act="chat">${ic(i)}${n}</button>` : `<button class="${tab === t ? 'on' : ''}" data-act="tab" data-t="${t}">${ic(i)}${n}</button>`).join('')}</div>`;
   placeStrip();
   const h = document.getElementById('heat'); if (h) h.scrollLeft = h.scrollWidth;
 }
 
 /* ---------- Alt sayfalar ---------- */
 const $sheet = () => document.getElementById('sheet');
-const showSheet = html => { $sheet().innerHTML = '<div class="grab"></div>' + html; $sheet().scrollTop = 0; document.body.classList.add('sheet-open'); };
+const showSheet = html => { $sheet().innerHTML = '<button class="grab" data-act="close" aria-label="Kapat"></button>' + html; $sheet().scrollTop = 0; document.body.classList.add('sheet-open'); };
 const closeSheet = () => { document.body.classList.remove('sheet-open'); sheet = null; pending = null; };
+/* Sayfa aşağı sürüklenerek kapanır: tutamaçtan her zaman, içerikten yalnızca en üstteyken. Yazı alanları hariç. */
+(() => {
+  const sh = $sheet(), sc = document.querySelector('.scrim'); let y0 = null, x0 = 0, dy = 0, t0 = 0, drag = false;
+  const reset = () => { sh.style.transition = ''; sh.style.transform = ''; sc.style.transition = ''; sc.style.opacity = ''; };
+  sh.addEventListener('touchstart', e => { y0 = null; drag = false; const t = e.target;
+    if (e.touches.length !== 1 || t.closest('input, textarea') || (sh.scrollTop > 0 && !t.closest('.grab'))) return;
+    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; dy = 0; t0 = Date.now(); }, { passive: true });
+  sh.addEventListener('touchmove', e => { if (y0 == null) return; dy = e.touches[0].clientY - y0; const dx = Math.abs(e.touches[0].clientX - x0);
+    if (!drag) { if (dy > 8 && dy > dx) { drag = true; sh.style.transition = 'none'; sc.style.transition = 'none'; } else { if (dy < -8 || dx > 8) y0 = null; return; } }
+    if (e.cancelable) e.preventDefault(); const y = Math.max(0, dy);
+    sh.style.transform = `translateY(${y}px)`; sc.style.opacity = Math.max(.2, 1 - y / sh.offsetHeight); }, { passive: false });
+  const end = () => { if (y0 == null || !drag) { y0 = null; return; } const fast = dy > 40 && dy / Math.max(1, Date.now() - t0) > .5;
+    y0 = null; drag = false; reset(); if (dy > 120 || fast) closeSheet(); };
+  sh.addEventListener('touchend', end); sh.addEventListener('touchcancel', end);
+})();
+/* Açılan olay ekranın ortasına yumuşakça gelir; ekrana sığmıyorsa başı yukarıda kalır. */
+const openNow = () => tab === 'today' ? (openEv[sel] !== undefined ? openEv[sel] : defOpen(sel)) : '';
+function centerOpen() {
+  const el = document.querySelector('.ev.open'); if (!el) return;
+  el.classList.add('fresh');
+  const r = el.getBoundingClientRect(), top = 20, room = innerHeight - 116 - top;
+  window.scrollBy({ top: r.top - top - Math.max(0, (room - r.height) / 2), behavior: 'smooth' });
+}
+/* ---------- Görünüm: sistem, açık ya da koyu ---------- */
+const THEMEKEY = 'diyet-theme';
+const theme = () => { try { return localStorage.getItem(THEMEKEY) || ''; } catch (e) { return ''; } };
+function setTheme(v) {
+  try { v ? localStorage.setItem(THEMEKEY, v) : localStorage.removeItem(THEMEKEY); } catch (e) {}
+  window.applyTheme && window.applyTheme();
+}
 function findItem(id) { const [mid, iid] = id.split('.'), meal = MEALS.find(m => m.id === mid); return [meal, itemsOf(meal, sel).find(i => i.id === iid)]; }
 /* ---------- Kalem sayfası ----------
    Bir kalemde ne kadar ve ne yendiği. Her dokunuş hemen kaydedilir: seçenek (programın eşdeğerleri, muadiller,
@@ -1432,6 +1471,7 @@ const buzz = () => { try { navigator.vibrate && navigator.vibrate(8); } catch (e
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const a = el.dataset.act, d = day(sel), meal = MEALS.find(m => m.id === el.dataset.meal), A = adjust(sel);
+  const o0 = openNow(), s0 = sel;
   const eaten = id => { const o = A.over[id]; return o ? { s: 'done', name: o.name, k: o.k, p: o.p } : { s: 'done' }; };
   const setAll = (m, fn) => itemsOf(m, sel).forEach(i => { const k = m.id + '.' + i.id, v = fn(d.items[k], i, k); v ? d.items[k] = v : delete d.items[k]; });
   switch (a) {
@@ -1450,6 +1490,7 @@ document.addEventListener('click', e => {
     case 'spsave': spSync(); spSave(); SP = null; supsSheet(); break;
     case 'spdel': if (!SP.del) { spSync(); SP.del = true; return supForm(); } S.supps = SUPS().filter(y => y.id !== SP.id); SP = null; supsSheet(); break;
     case 'spback': SP = null; supsSheet(); return;
+    case 'theme': setTheme(el.dataset.v); progSheet('gorunum'); return;
     case 'toggle': { const id = el.dataset.id, m = MEALS.find(x => x.id === id.split('.')[0]);
       if (d.items[id]) delete d.items[id]; else { lockMain(sel, m); d.items[id] = eaten(id); }
       if (mealStat(m, sel).resolved && m.time) delete openEv[sel]; buzz(); break; }
@@ -1507,7 +1548,7 @@ document.addEventListener('click', e => {
     case 'chatnew': if (chatBusy) return; CHAT = []; chatErr = ''; chatSave(); chatSheet(); return;
     case 'close': closeSheet(); return;
     case 'all': lockMain(sel, meal); A.adds.filter(x => x.meal === meal.id && x.xi < 0).forEach(({ xi, ...x }) => d.extras.push({ ...x, adj: true }));
-      setAll(meal, (c, i, k) => c || (i.optional ? null : eaten(k))); delete openEv[sel]; buzz(); break;
+      setAll(meal, (c, i, k) => c || (i.optional ? null : eaten(k))); if (supLeft(meal, sel).length) openEv[sel] = meal.id; else delete openEv[sel]; buzz(); break;
     case 'skipmeal': lockMain(sel, meal); setAll(meal, (c, i) => i.optional ? null : { s: 'skip' }); delete openEv[sel]; break;
     case 'clear': setAll(meal, () => null); d.extras = d.extras.filter(x => x.meal !== meal.id); openEv[sel] = meal.id; break;
     case 'mode': d.mode[meal.id] = +el.dataset.i; break;
@@ -1559,6 +1600,7 @@ document.addEventListener('click', e => {
     case 'import': document.getElementById('file').click(); return;
   }
   save(); render();
+  if (sel === s0 && openNow() && openNow() !== o0) centerOpen();
 });
 document.addEventListener('change', e => {
   if ((e.target.id === 'dka' || e.target.id === 'dkb') && DK) { dkSet(document.getElementById('dka').value, document.getElementById('dkb').value); return dumpSheet(); }
