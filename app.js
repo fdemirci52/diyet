@@ -767,7 +767,7 @@ const aiFetch = (body, signal) => aiCode()
   ? fetch(PROXY_URL + '/v1/messages', { method: 'POST', body: JSON.stringify(body), signal, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + aiCode() } })
   : fetch(AI_URL, { method: 'POST', body: JSON.stringify(body), signal,
     headers: { 'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' } });
-const aiErr = (r, j) => new Error(r.status === 401 ? (aiCode() ? 'Davet kodu geçersiz. Program → Yapay zekâ bölümünden kontrol et.' : 'API anahtarı geçersiz. Program sekmesinden yenisini gir.')
+const aiErr = (r, j) => new Error(r.status === 401 ? (aiCode() ? (sheet === 'build' ? 'Davet kodu geçersiz.' : 'Davet kodu geçersiz. Program → Yapay zekâ bölümünden kontrol et.') : 'API anahtarı geçersiz. Program sekmesinden yenisini gir.')
   : r.status === 402 ? 'Bu ayın yapay zekâ hakkı doldu. Kütüphane ve geçmişinden kayıt yapmaya devam edebilirsin.'
   : r.status === 429 ? 'Çok fazla istek; biraz sonra yeniden dene.' : r.status === 529 ? 'Servis şu an yoğun; biraz sonra yeniden dene.'
   : r.status === 502 ? 'Servis şu an çalışmıyor; diyetisyenine haber ver.' : (j && j.error && j.error.message) || 'İstek başarısız oldu.');
@@ -1158,7 +1158,7 @@ function buildSheet() {
     <div class="pages">${PB.pics.map((p, i) => `<button class="pg" data-act="pbx" data-i="${i}" aria-label="Sayfayı çıkar"><img src="${p.img}" alt=""><i>${ic('x')}</i></button>`).join('')}
       ${PB.pics.length < 6 ? `<button class="pg add" data-act="pbadd" aria-label="Sayfa ekle">${ic('cam')}<small>${PB.pics.length ? 'Sayfa ekle' : 'Fotoğraf ekle'}</small></button>` : ''}</div>
     <textarea id="pbtx" placeholder="Ek açıklama (isteğe bağlı) · örn. kahvaltı 09:00, öğle 13:00; hafta sonu bir saat geç. Hedefim 80 kg. Ara öğünde muz yemiyorum.">${esc(PB.text)}</textarea>
-    ${PB.err ? `<p class="err">${esc(PB.err)}</p>` : ''}
+    ${PB.err ? `<p class="err">${esc(PB.err)}</p>` : ''}${aiCode() && PB.err ? `<button class="textbtn" data-act="pbcode">Davet kodunu değiştir</button>` : ''}
     <button class="primary" data-act="pbgo" ${PB.pics.length || PB.text.trim() ? '' : 'disabled'}>${ic('check')}Programı oluştur</button>
     <p class="note" style="padding-top:12px;text-align:center">Yapay zekâ okur; yüklemeden önce sonucu kontrol edersin. Kalori ve protein değerleri tahmindir.</p>`);
 }
@@ -1666,7 +1666,9 @@ document.addEventListener('click', e => {
     case 'savekey': { const v = document.getElementById('aikey').value.trim(); if (!v) return; try { localStorage.setItem(AIKEY, v); } catch (x) {}
       if (afterKey) { const f = afterKey; afterKey = null; if (aiReady(f)) f(); return; } closeSheet(); break; }
     case 'delkey': try { localStorage.removeItem(AIKEY); } catch (x) {} closeSheet(); break;
-    case 'savecode': { const v = document.getElementById('aicode').value.trim().toUpperCase().replace(/\s+/g, ''); if (!v) return;
+    case 'pbcode': pbSync(); PB.err = ''; return needKey(buildSheet);
+    /* Tire unutulursa (AILE6S7N) son dört karakterin önüne konur. */
+    case 'savecode': { const v = document.getElementById('aicode').value.trim().toUpperCase().replace(/\s+/g, '').replace(/^([A-Z]+)([A-Z0-9]{4})$/, '$1-$2'); if (!v) return;
       try { localStorage.setItem(CODEKEY, v); } catch (x) {} ME = null;
       if (afterKey) { const f = afterKey; afterKey = null; if (aiReady(f)) f(); return; }
       progSheet('ai'); loadMe().then(() => { if (sheet === 'ai') progSheet('ai'); }); return; }
