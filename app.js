@@ -327,9 +327,14 @@ function mealPanel(meal, k, A, st) {
       <button class="sq" data-act="write" data-meal="${meal.id}" aria-label="Yazarak kaydet">${ic('pen')}</button></div>
     <div class="tbtns"><button data-act="skipmeal" data-meal="${meal.id}">Bu öğünü atladım</button>${noteBtn}</div>`;
 }
-function eventHTML({ id, cls, node, title, sub, right, panel, act }) {
-  return `<div class="ev ${cls} ${panel ? 'open' : ''}"><span class="node">${ic(node)}</span><div>
-    <button class="evh" ${act}><div><h3>${title}</h3><p>${esc(sub)}</p></div>${right}</button></div>${panel ? `<div class="panel">${panel}</div>` : ''}</div>`;
+/* Kapalı olay: zaman çizelgesinde bir satır. Açık olay: başlığı içinde tek kart; başlık kaydırınca ekranın tepesine
+   yapışır, dokununca kapanır. prog: kalemlerin işaretlenen oranı, simgenin çevresinde halka. */
+function eventHTML({ id, cls, node, title, sub, right, panel, act, prog }) {
+  if (!panel) return `<div class="ev ${cls}"><span class="node">${ic(node)}</span><div>
+    <button class="evh" ${act}><div><h3>${title}</h3><p>${esc(sub)}</p></div>${right}</button></div></div>`;
+  const pr = prog > 0 && prog < 1 ? `<span class="nprog">${ring(prog, 52, 3, 'var(--fg)')}</span>` : '';
+  return `<div class="ev ${cls} open"><div class="mcard"><button class="evh mh" ${act}><span class="node">${pr}${ic(node)}</span><div><h3>${title}</h3><p>${esc(sub)}</p></div>${right}</button>
+    <div class="panel">${panel}</div></div></div>`;
 }
 function mealEvent(meal, k, A, next, open) {
   const d = peek(k), st = mealStat(meal, k), ate = (d.extras || []).filter(e => e.meal === meal.id && !e.adj), allSkip = st.skip === st.total && !ate.length, isNow = meal === next;
@@ -341,7 +346,7 @@ function mealEvent(meal, k, A, next, open) {
     : itemsOf(meal, k).filter(i => !i.optional).map(short).join(' · ') + (A.adds.some(a => a.meal === meal.id) ? ' · + telafi' : '');
   if (wait.length) sub = 'Takviye bekliyor · ' + wait.map(s => s.n).join(' · ');
   let right = meal.time ? `<span class="t">${timeOf(meal, k)}</span>` : '';
-  if (open === meal.id && !st.resolved && !pl) sub = itemsOf(meal, k).filter(i => !i.optional).length + ' kalem';
+  if (open === meal.id && !st.resolved && !pl) sub = st.ok + st.skip ? `${st.ok + st.skip} / ${st.total} tamam` : itemsOf(meal, k).filter(i => !i.optional).length + ' kalem';
   if (isNow) { const mt = minsTo(meal, k); sub = timeOf(meal, k) + ' · ' + sub;
     right = `<span class="pill ${mt < -90 ? 'late' : mt <= 30 ? 'hot' : ''}">${mt > 0 ? (mt >= 60 ? `${Math.floor(mt / 60)} sa ${mt % 60} dk` : `${mt} dk`) : mt > -90 ? 'Şimdi' : 'Gecikti'}</span>`; }
   else if (isLate(meal, k)) right = `<span class="pill late">Gecikti</span>`;
@@ -349,7 +354,7 @@ function mealEvent(meal, k, A, next, open) {
     const sub = [label(it), it.meta && it.meta[0].toLocaleLowerCase('tr') + it.meta.slice(1)].filter(Boolean).join(', ');
     return eventHTML({ cls, node: s ? 'check' : meal.id, title: meal.title, sub: s ? 'Tamam' : sub, right: '', act: `data-act="toggle" data-id="${id}"` }); }
   return eventHTML({ cls, node: wait.length ? 'pill' : done ? (allSkip ? 'dash' : 'check') : meal.id, title: meal.title, sub, right,
-    act: `data-act="ev" data-id="${meal.id}"`, panel: open === meal.id ? mealPanel(meal, k, A, st) : '' });
+    act: `data-act="ev" data-id="${meal.id}"`, panel: open === meal.id ? mealPanel(meal, k, A, st) : '', prog: st.total ? (st.ok + st.skip) / st.total : 0 });
 }
 function gymEvent(k, W, open) {
   const d = peek(k);
@@ -439,20 +444,16 @@ function spSave() {
 function stepper(act, val, over) {
   return `<span class="stepper"><button data-act="${act}" data-n="-1" aria-label="Azalt">${ic('minus')}</button><b class="${over ? 'over' : ''}">${val}</b><button data-act="${act}" data-n="1" aria-label="Artır">${ic('plus')}</button></span>`;
 }
-/* Şeridin haftaları (pazartesileri): 26 hafta geri, 8 hafta ileri; seçili gün dışarıdaysa aralık genişler. */
+/* İleriye en çok sekiz hafta gidilir. */
 const AHEAD = 8 * 7;
-let stripLeft = null, stripTo = true;
-function stripWeeks() {
-  const t0 = weekOf(today)[0], s0 = weekOf(sel)[0];
-  let a = addDays(t0, -26 * 7), b = addDays(t0, 8 * 7); if (s0 < a) a = s0; if (s0 > b) b = s0;
-  const out = []; for (let k = a; k <= b; k = addDays(k, 7)) out.push(k); return out;
-}
-/* Yeniden çizimde şerit yerinde kalır; seçili gün başka yoldan değiştiyse o haftaya gider. */
-function placeStrip() {
-  const s = document.getElementById('strip'); if (!s) return;
-  if (stripTo || stripLeft == null) { const i = stripWeeks().indexOf(weekOf(sel)[0]); s.scrollLeft = i * s.clientWidth; stripTo = false; }
-  else s.scrollLeft = stripLeft;
-  stripLeft = s.scrollLeft;
+/* Gün başlığı: bugün, dün, yarın; diğerlerinde haftanın günü. */
+const dayTitle = k => k === today ? 'Bugün' : k === addDays(today, -1) ? 'Dün' : k === addDays(today, 1) ? 'Yarın' : parse(k).toLocaleDateString('tr-TR', { weekday: 'long' }).replace(/^./, c => c.toLocaleUpperCase('tr'));
+/* Başlık sola kaydırılınca ertesi gün, sağa kaydırılınca önceki gün. */
+function shiftDay(n) {
+  const k = addDays(sel, n); if (k > addDays(today, AHEAD)) return;
+  sel = k; render(); window.scrollTo({ top: 0 });
+  const a = document.getElementById('app'); a.classList.remove('slide-l', 'slide-r'); void a.offsetWidth; a.classList.add(n > 0 ? 'slide-l' : 'slide-r');
+  a.addEventListener('animationend', () => a.classList.remove('slide-l', 'slide-r'), { once: true });
 }
 function todayView() {
   const d = peek(sel), fillPct = dayFill(sel), A = adjust(sel), B = balance(sel), wk = weekOf(sel);
@@ -463,16 +464,13 @@ function todayView() {
   const timed = G.filter(g => isHM(g.at)).sort((a, b) => a.at < b.at ? -1 : 1);
   const before = m => { if (!m.time) return ''; const t = timeOf(m, sel), out = timed.filter(g => !g.put && g.at < t); out.forEach(g => g.put = true); return out.map(g => supEvent(g, sel, open)).join(''); };
   const anytime = [...SUPS().filter(s => !anc(s)), ...supList('yat')];
-  /* Şerit: hafta hafta kayan sayfalar; geçmiş ve gelecek haftalar. */
-  const strip = stripWeeks().map(w => `<div class="wk">${weekOf(w).map(k => { const dt = parse(k);
-    return `<button class="day ${k === sel ? 'sel' : ''} ${k === today ? 'today' : ''} ${k > today ? 'fut' : ''}" data-act="day" data-k="${k}"><small>${DOW[dt.getDay()]}</small><span class="disc" style="--p:${dayFill(k)}"><b>${dt.getDate()}</b></span></button>`; }).join('')}</div>`).join('');
   const litres = (d.water * WATER_ML / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
-  const tile = (name, val, unit, of, pct, color) => `<div class="tile"><div class="top"><span class="label">${name}</span>${ring(pct, 30, 4.5, color)}</div><strong>${val}${unit ? `<em>${unit}</em>` : ''}</strong><small>${of}</small></div>`;
+  /* Kadran: sayı halkanın içinde, ad ve hedef altta (Apple Watch dairesel komplikasyonu). */
+  const tile = (name, val, unit, of, pct, color) => `<div class="tile dial"><div class="dr">${ring(pct, 76, 6.5, color)}<strong><span>${val}${unit ? `<em>${unit}</em>` : ''}</span></strong></div><b>${name}</b><small>${of}</small></div>`;
   const walks = wk.filter(x => peek(x).walk).length, gyms = wk.filter(x => peek(x).gym).length;
-  return `<header class="head"><div><p>${fmtLong(sel)}</p><h1>${sel === today ? 'Bugün' : parse(sel).toLocaleDateString('tr-TR', { weekday: 'long' })}</h1></div>
+  return `<header class="head" id="dayhead"><div><p>${fmtLong(sel)}</p><h1>${dayTitle(sel)}</h1></div>
       <div class="hright">${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : `<button class="dayring" data-act="score" aria-label="Uyum puanı">${ring(fillPct / 100, 54, 5, 'var(--accent)')}<b>%${fillPct}</b></button>`}</div></header>
-    <div class="strip" id="strip">${strip}</div>
-    <div class="tiles">${KC ? tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)') : (() => { const ms = MEALS.filter(m => m.time), r = ms.filter(m => mealStat(m, sel).resolved).length; return tile('Öğün', r, '', `/ ${ms.length} öğün`, r / ms.length, 'var(--fg)'); })()}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', `/ ${WATER_L} L`, d.water / WATER_GOAL, 'var(--blue)')}</div>
+    <div class="tiles dials">${KC ? tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)') : (() => { const ms = MEALS.filter(m => m.time), r = ms.filter(m => mealStat(m, sel).resolved).length; return tile('Öğün', r, '', `/ ${ms.length} öğün`, r / ms.length, 'var(--fg)'); })()}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', `/ ${WATER_L} L`, d.water / WATER_GOAL, 'var(--blue)')}</div>
     ${A.note ? `<p class="note">${A.note}</p>` : ''}
     <div class="tl">${MEALS.map(m => before(m) + mealEvent(m, sel, A, next, open) + (m.time ? '' : sp(m.id)) + (m.id === TRAIN.after && W ? gymEvent(sel, W, open) : '')).join('')}${timed.filter(g => !g.put).map(g => supEvent(g, sel, open)).join('')}</div>
     <div class="sect">Gün boyu</div>
@@ -629,14 +627,13 @@ function render() {
   document.getElementById('app').innerHTML = tab === 'today' ? todayView() : tab === 'week' ? weekView() : tab === 'progress' ? progressView() : planView();
   document.getElementById('dock').innerHTML = `<div class="tabs">${[['today', 'today', 'Bugün'], ['week', 'week', 'Hafta'], ['chat', 'chat', 'Asistan'], ['progress', 'grid', 'İlerleme'], ['plan', 'list', 'Program']].map(([t, i, n]) =>
     t === 'chat' ? `<button data-act="chat">${ic(i)}${n}</button>` : `<button class="${tab === t ? 'on' : ''}" data-act="tab" data-t="${t}">${ic(i)}${n}</button>`).join('')}</div>`;
-  placeStrip();
   const h = document.getElementById('heat'); if (h) h.scrollLeft = h.scrollWidth;
 }
 
 /* ---------- Alt sayfalar ---------- */
 const $sheet = () => document.getElementById('sheet');
 const showSheet = html => { $sheet().innerHTML = '<button class="grab" data-act="close" aria-label="Kapat"></button>' + html; $sheet().scrollTop = 0; document.body.classList.add('sheet-open'); };
-const closeSheet = () => { document.body.classList.remove('sheet-open'); sheet = null; pending = null; };
+const closeSheet = () => { document.body.classList.remove('sheet-open'); sheet = null; pending = null; afterKey = null; };
 /* Sayfa aşağı sürüklenerek kapanır: tutamaçtan her zaman, içerikten yalnızca en üstteyken. Yazı alanları hariç. */
 (() => {
   const sh = $sheet(), sc = document.querySelector('.scrim'); let y0 = null, x0 = 0, dy = 0, t0 = 0, drag = false;
@@ -708,7 +705,7 @@ function itemSheet() {
     ${mains}<div class="sect">Ne yedin?</div>
     <div class="group">${plan}${subs}${sugg}${own}</div>
     ${sugg ? `<p class="note">Uygulamanın önerileri aynı besin grubundan yaklaşık eşdeğerlerdir; programında yoksa diyetisyenine danış.</p>` : ''}
-    <div class="group"><div class="field"><input id="custom" type="text" placeholder="Başka bir şey… (ara ya da yaz)" enterkeyhint="done" autocomplete="off"><button class="btn" data-act="s-custom">Ekle</button></div><div id="csug"></div></div>
+    <div class="group"><div class="field"><input id="custom" type="text" placeholder="Başka bir şey… (ara ya da yaz)" enterkeyhint="done" autocomplete="off"><button class="btn" data-act="s-custom">Ekle</button></div></div><div id="csug"></div>
     <button class="primary" data-act="it-ok">${ic('check')}${s && s !== 'skip' ? 'Tamam' : 'Yedim'}</button>
     <div class="tbtns">${s === 'skip' ? '' : `<button data-act="s-skip">Atladım</button>`}${s ? `<button data-act="s-clear">İşareti kaldır</button>` : ''}</div>`);
 }
@@ -721,7 +718,9 @@ function itApply(A) {
   else if (c.t === 'lib') d.items[IT.id] = { s: 'swap', sub: q === 1 ? c.x.n : `${c.x.n} × ${qLab(q)}`, k: V.k, p: V.p, q, src: { n: c.x.n, k: c.x.k, p: c.x.p, u: c.x.u || '' } };
   else d.items[IT.id] = { s: 'swap', sub: scaleText(c.text, q), base: c.text, ...sc };
 }
-function needKey() { progSheet('ai'); }
+/* Kod ya da anahtar girilince yarım kalan iş (ör. programı aktarma) kaldığı yerden sürer. */
+let afterKey = null;
+function needKey(then) { afterKey = then || null; progSheet('ai'); }
 
 /* ---------- Öğün notu ve fotoğraf açıklaması ----------
    days[k].notes = { öğün: 'metin' }: isteğe bağlı açıklama; panelde görünür, haftalık rapora ve asistana gider.
@@ -778,7 +777,7 @@ const aiOk = () => { try { return localStorage.getItem(OKKEY) || ''; } catch (e)
 let afterOk = null;
 /* Yapay zekâ kapısı: anahtar yoksa ayar sayfası, rıza yoksa aydınlatma metni açılır; onaydan sonra then çalışır. */
 function aiReady(then) {
-  if (!aiAuth()) { needKey(); return false; }
+  if (!aiAuth()) { needKey(then); return false; }
   if (!aiOk()) { afterOk = then; consentSheet(); return false; }
   return true;
 }
@@ -912,12 +911,12 @@ function qPaint() {
       <p class="note" style="padding:10px 6px 0;text-align:center">Gün şimdiden buna göre dengelenir; yiyince onaylarsın.</p><button class="textbtn" data-act="qsave">Yedim, kaydet</button>`
     : `<button class="primary" data-act="qsave">${ic('check')}Kaydet${KC ? ` · ${num(tk)} kcal` : ''}</button>`}`;
   Q.res = qFind(meal.id, q).filter(x => !Q.tray.some(t => t.id === x.id));
-  const rows = Q.res.map((x, i) => `<button class="opt" data-act="qadd" data-i="${i}"><span>${esc(x.n)}<small>${esc(x.u || '')}${KC ? `${x.u ? ' · ' : ''}${num(x.k)} kcal` : ''}${x.mine ? ' · senin' : ''}</small></span><span class="fi">${x.img ? `<img class="th" src="${x.img}" alt="">` : ''}${ic('plus')}</span></button>`).join('');
+  const rows = fgrid(Q.res.map((x, i) => fcard(x, 'qadd', i, 'plus')).join(''));
   const add = `<button class="opt" data-act="fnew" data-ret="${meal.id}" data-q="${esc(q)}"><span>Yeni gıda ekle<small>Kendi ürününü fotoğrafla ya da elle kaydet</small></span>${ic('cam')}</button>`;
   const ai = q ? `<button class="opt" data-act="qai"><span>“${esc(q)}”<small>Yapay zekâyla işle${aiAuth() ? '' : PROXY_URL ? ' · davet kodu gerekli' : ' · API anahtarı gerekli'}</small></span>${ic('pen')}</button>` : '';
   document.getElementById('qres').innerHTML = !q && !Q.res.length
     ? (Q.tray.length ? '' : `<p class="lead" style="padding-top:14px">Yediğin şeyi ara. Kaydettiklerin burada birikir; bir dahakine tek dokunuşla eklersin.</p><div class="group">${add}</div>`)
-    : `<div class="sect">${q ? 'Sonuçlar' : 'Senin gıdaların'}</div><div class="group">${rows}${ai}${add}</div>${q && !Q.res.length ? `<p class="note">Kütüphanede yok. Yapay zekâ işlerse ya da kendin eklersen bir dahakine burada çıkar.</p>` : ''}`;
+    : `<div class="sect">${q ? 'Sonuçlar' : 'Senin gıdaların'}</div>${rows}<div class="group">${ai}${add}</div>${q && !Q.res.length ? `<p class="note">Kütüphanede yok. Yapay zekâ işlerse ya da kendin eklersen bir dahakine burada çıkar.</p>` : ''}`;
 }
 /* Öğünün saati daha gelmediyse (30 dakikadan uzak ya da ileri bir gün) kayıt planlama olur. */
 const qLater = meal => sel > today || (sel === today && !!meal.time && minsTo(meal, sel) > 30);
@@ -964,8 +963,8 @@ const xSync = () => { const n = document.getElementById('xn'), k = document.getE
 let CS = [];
 function csPaint() {
   const box = document.getElementById('csug'), v = document.getElementById('custom').value.trim(); if (!box) return;
-  CS = v ? qFind(sheet.split('.')[0], v).slice(0, 4) : [];
-  box.innerHTML = CS.map((x, i) => `<button class="opt" data-act="s-food" data-i="${i}"><span>${esc(x.n)}<small>${esc(x.u || '')}${KC ? `${x.u ? ' · ' : ''}${num(x.k)} kcal` : ''}</small></span>${ic('plus')}</button>`).join('');
+  CS = v ? qFind(sheet.split('.')[0], v).slice(0, 6) : [];
+  box.innerHTML = fgrid(CS.map((x, i) => fcard(x, 's-food', i, 'plus')).join(''));
 }
 
 /* ---------- Gıdalarım ----------
@@ -980,12 +979,17 @@ function thumb(file, size = 160) {
     img.onerror = () => no(new Error('Fotoğraf okunamadı')); img.src = url; });
 }
 const tile = f => f.img ? `<img class="th" src="${f.img}" alt="">` : `<span class="th">${esc((f.n || '?').trim()[0].toLocaleUpperCase('tr'))}</span>`;
+/* Gıda ızgarası: görsel, ad, porsiyon; altında yan yana kalori ve protein (gram protein). Seçimin yapıldığı her yerde aynı kart. */
+const fcard = (f, act, i, badge) => `<button class="fcard" data-act="${act}" ${i != null ? `data-i="${i}"` : ''} ${f.id != null && i == null ? `data-id="${esc(f.id)}"` : ''}>
+  <span class="fimg">${f.img ? `<img src="${f.img}" alt="">` : `<i>${esc((f.n || '?').trim()[0].toLocaleUpperCase('tr'))}</i>`}${badge ? `<span class="fbadge">${ic(badge)}</span>` : ''}</span>
+  <b>${esc(f.n)}</b>${f.u ? `<small class="fu">${esc(f.u)}</small>` : ''}<small class="fv">${KC ? `${num(f.k)} kcal · ${num1(f.p)} g` : `${num1(f.p)} g protein`}</small></button>`;
+const fgrid = cards => cards ? `<div class="fgrid">${cards}</div>` : '';
 function foodsSheet() {
   sheet = 'foods';
   const list = Object.entries(S.foods || {}).sort(([, a], [, b]) => (b.t || '').localeCompare(a.t || '') || b.c - a.c);
   showSheet(`<div class="between" style="align-items:center;padding-right:6px"><h2>Gıdalarım</h2><button class="pill" data-act="fnew">${ic('plus')}Yeni</button></div>
     <p class="lead">Kendi ürünlerin ve daha önce kaydettiklerin. Öğüne eklerken aramada önce bunlar çıkar.</p>
-    ${list.length ? `<div class="group">${list.map(([id, f]) => `<button class="opt" data-act="fedit" data-id="${esc(id)}"><span class="fi">${tile(f)}<span>${esc(f.n)}<small>${esc(f.u ? f.u + ' · ' : '')}${KC ? num(f.k) + ' kcal · ' : ''}${num1(f.p)} g protein</small></span></span>${ic('right')}</button>`).join('')}</div>`
+    ${list.length ? fgrid(list.map(([id, f]) => fcard({ ...f, id }, 'fedit')).join(''))
       : `<button class="primary" data-act="fnew">${ic('plus')}İlk gıdanı ekle</button><p class="note" style="padding-top:12px">Örneğin kendi whey proteinin ya da her zaman aldığın protein bar. Etiketin fotoğrafını çekersen değerleri yapay zekâ doldurur.</p>`}`);
 }
 function foodForm() {
@@ -1121,15 +1125,15 @@ function welcomeSheet() {
   sheet = 'welcome';
   const o = (w, icn, n, m) => `<button class="nav-row" data-act="welcome" data-w="${w}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${m}</span></span>${ic('right')}</button>`;
   showSheet(`<h2>Hoş geldin</h2><p class="lead">Önce diyetisyeninin programını ekleyelim. Öğünlerin, saatlerin ve muadillerin buradan gelir.</p>
-    <div class="group">${o('link', 'link', 'Diyetisyenim bağlantı gönderdi', 'Bağlantıyı yapıştır, program hazır gelir')}${o('photo', 'cam', 'Kâğıttaki programımı aktar', 'Sayfaların fotoğrafını çek, eklemek istediklerini yaz')}${o('demo', 'list', 'Örnek programla bak', 'Sonra Program sekmesinden değiştirebilirsin')}</div>`);
+    <div class="group">${o('link', 'link', 'Diyetisyenim bağlantı gönderdi', 'Bağlantıyı yapıştır, program hazır gelir')}${o('photo', 'cam', 'Kâğıttaki programımı aktar', 'Sayfaları çek ya da galeriden seç')}${o('demo', 'list', 'Örnek programla bak', 'Sonra Program sekmesinden değiştirebilirsin')}</div>`);
 }
 const pbSync = () => { const t = document.getElementById('pbtx'); if (t && PB) PB.text = t.value; };
 function buildSheet() {
   sheet = 'build'; if (!PB) PB = { pics: [], text: '' };
   if (PB.busy) return showSheet(`<div class="busy"><div class="spin"></div>Programı okuyorum… Birkaç sayfa bir dakikayı bulabilir.</div>`);
-  showSheet(`<h2>Programını aktar</h2><p class="lead">Diyetisyeninin verdiği programın her sayfasını çek. Kâğıtta olmayanları ya da değişenleri altına yaz.</p>
+  showSheet(`<h2>Programını aktar</h2><p class="lead">Diyetisyeninin verdiği programın her sayfasını çek ya da galeriden seç. Kâğıtta olmayanları ya da değişenleri altına yaz.</p>
     <div class="pages">${PB.pics.map((p, i) => `<button class="pg" data-act="pbx" data-i="${i}" aria-label="Sayfayı çıkar"><img src="${p.img}" alt=""><i>${ic('x')}</i></button>`).join('')}
-      ${PB.pics.length < 6 ? `<button class="pg add" data-act="pbadd" aria-label="Sayfa ekle">${ic('cam')}<small>${PB.pics.length ? 'Sayfa ekle' : 'Fotoğraf çek'}</small></button>` : ''}</div>
+      ${PB.pics.length < 6 ? `<button class="pg add" data-act="pbadd" aria-label="Sayfa ekle">${ic('cam')}<small>${PB.pics.length ? 'Sayfa ekle' : 'Fotoğraf ekle'}</small></button>` : ''}</div>
     <textarea id="pbtx" placeholder="Ek açıklama (isteğe bağlı) · örn. kahvaltı 09:00, öğle 13:00; hafta sonu bir saat geç. Hedefim 80 kg. Ara öğünde muz yemiyorum.">${esc(PB.text)}</textarea>
     ${PB.err ? `<p class="err">${esc(PB.err)}</p>` : ''}
     <button class="primary" data-act="pbgo" ${PB.pics.length || PB.text.trim() ? '' : 'disabled'}>${ic('check')}Programı oluştur</button>
@@ -1476,9 +1480,9 @@ document.addEventListener('click', e => {
   const setAll = (m, fn) => itemsOf(m, sel).forEach(i => { const k = m.id + '.' + i.id, v = fn(d.items[k], i, k); v ? d.items[k] = v : delete d.items[k]; });
   switch (a) {
     case 'tab': tab = el.dataset.t; window.scrollTo(0, 0); break;
-    case 'day': sel = el.dataset.k; if (el.dataset.go) { tab = 'today'; stripTo = true; window.scrollTo(0, 0); } break;
-    case 'week': { sel = addDays(sel, 7 * +el.dataset.n); const max = addDays(today, AHEAD); if (sel > max) sel = max; stripTo = true; break; }
-    case 'gotoday': sel = today; stripTo = true; break;
+    case 'day': sel = el.dataset.k; if (el.dataset.go) { tab = 'today'; window.scrollTo(0, 0); } break;
+    case 'week': { sel = addDays(sel, 7 * +el.dataset.n); const max = addDays(today, AHEAD); if (sel > max) sel = max; break; }
+    case 'gotoday': sel = today; break;
     case 'ev': { const cur = openEv[sel] !== undefined ? openEv[sel] : defOpen(sel); openEv[sel] = cur === el.dataset.id ? '' : el.dataset.id; break; }
     case 'sup': { const s = d.supps || (d.supps = {}), id = el.dataset.id, x = SUPS().find(y => y.id === id); if (!x) return;
       if (s[id]) delete s[id]; else s[id] = 1;
@@ -1580,10 +1584,13 @@ document.addEventListener('click', e => {
     case 'plno': d.extras = d.extras.filter(e => !(e.meal === meal.id && e.pl));
       Object.entries(d.items).forEach(([k, v]) => { if (k.startsWith(meal.id + '.') && v.pl) delete d.items[k]; }); break;
     case 'applyai': applyAI(); closeSheet(); buzz(); break;
-    case 'savekey': { const v = document.getElementById('aikey').value.trim(); if (!v) return; try { localStorage.setItem(AIKEY, v); } catch (x) {} closeSheet(); break; }
+    case 'savekey': { const v = document.getElementById('aikey').value.trim(); if (!v) return; try { localStorage.setItem(AIKEY, v); } catch (x) {}
+      if (afterKey) { const f = afterKey; afterKey = null; if (aiReady(f)) f(); return; } closeSheet(); break; }
     case 'delkey': try { localStorage.removeItem(AIKEY); } catch (x) {} closeSheet(); break;
     case 'savecode': { const v = document.getElementById('aicode').value.trim().toUpperCase().replace(/\s+/g, ''); if (!v) return;
-      try { localStorage.setItem(CODEKEY, v); } catch (x) {} ME = null; progSheet('ai'); loadMe().then(() => { if (sheet === 'ai') progSheet('ai'); }); return; }
+      try { localStorage.setItem(CODEKEY, v); } catch (x) {} ME = null;
+      if (afterKey) { const f = afterKey; afterKey = null; if (aiReady(f)) f(); return; }
+      progSheet('ai'); loadMe().then(() => { if (sheet === 'ai') progSheet('ai'); }); return; }
     case 'delcode': try { localStorage.removeItem(CODEKEY); } catch (x) {} ME = null; progSheet('ai'); return;
     case 'water': d.water = Math.max(0, d.water + +el.dataset.n); buzz(); break;
     case 'coffee': d.coffee = Math.max(0, d.coffee + +el.dataset.n); break;
@@ -1637,7 +1644,19 @@ document.addEventListener('visibilitychange', () => {
   if (t !== today) { if (sel === today) sel = t; today = t; } if (!document.body.classList.contains('sheet-open')) render();
 });
 setInterval(() => { if (!document.hidden && tab === 'today' && !document.body.classList.contains('sheet-open')) render(); }, 60000);
-document.addEventListener('scroll', e => { if (e.target.id === 'strip') stripLeft = e.target.scrollLeft; }, true);
+/* Açık öğünün başlığı ekranın tepesine yapışınca gölge alır. */
+const stuck = () => { const h = document.querySelector('.mh'); if (!h) return; const c = h.parentElement.getBoundingClientRect(), t = parseFloat(getComputedStyle(h).top) || 0;
+  h.classList.toggle('stuck', c.top < t - 1 && c.bottom > h.offsetHeight + t + 8); };
+window.addEventListener('scroll', stuck, { passive: true });
+/* Gün başlığında yatay kaydırma (Bugün sekmesi, sayfa kapalıyken). Klavyede sol ve sağ ok tuşları. */
+(() => { let x0 = null, y0 = 0;
+  document.addEventListener('touchstart', e => { x0 = null; if (tab !== 'today' || document.body.classList.contains('sheet-open') || e.touches.length !== 1 || !e.target.closest('#dayhead, .tiles')) return;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  document.addEventListener('touchend', e => { if (x0 == null) return; const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) shiftDay(dx < 0 ? 1 : -1); }, { passive: true });
+  document.addEventListener('keydown', e => { if (tab !== 'today' || document.body.classList.contains('sheet-open') || /input|textarea/i.test(e.target.tagName)) return;
+    if (e.key === 'ArrowLeft') shiftDay(-1); if (e.key === 'ArrowRight') shiftDay(1); });
+})();
 render();
 planFromHash();
 window.addEventListener('hashchange', planFromHash);
