@@ -226,6 +226,11 @@ const P = {
   link: '<path d="M10 14a4 4 0 005.700 0l3-3a4 4 0 00-5.700-5.700l-1 1M14 10a4 4 0 00-5.700 0l-3 3a4 4 0 005.700 5.700l1-1"/>',
   search: '<circle cx="11" cy="11" r="6.500"/><path d="M20 20l-4.200-4.200"/>',
   pill: '<path d="M10.500 20.500l10-10a4.950 4.950 0 10-7-7l-10 10a4.950 4.950 0 107 7zM8.500 8.500l7 7"/>',
+  copy: '<rect x="8.500" y="8.500" width="11" height="11" rx="2.500"/><path d="M15.500 8.500V6.500a2 2 0 00-2-2h-7a2 2 0 00-2 2v7a2 2 0 002 2h2"/>',
+  stop: '<rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none"/>',
+  hist: '<path d="M4.500 12a7.500 7.500 0 101.900-5M4.500 4.500v3h3"/><path d="M12 8v4l2.500 2"/>',
+  compose: '<path d="M11 4.500H7A2.500 2.500 0 004.500 7v10A2.500 2.500 0 007 19.500h10a2.500 2.500 0 002.500-2.500v-4"/><path d="M17.500 4l2.500 2.500-7 7H10.500V11z"/>',
+  trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>',
 };
 const ic = n => `<svg class="i" viewBox="0 0 24 24">${P[n] || ''}</svg>`;
 const ring = (pct, size, w, color) => { const r = (size - w) / 2, C = 2 * Math.PI * r, c = size / 2;
@@ -624,10 +629,13 @@ function progSheet(p) {
   showSheet(S2[p]());
 }
 function render() {
-  document.getElementById('app').innerHTML = tab === 'today' ? todayView() : tab === 'week' ? weekView() : tab === 'progress' ? progressView() : planView();
+  document.getElementById('app').innerHTML = tab === 'today' ? todayView() : tab === 'week' ? weekView() : tab === 'chat' ? chatView() : tab === 'progress' ? progressView() : planView();
+  document.body.classList.toggle('on-chat', tab === 'chat'); document.getElementById('ask').hidden = tab !== 'chat';
   document.getElementById('dock').innerHTML = `<div class="tabs">${[['today', 'today', 'Bugün'], ['week', 'week', 'Hafta'], ['chat', 'chat', 'Asistan'], ['progress', 'grid', 'İlerleme'], ['plan', 'list', 'Program']].map(([t, i, n]) =>
-    t === 'chat' ? `<button data-act="chat">${ic(i)}${n}</button>` : `<button class="${tab === t ? 'on' : ''}" data-act="tab" data-t="${t}">${ic(i)}${n}</button>`).join('')}</div>`;
+    `<button class="${tab === t ? 'on' : ''}" data-act="tab" data-t="${t}">${ic(i)}${n}</button>`).join('')}</div>`;
   const h = document.getElementById('heat'); if (h) h.scrollLeft = h.scrollWidth;
+  if (tab === 'chat' && chatScroll) { chatScroll = false; toEnd(); }
+  if (tab === 'chat') askPaint();
 }
 
 /* ---------- Alt sayfalar ---------- */
@@ -753,9 +761,9 @@ const PROXY_URL = 'https://diyet-api.basedchimpers.workers.dev';
 const aiCode = () => { try { return PROXY_URL && localStorage.getItem(CODEKEY) || ''; } catch (e) { return ''; } };
 const aiAuth = () => aiCode() || aiKey();
 /* Davet kodu varsa vekile, yoksa kullanıcının kendi anahtarıyla doğrudan Anthropic'e. */
-const aiFetch = body => aiCode()
-  ? fetch(PROXY_URL + '/v1/messages', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', authorization: 'Bearer ' + aiCode() } })
-  : fetch(AI_URL, { method: 'POST', body: JSON.stringify(body),
+const aiFetch = (body, signal) => aiCode()
+  ? fetch(PROXY_URL + '/v1/messages', { method: 'POST', body: JSON.stringify(body), signal, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + aiCode() } })
+  : fetch(AI_URL, { method: 'POST', body: JSON.stringify(body), signal,
     headers: { 'content-type': 'application/json', 'x-api-key': aiKey(), 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' } });
 const aiErr = (r, j) => new Error(r.status === 401 ? (aiCode() ? 'Davet kodu geçersiz. Program → Yapay zekâ bölümünden kontrol et.' : 'API anahtarı geçersiz. Program sekmesinden yenisini gir.')
   : r.status === 402 ? 'Bu ayın yapay zekâ hakkı doldu. Kütüphane ve geçmişinden kayıt yapmaya devam edebilirsin.'
@@ -1364,10 +1372,20 @@ function usageRows() {
 
 /* ---------- Asistan ----------
    Genel sohbet: Haiku, düşünme kapalı, akışla. Programın tamamı sistem isteminde (önbelleğe alınır);
-   günün anlık durumu her soruyla birlikte <durum> içinde gider. Sohbet gün boyu saklanır, ertesi gün sıfırlanır. */
-let CHAT = [], chatBusy = false, chatErr = '';
-const chatLoad = () => { try { const o = JSON.parse(localStorage.getItem(CHATKEY) || 'null'); CHAT = o && o.d === today ? o.m : []; } catch (e) { CHAT = []; } };
-const chatSave = () => { try { localStorage.setItem(CHATKEY, JSON.stringify({ d: today, m: CHAT })); } catch (e) {} };
+   günün anlık durumu her soruyla birlikte <durum> içinde gider. Asistan alt çubukta bir sekmedir; sohbetler
+   diyet-chats'te saklanır: [{ id, d: başladığı gün, u: son mesaj zamanı (ms), m: [{ role, content, show?, cut? }] }],
+   en yeni önde, en çok 60. Eski tek günlük sohbet (diyet-chat) ilk açılışta buraya taşınır. CUR: açık sohbet, null ise yeni. */
+const CHATSKEY = 'diyet-chats';
+let CHATS = [], CUR = null, chatBusy = false, chatErr = '', chatAbort = null, chatScroll = false, chatDel = null;
+const chatsSave = () => { try { localStorage.setItem(CHATSKEY, JSON.stringify(CHATS.slice(0, 60))); } catch (e) {} };
+function chatsLoad() {
+  try { CHATS = JSON.parse(localStorage.getItem(CHATSKEY) || '[]'); } catch (e) { CHATS = []; }
+  try { const o = JSON.parse(localStorage.getItem(CHATKEY) || 'null');
+    if (o && o.m && o.m.length) { CHATS.unshift({ id: 'c' + Date.now().toString(36), d: o.d || today, u: parse(o.d || today).getTime() + 12 * 36e5, m: o.m.filter(x => x.content) }); chatsSave(); }
+    localStorage.removeItem(CHATKEY); } catch (e) {}
+}
+const curChat = () => CHATS.find(c => c.id === CUR) || null;
+const chatTitle = c => { const q = c && c.m.find(m => m.role === 'user'); if (!q) return 'Yeni sohbet'; const t = q.show.replace(/\s+/g, ' ').trim(); return t.length > 42 ? t.slice(0, 40).trim() + '…' : t; };
 
 const CHAT_SYSTEM = () => `Bu bir diyet takip uygulamasının içindeki asistansın. Kullanıcı, diyetisyeninin hazırladığı programı uyguluyor. Programın tamamı aşağıda JSON olarak var (k tahmini kcal, p tahmini protein gramı). Her mesajla birlikte <durum> içinde bugünün anlık kaydı gelir: saat, öğünlerin durumu, yenenler, kalan kalori ve protein, uygulamanın kendi hesapladığı telafiler.
 
@@ -1416,34 +1434,60 @@ function dayContext() {
 }
 
 const SUGGEST = ['Akşam ne yesem?', 'Dışarıda yiyeceğim, ne sipariş edeyim?', 'Protein açığımı nasıl kapatırım?', 'Canım tatlı çekti, ne yapayım?'];
-const fmtMsg = t => esc(t.replace(/\*\*(.+?)\*\*/g, '$1').replace(/^#+\s*/gm, '').trim());
-function chatSheet() {
-  sheet = 'chat';
-  const msgs = CHAT.map((m, i) => `<div class="msg ${m.role === 'user' ? 'u' : 'a'}" ${i === CHAT.length - 1 && m.role === 'assistant' ? 'id="live"' : ''}>${m.role === 'user' ? esc(m.show) : m.content ? fmtMsg(m.content) : '<span class="typing"><i></i><i></i><i></i></span>'}</div>`).join('');
-  const intro = CHAT.length ? '' : `<p class="lead">Programın ve bugünün kaydı elimde. Ne istersen sor.</p><div class="chips">${SUGGEST.map(q => `<button data-act="chatq">${q}</button>`).join('')}</div>`;
-  const keep = document.getElementById('said2'), draft = keep ? keep.value : '';
-  showSheet(`<div class="between" style="align-items:center;padding-right:6px"><h2>Asistan</h2>${CHAT.length ? `<button class="pill" data-act="chatnew">Yeni sohbet</button>` : ''}</div>
-    ${intro}<div class="chat">${msgs}</div>${chatErr ? `<p class="err">${esc(chatErr)}</p>` : ''}
-    <div class="ask"><textarea id="said2" rows="1" placeholder="Bir şey sor…" enterkeyhint="send"></textarea><button class="send" data-act="chatsend" aria-label="Gönder" ${chatBusy ? 'disabled' : ''}>${ic('up')}</button></div>`);
-  const t = document.getElementById('said2'); t.value = draft; grow(t);
-  $sheet().scrollTop = $sheet().scrollHeight;
+/* Cevap düz metin; **kalın** kalın olur, "- " ile başlayan satırlar madde olur. */
+const fmtMsg = t => esc(t.replace(/^#+\s*/gm, '').trim()).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^- (.*)(\n|$)/gm, '<span class="li">$1</span>');
+const TYPING = '<span class="typing"><i></i><i></i><i></i></span>';
+/* Sohbet sayfası. Yazı kutusu (#ask) sayfanın dışında durur; yeniden çizimde taslak ve odak kaybolmaz. */
+function chatView() {
+  const c = curChat(), M = c ? c.m : [], last = M.length - 1;
+  const msgs = M.map((m, i) => m.role === 'user' ? `<div class="msg u">${esc(m.show || '')}</div>`
+    : `<div class="msg a" ${i === last ? 'id="live"' : ''}>${m.content ? fmtMsg(m.content) : TYPING}${m.cut ? '<span class="cut">Yarıda kesildi</span>' : ''}</div>
+      ${m.content && !(chatBusy && i === last) ? `<div class="mact"><button data-act="chatcopy" data-i="${i}" aria-label="Kopyala">${ic('copy')}</button></div>` : ''}`).join('');
+  return `<div class="cbar"><button class="round" data-act="chathist" aria-label="Sohbetler">${ic('hist')}</button><b>${c ? esc(chatTitle(c)) : 'Asistan'}</b><button class="round" data-act="chatnew" aria-label="Yeni sohbet" ${!c ? 'disabled' : ''}>${ic('compose')}</button></div>
+    ${M.length ? `<div class="chat">${msgs}</div>` : `<div class="cempty"><span class="cico">${ic('chat')}</span><h2>Ne sormak istersin?</h2><p>Programın ve ${sel === today ? 'bugünün' : 'günün'} kaydı elimde; cevaplar buna göre.</p>
+      <div class="sugg">${SUGGEST.map(q => `<button data-act="chatq">${q}</button>`).join('')}</div></div>`}
+    ${chatErr ? `<p class="err cerr">${esc(chatErr)}</p>` : ''}`;
 }
-const grow = t => { t.style.height = 'auto'; t.style.height = Math.min(120, t.scrollHeight) + 'px'; };
-function openChat() {
-  if (!aiReady(openChat)) return;
-  chatLoad(); chatErr = ''; chatSheet();
-  if (!CHAT.length) setTimeout(() => { const t = document.getElementById('said2'); t && t.focus(); }, 320);
+/* Gönder düğmesi: boşken sönük, cevap gelirken durdurma. */
+function askPaint() {
+  const b = document.querySelector('#ask .send'), t = document.getElementById('said2'); if (!b) return;
+  b.innerHTML = ic(chatBusy ? 'stop' : 'up'); b.setAttribute('aria-label', chatBusy ? 'Durdur' : 'Gönder');
+  b.disabled = !chatBusy && !(t && t.value.trim());
+}
+const grow = t => { t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px'; };
+const nearEnd = () => innerHeight + scrollY > document.documentElement.scrollHeight - 200;
+const toEnd = smooth => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+/* Geçmiş: son kullanılana göre gruplanmış sohbetler; silmek iki dokunuş ister. */
+function histSheet() {
+  sheet = 'hist';
+  const day0 = parse(today).getTime(), grp = c => { const d = Math.floor((day0 - new Date(new Date(c.u).toDateString()).getTime()) / 864e5);
+    return d <= 0 ? 'Bugün' : d === 1 ? 'Dün' : d < 7 ? 'Son 7 gün' : d < 30 ? 'Son 30 gün' : 'Daha önce'; };
+  const G = {}; CHATS.forEach(c => (G[grp(c)] = G[grp(c)] || []).push(c));
+  const when = c => { const t = new Date(c.u); return grp(c) === 'Bugün' || grp(c) === 'Dün' ? `${pad(t.getHours())}:${pad(t.getMinutes())}` : t.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }); };
+  showSheet(`<div class="between" style="align-items:center;padding-right:6px"><h2>Sohbetler</h2><button class="pill" data-act="chatnew">${ic('compose')}Yeni sohbet</button></div>
+    ${CHATS.length ? `<p class="lead">Her soruda o günün kaydı da gider; eski bir sohbete devam edersen bugünkü kaydınla cevaplanır.</p>${Object.entries(G).map(([g, L]) => `<div class="sect">${g}</div><div class="group">${L.map(c => `<div class="hrow ${c.id === CUR ? 'on' : ''}">
+      <button class="opt" data-act="chatopen" data-id="${c.id}"><span>${esc(chatTitle(c))}<small>${when(c)} · ${c.m.filter(m => m.role === 'user').length} soru</small></span></button>
+      <button class="hdel ${chatDel === c.id ? 'over' : ''}" data-act="chatdel" data-id="${c.id}" aria-label="Sil">${chatDel === c.id ? 'Sil' : ic('trash')}</button></div>`).join('')}</div>`).join('')}`
+      : `<p class="lead">Henüz sohbet yok. Sorduğun her şey burada birikir; istediğine dönüp devam edebilirsin.</p>`}`);
 }
 async function chatSend(text) {
+  text = (text || '').trim();
   if (chatBusy || !text) return;
+  if (!aiReady(() => { tab = 'chat'; render(); chatSend(text); })) return;
+  let c = curChat();
+  if (!c) { c = { id: 'c' + Date.now().toString(36), d: today, u: Date.now(), m: [] }; CUR = c.id; }
+  CHATS = [c, ...CHATS.filter(x => x !== c)];
   chatBusy = true; chatErr = '';
   const q = { role: 'user', content: `<durum>\n${dayContext()}\n</durum>\n\n${text}`, show: text }, a = { role: 'assistant', content: '' };
-  CHAT.push(q, a); const t0 = document.getElementById('said2'); if (t0) t0.value = ''; chatSheet();
-  const paint = () => { const el = document.getElementById('live'); if (el) { el.innerHTML = fmtMsg(a.content); $sheet().scrollTop = $sheet().scrollHeight; } };
+  c.m.push(q, a); c.u = Date.now();
+  const t0 = document.getElementById('said2'); if (t0) { t0.value = ''; grow(t0); }
+  if (tab === 'chat') { render(); toEnd(true); } askPaint();
+  const paint = () => { const el = document.getElementById('live'); if (!el) return; const end = nearEnd(); el.innerHTML = fmtMsg(a.content); if (end) toEnd(); };
+  const ctl = new AbortController(); chatAbort = ctl;
   try {
     const r = await aiFetch({ model: CHAT_MODEL, max_tokens: 4000, stream: true, thinking: { type: 'disabled' }, output_config: { effort: 'low' },
       system: [{ type: 'text', text: CHAT_SYSTEM(), cache_control: { type: 'ephemeral' } }],
-      messages: CHAT.slice(0, -1).map(({ role, content }) => ({ role, content })) });
+      messages: c.m.slice(0, -1).filter(m => m.content).map(({ role, content }) => ({ role, content })) }, ctl.signal);
     if (!r.ok) throw aiErr(r, await r.json().catch(() => ({})));
     const rd = r.body.getReader(), dec = new TextDecoder(), usage = {}; let buf = '', stop = '';
     for (;;) {
@@ -1463,12 +1507,23 @@ async function chatSend(text) {
     if (stop === 'refusal' && !a.content) throw new Error('Bu soruya cevap veremiyorum.');
     if (!a.content) throw new Error('Boş cevap geldi; yeniden dene.');
   } catch (e) {
-    /* Başarısız soru-cevap çifti geçmişten çıkar, soru kutuya geri döner. */
-    CHAT.splice(CHAT.indexOf(q), 2); chatErr = e.message || 'Bağlantı kurulamadı.';
-    chatBusy = false; if (sheet !== 'chat') return; chatSheet(); const t = document.getElementById('said2'); if (t) { t.value = text; grow(t); } return;
+    if (e.name === 'AbortError' && a.content) a.cut = true;   /* durdurulan cevabın gelen kısmı kalır */
+    else {
+      /* Başarısız soru-cevap çifti geçmişten çıkar, soru kutuya geri döner. */
+      c.m.splice(c.m.indexOf(q), 2); if (!c.m.length) { CHATS = CHATS.filter(x => x !== c); CUR = null; }
+      chatErr = e.name === 'AbortError' ? '' : e.message || 'Bağlantı kurulamadı.';
+      const t = document.getElementById('said2'); if (t && !t.value) { t.value = text; grow(t); }
+    }
   }
-  chatBusy = false; chatSave(); if (sheet === 'chat') chatSheet();
+  chatBusy = false; chatAbort = null; chatsSave(); if (tab === 'chat') render(); askPaint();
 }
+/* Klavye açılınca yazı kutusu klavyenin üstüne çıkar, alt çubuk gizlenir. */
+(() => { const vv = window.visualViewport, set = () => { const kb = vv ? Math.max(0, innerHeight - vv.height - vv.offsetTop) : 0;
+    document.documentElement.style.setProperty('--kb', kb + 'px'); };
+  if (vv) { vv.addEventListener('resize', set); vv.addEventListener('scroll', set); }
+  document.addEventListener('focusin', e => { if (e.target.id === 'said2') document.body.classList.add('typing'); });
+  document.addEventListener('focusout', e => { if (e.target.id === 'said2') setTimeout(() => { if (document.activeElement.id !== 'said2') document.body.classList.remove('typing'); }, 60); });
+})();
 
 /* ---------- Etkileşim ---------- */
 const buzz = () => { try { navigator.vibrate && navigator.vibrate(8); } catch (e) {} };
@@ -1479,7 +1534,7 @@ document.addEventListener('click', e => {
   const eaten = id => { const o = A.over[id]; return o ? { s: 'done', name: o.name, k: o.k, p: o.p } : { s: 'done' }; };
   const setAll = (m, fn) => itemsOf(m, sel).forEach(i => { const k = m.id + '.' + i.id, v = fn(d.items[k], i, k); v ? d.items[k] = v : delete d.items[k]; });
   switch (a) {
-    case 'tab': tab = el.dataset.t; window.scrollTo(0, 0); break;
+    case 'tab': if (tab === el.dataset.t && tab === 'chat') { toEnd(true); return; } tab = el.dataset.t; window.scrollTo(0, 0); if (tab === 'chat') chatScroll = true; break;
     case 'day': sel = el.dataset.k; if (el.dataset.go) { tab = 'today'; window.scrollTo(0, 0); } break;
     case 'week': { sel = addDays(sel, 7 * +el.dataset.n); const max = addDays(today, AHEAD); if (sel > max) sel = max; break; }
     case 'gotoday': sel = today; break;
@@ -1546,10 +1601,17 @@ document.addEventListener('click', e => {
       if (navigator.share) navigator.share({ title: 'Diyet programı', url }).catch(() => {});
       else if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
       planSheet(); }); return;
-    case 'chat': openChat(); return;
+    case 'chat': tab = 'chat'; chatScroll = true; break;
+    case 'chathist': chatDel = null; histSheet(); return;
+    case 'chatopen': CUR = el.dataset.id; chatErr = ''; chatDel = null; closeSheet(); tab = 'chat'; chatScroll = true; break;
+    case 'chatdel': { const id = el.dataset.id; if (chatDel !== id) { chatDel = id; return histSheet(); }
+      if (chatBusy && id === CUR) return; CHATS = CHATS.filter(c => c.id !== id); if (CUR === id) CUR = null; chatDel = null; chatsSave(); histSheet(); break; }
+    case 'chatcopy': { const m = (curChat() || { m: [] }).m[+el.dataset.i]; if (!m) return;
+      const done = () => { el.innerHTML = ic('check'); setTimeout(() => { el.innerHTML = ic('copy'); }, 1400); };
+      try { navigator.clipboard.writeText(m.content).then(done, () => {}); } catch (x) {} return; }
     case 'chatq': chatSend(el.textContent); return;
-    case 'chatsend': chatSend(document.getElementById('said2').value.trim()); return;
-    case 'chatnew': if (chatBusy) return; CHAT = []; chatErr = ''; chatSave(); chatSheet(); return;
+    case 'chatsend': if (chatBusy) { if (chatAbort) chatAbort.abort(); return; } chatSend(document.getElementById('said2').value); return;
+    case 'chatnew': if (chatBusy) return; CUR = null; chatErr = ''; closeSheet(); tab = 'chat'; render(); window.scrollTo(0, 0); { const t = document.getElementById('said2'); t && t.focus(); } return;
     case 'close': closeSheet(); return;
     case 'all': lockMain(sel, meal); A.adds.filter(x => x.meal === meal.id && x.xi < 0).forEach(({ xi, ...x }) => d.extras.push({ ...x, adj: true }));
       setAll(meal, (c, i, k) => c || (i.optional ? null : eaten(k))); if (supLeft(meal, sel).length) openEv[sel] = meal.id; else delete openEv[sel]; buzz(); break;
@@ -1628,11 +1690,11 @@ document.addEventListener('change', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.id === 'q') { e.preventDefault(); const b = document.querySelector('[data-act="qadd"]'); b ? b.click() : e.target.blur(); }
   if (e.key === 'Enter' && e.target.id === 'custom') document.querySelector('[data-act="s-custom"]').click();
-  if (e.key === 'Enter' && !e.shiftKey && e.target.id === 'said2') { e.preventDefault(); document.querySelector('[data-act="chatsend"]').click(); }
+  if (e.key === 'Enter' && !e.shiftKey && e.target.id === 'said2') { e.preventDefault(); if (!chatBusy) chatSend(e.target.value); }
 });
 document.addEventListener('input', e => {
   if ((e.target.id === 'dname' || e.target.id === 'dphone') && PL) { PL.dirty = true; const b = document.querySelector('[data-act="pset"]'); if (b) b.disabled = false; }
-  if (e.target.id === 'said2') grow(e.target);
+  if (e.target.id === 'said2') { grow(e.target); askPaint(); }
   if (e.target.id === 'q') qPaint();
   if (e.target.id === 'custom') csPaint();
   if (e.target.id === 'spn') { const b = document.querySelector('[data-act="spsave"]'); if (b) b.disabled = !e.target.value.trim(); }
@@ -1643,6 +1705,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) return; const t = key(new Date());
   if (t !== today) { if (sel === today) sel = t; today = t; } if (!document.body.classList.contains('sheet-open')) render();
 });
+chatsLoad();
 setInterval(() => { if (!document.hidden && tab === 'today' && !document.body.classList.contains('sheet-open')) render(); }, 60000);
 /* Açık öğünün başlığı ekranın tepesine yapışınca gölge alır. */
 const stuck = () => { const h = document.querySelector('.mh'); if (!h) return; const c = h.parentElement.getBoundingClientRect(), t = parseFloat(getComputedStyle(h).top) || 0;
