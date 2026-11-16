@@ -475,6 +475,7 @@ function todayView() {
   const walks = wk.filter(x => peek(x).walk).length, gyms = wk.filter(x => peek(x).gym).length;
   return `<header class="head" id="dayhead"><div><p>${fmtLong(sel)}</p><h1>${dayTitle(sel)}</h1></div>
       <div class="hright">${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : `<button class="dayring" data-act="score" aria-label="Uyum puanı">${ring(fillPct / 100, 54, 5, 'var(--accent)')}<b>%${fillPct}</b></button>`}</div></header>
+    ${sample() ? `<section class="card"><div class="row goto" data-act="setup" role="button"><span class="b"><span class="n">Örnek programı görüyorsun</span><span class="m">Diyetisyeninin verdiği programı ekle</span></span>${ic('right')}</div></section>` : ''}
     <div class="tiles dials">${KC ? tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)') : (() => { const ms = MEALS.filter(m => m.time), r = ms.filter(m => mealStat(m, sel).resolved).length; return tile('Öğün', r, '', `/ ${ms.length} öğün`, r / ms.length, 'var(--fg)'); })()}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', `/ ${WATER_L} L`, d.water / WATER_GOAL, 'var(--blue)')}</div>
     ${A.note ? `<p class="note">${A.note}</p>` : ''}
     <div class="tl">${MEALS.map(m => before(m) + mealEvent(m, sel, A, next, open) + (m.time ? '' : sp(m.id)) + (m.id === TRAIN.after && W ? gymEvent(sel, W, open) : '')).join('')}${timed.filter(g => !g.put).map(g => supEvent(g, sel, open)).join('')}</div>
@@ -1128,9 +1129,12 @@ async function planFromHash() {
 const SETUPKEY = 'diyet-setup';
 let PB = null;   /* { pics: [{ img, full }], text, busy, err } */
 const setupDone = () => { try { localStorage.setItem(SETUPKEY, today); } catch (e) {} };
+/* Karşılamayı görmüş ama kendi programını yüklememiş kişi örnek programdadır; Bugün'ün başında bunu söyleyen satır durur.
+   Karşılamayı hiç görmemiş eski kullanıcıda (varsayılan program kendi programı) görünmez. */
+const sample = () => { if (PLAN_CUSTOM) return false; try { return !!localStorage.getItem(SETUPKEY); } catch (e) { return false; } };
 /* İlk açılış: kayıt da yüklenmiş program da yoksa nasıl başlanacağı sorulur. */
 function welcomeSheet() {
-  sheet = 'welcome';
+  sheet = 'welcome'; setupDone();
   const o = (w, icn, n, m) => `<button class="nav-row" data-act="welcome" data-w="${w}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${m}</span></span>${ic('right')}</button>`;
   showSheet(`<h2>Hoş geldin</h2><p class="lead">Önce diyetisyeninin programını ekleyelim. Öğünlerin, saatlerin ve muadillerin buradan gelir.</p>
     <div class="group">${o('link', 'link', 'Diyetisyenim bağlantı gönderdi', 'Bağlantıyı yapıştır, program hazır gelir')}${o('photo', 'cam', 'Kâğıttaki programımı aktar', 'Sayfaları çek ya da galeriden seç')}${o('demo', 'list', 'Örnek programla bak', 'Sonra Program sekmesinden değiştirebilirsin')}</div>`);
@@ -1573,7 +1577,8 @@ document.addEventListener('click', e => {
     case 'notesave': case 'notedel': { const v = a === 'notesave' ? document.getElementById('notetx').value.trim() : '', n = d.notes || (d.notes = {});
       if (v) n[NT] = v; else delete n[NT]; closeSheet(); break; }
     case 'phgo': { const t = document.getElementById('phtx').value.trim(), p = PH; PH = null; analyze(p.meal, { image: p.full, text: t }); return; }
-    case 'welcome': setupDone(); { const w = el.dataset.w; if (w === 'link') { PL = {}; return planSheet(); } if (w === 'photo') return buildSheet(); } closeSheet(); return;
+    case 'setup': return welcomeSheet();
+    case 'welcome': { const w = el.dataset.w; if (w === 'link') { PL = {}; return planSheet(); } if (w === 'photo') return buildSheet(); } closeSheet(); return;
     case 'build': return buildSheet();
     case 'pbadd': pbSync(); if (PB.pics.length < 6) document.getElementById('pages').click(); return;
     case 'pbx': pbSync(); PB.pics.splice(+el.dataset.i, 1); return buildSheet();
