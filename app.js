@@ -394,7 +394,7 @@ const supAt = at => at === 'yat' ? 'Yatmadan önce' : isHM(at) ? 'Saat ' + at : 
 const hm = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const supRank = at => at === 'yat' ? 3000 : isHM(at) ? hm(at) : !at ? 4000 : (m => m.time ? hm(m.time) + 1 : 0)(MEALS.find(m => m.id === at));
 const supList = at => SUPS().filter(s => anc(s) === at);
-/* Saatli öğüne bağlı takviye öğünün kendi listesinde durur; yatmadan önce alınan Gün boyu bölümünde. */
+/* Saatli öğüne bağlı takviye öğünün kendi listesinde durur; yatmadan önce alınan zaman çizelgesinin sonunda. */
 const inMeal = at => MEALS.some(m => m.id === at && m.time);
 const supLeft = (meal, k) => meal.time ? supList(meal.id).filter(s => !supTaken(k, s.id)) : [];
 /* Zaman çizelgesindeki gruplar; saat önemsizler Gün boyu bölümünde. */
@@ -410,7 +410,7 @@ function supDue(at, k) {
    ile gecikmiş sayılana kadar) öğün açılır. */
 function defOpen(k) {
   if (k !== today) return '';
-  const next = nextMeal(), g = supGroups().find(g => g.at !== 'yat' && supDue(g.at, k) && g.list.some(s => !supTaken(k, s.id))), mt = next ? minsTo(next, k) : 0;
+  const next = nextMeal(), g = supGroups().find(g => supDue(g.at, k) && g.list.some(s => !supTaken(k, s.id))), mt = next ? minsTo(next, k) : 0;
   if (g && (!next || mt > 30 || mt < -90)) return inMeal(g.at) ? g.at : 'sp:' + g.at;
   return next ? next.id : '';
 }
@@ -428,7 +428,7 @@ function supsSheet() {
   sheet = 'sups';
   const L = [...SUPS()].sort((a, b) => supRank(anc(a)) - supRank(anc(b)));
   showSheet(`<div class="between" style="align-items:center;padding-right:6px"><h2>Takviyeler</h2>${L.length ? `<button class="pill" data-act="spnew">${ic('plus')}Yeni</button>` : ''}</div>
-    <p class="lead">Aldığın takviyeler ve ne zaman aldığın. Öğüne bağlı olanlar o öğünün listesinde, yatmadan önce alınanlar Gün boyu bölümünde çıkar.</p>
+    <p class="lead">Aldığın takviyeler ve ne zaman aldığın. Öğüne bağlı olanlar o öğünün listesinde, yatmadan önce alınanlar günün son adımı olarak çıkar.</p>
     ${L.length ? `<div class="group">${L.map(s => `<button class="opt" data-act="spedit" data-id="${esc(s.id)}"><span>${esc(s.n)}<small>${[s.dose, supAt(anc(s))].filter(Boolean).map(esc).join(' · ')}</small></span>${ic('right')}</button>`).join('')}</div>`
       : `<button class="primary" data-act="spnew">${ic('plus')}İlk takviyeni ekle</button><p class="note" style="padding-top:12px">Örneğin omega 3 kahvaltıdan sonra, magnezyum yatmadan önce, kreatin günün herhangi bir saatinde.</p>`}
     <p class="note">Bu liste senin kaydın; diyetisyenin programını değiştirmez. Yeni bir takviyeye başlamadan önce ona danış.</p>`);
@@ -438,7 +438,7 @@ function supForm() {
   const f = SP, at = f.at, kind = isHM(at) ? 'saat' : at;
   const ch = (v, n) => `<button class="${kind === v ? 'on' : ''}" data-act="spat" data-at="${v}">${n}</button>`;
   const m = MEALS.find(x => x.id === at);
-  const how = at === 'yat' ? 'Gün boyu bölümünde, su ve kahvenin yanında durur.' : isHM(at) ? 'Zaman çizelgesinde bu saate yerleşir.'
+  const how = at === 'yat' ? 'Zaman çizelgesinin sonunda çıkar; son öğünden sonra ya da 22.30\'da sırada bu olur.' : isHM(at) ? 'Zaman çizelgesinde bu saate yerleşir.'
     : !at ? 'Gün boyu bölümünde durur; ne zaman alırsan işaretle.' : (m.time ? `${m.title} listesinin sonunda çıkar; alınana kadar öğün tamamlanmış görünmez.` : `${m.title} işaretlenince sırada bu olur.`);
   showSheet(`<h2>${f.id ? 'Takviyeyi düzenle' : 'Yeni takviye'}</h2>
     <div class="group form" style="margin-top:12px"><label class="fl"><span>Ad</span><input id="spn" value="${esc(f.n)}" placeholder="Örn. Omega 3" autocomplete="off"></label>
@@ -479,7 +479,7 @@ function todayView() {
   const G = supGroups(), sp = at => G.filter(g => g.at === at).map(g => supEvent(g, sel, open)).join('');
   const timed = G.filter(g => isHM(g.at)).sort((a, b) => a.at < b.at ? -1 : 1);
   const before = m => { if (!m.time) return ''; const t = timeOf(m, sel), out = timed.filter(g => !g.put && g.at < t); out.forEach(g => g.put = true); return out.map(g => supEvent(g, sel, open)).join(''); };
-  const anytime = [...SUPS().filter(s => !anc(s)), ...supList('yat')];
+  const anytime = SUPS().filter(s => !anc(s));
   const litres = (d.water * WATER_ML / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
   /* Kadran: sayı halkanın içinde, ad ve hedef altta (Apple Watch dairesel komplikasyonu). */
   const tile = (name, val, unit, of, pct, color) => `<div class="tile dial"><div class="dr">${ring(pct, 76, 6.5, color)}<strong><span>${val}${unit ? `<em>${unit}</em>` : ''}</span></strong></div><b>${name}</b><small>${of}</small></div>`;
@@ -489,13 +489,13 @@ function todayView() {
     ${sample() ? `<section class="card"><div class="row goto" data-act="setup" role="button"><span class="b"><span class="n">Örnek programı görüyorsun</span><span class="m">Diyetisyeninin verdiği programı ekle</span></span>${ic('right')}</div></section>` : ''}
     <div class="tiles dials">${KC ? tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)') : (() => { const ms = MEALS.filter(m => m.time), r = ms.filter(m => mealStat(m, sel).resolved).length; return tile('Öğün', r, '', `/ ${ms.length} öğün`, r / ms.length, 'var(--fg)'); })()}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', `/ ${WATER_L} L`, d.water / WATER_GOAL, 'var(--blue)')}</div>
     ${A.note ? `<p class="note">${A.note}</p>` : ''}
-    <div class="tl">${MEALS.filter(m => itemsOf(m, sel).length).map(m => before(m) + mealEvent(m, sel, A, next, open) + (m.time ? '' : sp(m.id)) + (m.id === TRAIN.after && W ? gymEvent(sel, W, open) : '')).join('')}${timed.filter(g => !g.put).map(g => supEvent(g, sel, open)).join('')}</div>
+    <div class="tl">${MEALS.filter(m => itemsOf(m, sel).length).map(m => before(m) + mealEvent(m, sel, A, next, open) + (m.time ? '' : sp(m.id)) + (m.id === TRAIN.after && W ? gymEvent(sel, W, open) : '')).join('')}${timed.filter(g => !g.put).map(g => supEvent(g, sel, open)).join('')}${sp('yat')}</div>
     <div class="sect">Gün boyu</div>
     <section class="card">
       <div class="row"><span class="b"><span class="n">Su</span><span class="m">${d.water} bardak · ${litres} / ${WATER_L} L</span></span>${stepper('water', d.water)}</div>
       <div class="row"><span class="b"><span class="n">Kahve</span><span class="m ${d.coffee > COFFEE_MAX ? 'over' : ''}">${d.coffee > COFFEE_MAX ? 'Günlük sınır aşıldı' : PLAN.daily.coffee.note}</span></span>${stepper('coffee', d.coffee, d.coffee > COFFEE_MAX)}</div>
       ${!WALK_GOAL ? '' : `<div class="row ${d.walk ? 'done' : ''}" data-act="walk"><span class="b"><span class="n">${PLAN.daily.walk.name}</span><span class="m">Bu hafta ${walks} / ${WALK_GOAL}</span></span><span class="chk">${ic('check')}</span></div>`}
-      ${anytime.map(s => `<div class="row ${supTaken(sel, s.id) ? 'done' : ''}" data-act="sup" data-id="${esc(s.id)}"><span class="b"><span class="n">${esc(s.n)}</span><span class="m">${esc((s.dose || 'Takviye') + (anc(s) === 'yat' ? ' · yatmadan önce' : ' · saat önemsiz'))}</span></span><span class="chk">${ic('check')}</span></div>`).join('')}
+      ${anytime.map(s => `<div class="row ${supTaken(sel, s.id) ? 'done' : ''}" data-act="sup" data-id="${esc(s.id)}"><span class="b"><span class="n">${esc(s.n)}</span><span class="m">${esc((s.dose || 'Takviye') + ' · saat önemsiz')}</span></span><span class="chk">${ic('check')}</span></div>`).join('')}
       ${W || !GYM_GOAL ? '' : `<div class="row ${d.gym ? 'done' : ''}" data-act="gym"><span class="b"><span class="n">Ağırlık antrenmanı</span><span class="m">Bugün planlı değil · bu hafta ${gyms} / ${GYM_GOAL}</span></span><span class="chk">${ic('check')}</span></div>`}
       <div class="row goto" data-act="prog" data-p="takviye" role="button"><span class="b"><span class="n">Takviyeler</span><span class="m">${SUPS().length ? 'Ekle ya da düzenle' : 'Unutmamak için ekle: öğününde ya da burada hatırlatılır'}</span></span>${ic('right')}</div>
     </section>`;
