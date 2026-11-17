@@ -307,6 +307,7 @@ body.sheet-open .sheet { transform: none; }
 .fimg { position: relative; width: 64px; height: 64px; margin-bottom: 6px; display: grid; place-items: center; }
 .fimg img { width: 64px; height: 64px; border-radius: 14px; object-fit: cover; }
 .fimg i { width: 52px; height: 52px; border-radius: 50%; background: var(--sheet); color: var(--muted); display: grid; place-items: center; font: 600 22px/1 inherit; font-style: normal; }
+.fimg img.fico { border-radius: 0; object-fit: contain; }
 .fbadge { position: absolute; right: -4px; bottom: -2px; width: 22px; height: 22px; border-radius: 50%; background: var(--fg); color: var(--bg); display: grid; place-items: center; box-shadow: 0 0 0 2px var(--sheet); }
 .fbadge svg.i { width: 14px; height: 14px; stroke-width: 2.6; }
 .fcard b { font-size: 14px; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
@@ -315,6 +316,7 @@ body.sheet-open .sheet { transform: none; }
 .fcard small.fv { white-space: nowrap; margin-top: 2px; color: var(--fg); opacity: .72; }
 .opt > .fi { flex: none; }
 .th { width: 40px; height: 40px; border-radius: 11px; flex: none; object-fit: cover; display: grid; place-items: center; background: var(--sheet); color: var(--muted); font-size: 15px; font-weight: 600; }
+.th.fico { background: none; border-radius: 0; } .th.fico img { width: 40px; height: 40px; object-fit: contain; }
 .trow { padding-bottom: 12px; }
 .trow + .trow { box-shadow: inset 0 1px 0 var(--track); }
 .trow .row { min-height: 48px; padding-bottom: 6px; }

@@ -883,6 +883,13 @@ function applyAI() {
    kütüphane (FOODS). Bulunamazsa yapay zekâ seçeneği sunulur; yapay zekânın bulduğu her şey de geçmişe girer,
    böylece aynı şey ikinci kez çağrısız kaydedilir. */
 const fold = s => String(s).toLocaleLowerCase('tr').replace(/[çğıöşüâîû]/g, c => 'cgiosuaiu'['çğıöşüâîû'.indexOf(c)]).replace(/[^a-z0-9]+/g, ' ').trim();
+/* Gıda ikonu (foods.js ICONS): kimlik adın fold'u, boşluklar tire. Kütüphanedeki yemeğin adı ve eş adları da ikonuna gider;
+   böylece kullanıcının "Lahmacun" diye kaydettiği gıda da ikonunu bulur. Fotoğrafı olan gıdada fotoğraf önce gelir. */
+const ICON = (() => { const has = new Set(ICONS), m = new Map(), key = s => fold(s).replace(/ /g, '-');
+  ICONS.forEach(i => m.set(i, i));
+  FOODS.forEach(f => { const i = f.i || key(f.n); if (has.has(i)) [f.n, ...(f.a || [])].forEach(a => m.has(key(a)) || m.set(key(a), i)); });
+  return n => n ? m.get(key(n)) : undefined; })();
+const icoImg = (i, px) => `<img class="fico" src="img/f/${i}-160.webp" srcset="img/f/${i}-160.webp 160w, img/f/${i}-320.webp 320w" sizes="${px}px" alt="" loading="lazy">`;
 const QS = [.25, .5, .75, 1, 1.5, 2, 3];   /* porsiyon ölçekleri */
 const qLab = q => { q = Math.round(q * 4) / 4 || .25; const w = Math.floor(q), f = { .25: '¼', .5: '½', .75: '¾' }[q - w] || ''; return (w || '') + f || '0'; };
 /* Kullanıcının kendi kütüphanesi: k ve p bir porsiyon içindir; c kaç kez, t son tarih, m öğün başına sayı. */
@@ -924,7 +931,7 @@ function qPaint() {
   const meal = MEALS.find(m => m.id === Q.meal), inp = document.getElementById('q'), q = inp ? inp.value.trim() : '';
   const tk = Q.tray.reduce((t, x) => t + x.k * x.q, 0), tp = Q.tray.reduce((t, x) => t + x.p * x.q, 0), mode = qMode(), open = qOpen(meal);
   document.getElementById('qtray').innerHTML = !Q.tray.length ? '' : `<div class="group" style="margin-top:12px">${Q.tray.map((x, i) =>
-    `<div class="trow"><div class="row"><span class="b"><span class="n">${esc(x.n)}</span><span class="m">${esc(x.u ? x.u + ' · ' : '')}${KC ? num(x.k * x.q) + ' kcal · ' : ''}${num1(x.p * x.q)} g protein</span></span>${x.img ? `<img class="th" src="${x.img}" alt="">` : ''}<button class="more" data-act="qx" data-i="${i}" aria-label="Çıkar">${ic('x')}</button></div>
+    `<div class="trow"><div class="row"><span class="b"><span class="n">${esc(x.n)}</span><span class="m">${esc(x.u ? x.u + ' · ' : '')}${KC ? num(x.k * x.q) + ' kcal · ' : ''}${num1(x.p * x.q)} g protein</span></span>${x.img ? `<img class="th" src="${x.img}" alt="">` : ICON(x.n) ? `<span class="th fico">${icoImg(ICON(x.n), 40)}</span>` : ''}<button class="more" data-act="qx" data-i="${i}" aria-label="Çıkar">${ic('x')}</button></div>
       <div class="qchips">${QS.map(v => `<button class="${v === x.q ? 'on' : ''}" data-act="qq" data-i="${i}" data-v="${v}">${qLab(v)}</button>`).join('')}</div></div>`).join('')}</div>
     ${open.length ? `<div class="seg" style="margin:0 0 6px"><button class="${mode === 'yerine' ? 'on' : ''}" data-act="qmode" data-m="yerine">Planın yerine</button><button class="${mode === 'ek' ? 'on' : ''}" data-act="qmode" data-m="ek">Plana ek</button></div>
       <p class="note" style="padding:6px 6px 12px">${mode === 'yerine' ? `Öğünün işaretlenmemiş kalemleri atlandı sayılır; kalan öğünler buna göre dengelenir.` : `Öğünün planı olduğu gibi kalır; bu, üstüne eklenir.`}</p>` : ''}
@@ -1002,7 +1009,7 @@ function thumb(file, size = 160) {
 const tile = f => f.img ? `<img class="th" src="${f.img}" alt="">` : `<span class="th">${esc((f.n || '?').trim()[0].toLocaleUpperCase('tr'))}</span>`;
 /* Gıda ızgarası: görsel, ad, porsiyon; altında yan yana kalori ve protein (gram protein). Seçimin yapıldığı her yerde aynı kart. */
 const fcard = (f, act, i, badge) => `<button class="fcard" data-act="${act}" ${i != null ? `data-i="${i}"` : ''} ${f.id != null && i == null ? `data-id="${esc(f.id)}"` : ''}>
-  <span class="fimg">${f.img ? `<img src="${f.img}" alt="">` : `<i>${esc((f.n || '?').trim()[0].toLocaleUpperCase('tr'))}</i>`}${badge ? `<span class="fbadge">${ic(badge)}</span>` : ''}</span>
+  <span class="fimg">${f.img ? `<img src="${f.img}" alt="">` : ICON(f.n) ? icoImg(ICON(f.n), 64) : `<i>${esc((f.n || '?').trim()[0].toLocaleUpperCase('tr'))}</i>`}${badge ? `<span class="fbadge">${ic(badge)}</span>` : ''}</span>
   <b>${esc(f.n)}</b>${f.u ? `<small class="fu">${esc(f.u)}</small>` : ''}<small class="fv">${KC ? `${num(f.k)} kcal · ${num1(f.p)} g` : `${num1(f.p)} g protein`}</small></button>`;
 const fgrid = cards => cards ? `<div class="fgrid">${cards}</div>` : '';
 function foodsSheet() {

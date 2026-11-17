@@ -1,6 +1,6 @@
 /* ---------- Yerel yemek kütüphanesi ----------
    Plan dışı yenenleri yapay zekâya gitmeden kaydetmek için. Değerler yaklaşık, tipik bir porsiyon içindir.
-   n ad · u porsiyon · k kcal · p protein (g) · a arama için eş adlar.
+   n ad · u porsiyon · k kcal · p protein (g) · a arama için eş adlar · i ikon kimliği (yoksa addan türetilir).
    Kullanıcının kendi kaydettikleri (S.foods) aramada bunların önüne geçer. */
 const FOODS = [
   /* Kebap ve dışarıda */
@@ -126,7 +126,7 @@ const FOODS = [
   { n: 'Kola zero', u: '1 kutu', k: 1, p: 0, a: ['light', 'şekersiz kola'] },
   { n: 'Meyve suyu', u: '1 bardak', k: 110, p: 1 },
   { n: 'Şekerli çay', u: '1 bardak, 2 şeker', k: 35, p: 0 },
-  { n: 'Türk kahvesi, şekerli', u: '1 fincan', k: 25, p: 0 },
+  { n: 'Türk kahvesi, şekerli', u: '1 fincan', k: 25, p: 0, i: 'turk-kahvesi' },
   { n: 'Latte', u: '1 büyük', k: 200, p: 10 },
   { n: 'Cappuccino', u: '1 orta', k: 120, p: 6 },
   { n: 'Salep', u: '1 bardak', k: 200, p: 6 },
@@ -181,3 +181,28 @@ const FOODS = [
   { n: 'Kiraz', u: '1 kase', k: 90, p: 1 },
   { n: 'Şeftali', u: '1 orta', k: 60, p: 1 },
 ];
+
+/* ---------- Gıda ikonları ----------
+   img/f/<kimlik>-160.webp ve -320.webp; kaynakları ve üretim hattı design/ikon/ içinde. Kimlik adın fold'u, boşluklar tire
+   ("Kaşarlı pide" → kasarli-pide). Bir yemeğin adı, eş adı ya da i alanı bu listedekilerden birine denk gelirse kartında ikonu çıkar. */
+const ICONS = (
+  'acik-cay acma adana-kebap armut avokado ayran badem baklava bal balik-ekmek bazlama beyaz-ekmek beyaz-peynir ' +
+  'biftek bira biskuvi boza bulgur-pilavi cacik cappuccino ceviz cheeseburger cheesecake cig-kofte-durum cilek ' +
+  'cips coban-salata cokelek dondurma doner-durum elma esmer-pirinc et-sis etli-biber-dolmasi etli-kuru-fasulye ' +
+  'etli-nohut ezogelin-corbasi findik findik-kremasi firin-tavuk-but galeta gofret granola hamburger hamsi-tava ' +
+  'haslanmis-patates haslanmis-yumurta humus hunkar-begendi hurma icli-kofte imam-bayildi iskembe-corbasi ' +
+  'iskender-kebap islak-hamburger izgara-kofte izgara-tavuk-gogsu kabak-cekirdegi kahve karisik-kuruyemis ' +
+  'karisik-tost karniyarik karpuz kasar-peyniri kasarli-pide kasarli-tost kavun kayisi kazandibi kefir kek ' +
+  'keten-tohumu kiraz kisir kivi kiymali-pide kofte-ekmek kokorec kol-boregi kola kola-zero kraker kumpir kumru ' +
+  'kunefe kurabiye kuru-fasulye-pilav kuru-incir kusbasili-pide kuzu-pirzola lahmacun latte lavas leblebi ' +
+  'levrek-izgara limonlu-su lokum lor makarna-sade makarna-soslu mandalina manti menemen mercimek-corbasi ' +
+  'mercimek-koftesi meyve-suyu midye-dolma muz omlet patates-kizartmasi patlamis-misir peynirli-gozleme ' +
+  'pilav-ustu-doner pilav-ustu-tavuk-doner pirinc-patlagi pirinc-pilavi pizza pogaca portakal profiterol ' +
+  'protein-bar protein-shake protein-sut quark raki recel revani salep sandvic sarap seftali sekerli-cay ' +
+  'serpme-kahvalti sezar-salata sigara-boregi simit skyr sogus somon su su-boregi sucuk sucuk-ekmek ' +
+  'sucuklu-yumurta sushi sut sutlac sutlu-cikolata suzme-yogurt tahin-helvasi tam-bugday-ekmegi ' +
+  'tam-bugday-makarna tantuni tarhana-corbasi tavuk-burger tavuk-doner-durum tavuk-kanat tavuk-nugget tavuk-pilav ' +
+  'tavuk-sis tavuk-sote tavuk-suyu-corba tereyagi ton-baligi trilece tulumba turk-kahvesi urfa-kebap uzum waffle ' +
+  'wrap yaprak-sarma yayla-corbasi yesil-salata yogurt yulaf-ezmesi yulaf-lapasi zeytin zeytinyagi ' +
+  'zeytinyagli-taze-fasulye'
+).split(' ');
