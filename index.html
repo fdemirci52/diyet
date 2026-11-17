@@ -435,6 +435,16 @@ body.on-chat::after { height: calc(env(safe-area-inset-bottom) + 170px); }
 .mact button { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); }
 .mact button svg.i { width: 17px; height: 17px; }
 .mact button:active { background: var(--ctl); }
+.prop { background: var(--card); border-radius: 22px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); padding: 16px 16px 12px; margin: 8px 0 12px; }
+.prop .pt { font-size: 13px; font-weight: 600; color: var(--muted); padding-bottom: 8px; }
+.prop .pr { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.4; padding: 6px 0; }
+.prop .pr svg.i { width: 18px; height: 18px; flex: none; margin-top: 1px; color: var(--muted); }
+.prop .pr.bad { color: var(--muted); }
+.prop .pw { font-size: 13px; font-weight: 600; line-height: 1.4; padding: 8px 0 0; }
+.prop .pn { font-size: 13px; color: var(--muted); line-height: 1.4; padding: 6px 0 0; }
+.prop .primary { margin-top: 14px; }
+.prop .pst { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); padding: 8px 0 2px; }
+.prop .pst svg.i { width: 16px; height: 16px; }
 .cerr { padding: 12px 4px 0; }
 /* Sohbet geçmişi: satıra dokununca açılır; sağdaki düğme ilk dokunuşta "Sil" olur, ikincide siler. */
 .hrow { display: flex; align-items: center; gap: 8px; }

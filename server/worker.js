@@ -9,6 +9,7 @@
 
    Uçlar:
    - POST /v1/messages  Anthropic Messages API'nin aynısı (akışlı ya da değil). Authorization: Bearer <kod>.
+                        Araç olarak yalnızca istemcinin kendi (custom) araçları geçer.
    - GET  /v1/me        { name, month, n, usd, budget }: kodun bu ayki kullanımı. */
 
 const API = 'https://api.anthropic.com/v1/messages', VERSION = '2026-10-21';
@@ -54,7 +55,11 @@ export default {
     let body;
     try { body = await req.json(); } catch (e) { return fail(400, 'invalid_request_error', 'İstek okunamadı.', h); }
     if (!PRICE[body.model]) return fail(400, 'invalid_request_error', 'Bu model kullanılamaz.', h);
-    if (body.tools || body.mcp_servers || body.container) return fail(400, 'invalid_request_error', 'Araç kullanımı kapalı.', h);
+    /* Yalnızca uygulamanın kendi araçları (istemcide çalışır); sunucu araçları (web araması, kod çalıştırma…) kapalı. */
+    if (body.mcp_servers || body.container) return fail(400, 'invalid_request_error', 'Araç kullanımı kapalı.', h);
+    if (body.tools != null && (!Array.isArray(body.tools) || body.tools.length > 16
+      || body.tools.some(t => !t || (t.type != null && t.type !== 'custom') || typeof t.name !== 'string' || !t.input_schema)))
+      return fail(400, 'invalid_request_error', 'Bu araç kullanılamaz.', h);
     body.max_tokens = Math.min(body.max_tokens || MAX_TOKENS, MAX_TOKENS);
 
     const r = await fetch(API, { method: 'POST', body: JSON.stringify(body),

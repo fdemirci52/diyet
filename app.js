@@ -1436,14 +1436,134 @@ const CHAT_SYSTEM = () => `Bu bir diyet takip uygulamasının içindeki asistans
 
 Nasıl cevap verirsin:
 - Türkçe, kısa ve doğrudan. Cevap telefonda okunacak; çoğu cevap 2-5 cümle. Liste gerekiyorsa satır başına "- " koy. Başlık, tablo, kalın yazı kullanma.
-- Program diyetisyenindir. Programı değiştirmeyi, öğün atlamayı ya da kaloriyi daha da kısmayı önerme. Sapmayı programın kendi muadilleriyle (swaps, kalemlerin subs alanı) ve uygulamanın telafi önerileriyle dengele. Programda karşılığı olmayan bir şey için yaklaşık bir öneri ver ve diyetisyenine danışmasını söyle.
+- Program diyetisyenindir. Kendiliğinden program değişikliği, öğün atlamayı ya da kaloriyi daha da kısmayı önerme. Sapmayı programın kendi muadilleriyle (swaps, kalemlerin subs alanı) ve uygulamanın telafi önerileriyle dengele. Programda karşılığı olmayan bir şey için yaklaşık bir öneri ver ve diyetisyenine danışmasını söyle.
 ${KC ? `- Kalori ve protein söylerken <durum>daki değerleri kullan. Kendin tahmin ediyorsan "yaklaşık" de.` : `- Diyetisyen bu danışanın kalori sayılarını görmesini istemiyor. Kalori sayısı söyleme; porsiyon, öğün ve protein diliyle konuş. <durum>daki kalorileri yalnızca kendi muhakemen için kullan.`}
 - Dışarıda yemek, davet, tatil gibi durumlarda suçlama yok. En iyi seçeneği söyle, günün kalanının nasıl dengeleneceğini anlat: tek bir öğün günü bozmaz, kalan öğünlere devam etmek önemli.
 - Tıbbi bir şikâyet, ilaç, hastalık, hamilelik ya da yeme bozukluğu işareti varsa diyetisyenine veya doktoruna yönlendir.
-- Kayıt yapamazsın. Kullanıcı bir şey yediğini söylerse uygulamada nasıl kaydedeceğini kısaca hatırlat: öğüne dokununca kalemler açılır; "Hepsini yedim" hepsini işaretler; satırın sağındaki miktar düğmesi porsiyonu değiştirir ve muadil seçtirir; kalem düğmesi yenen şeyi aratır ya da yazdırır; kamera fotoğraftan kaydeder. Plandan sapınca kalan öğünlere telafi satırları kendiliğinden eklenir.
+- Uygulamada değişiklik yapmak için araçların var: takviyeler, öğün saatleri, su hedefi, görünüm${CYCLE ? ', döngünün hangi günde olduğu' : ''}, kalori görünürlüğü ve program kalemleri. Kullanıcı böyle bir değişiklik isterse "yetkim yok" deme, ilgili aracı çağır. Araç değişikliği hemen yapmaz: cevabının altında bir onay kartı çıkar, kullanıcı "Uygula"ya basarsa yapılır. Bu yüzden "yaptım" deme; tek cümleyle neyi önerdiğini söyle. Birden çok değişiklik varsa hepsini aynı cevapta çağır. Kimlikleri programdan ve <durum>dan al; belirsizse önce sor.
+- Takviyeler, görünüm, öğün saatleri, su hedefi ve döngü günü kullanıcının kendi ayarıdır; istenince doğrudan öner. Yeni bir takviyeye başlıyorsa diyetisyenine haber vermesini bir cümleyle hatırlatabilirsin.
+- Program kalemlerini eklemek, çıkarmak, miktarını ya da kalorisini değiştirmek ve kalori görünürlüğü diyetisyenin programına müdahaledir. Kullanıcı açıkça isterse aracı çağır ama cevabında bunun diyetisyenin planını değiştirdiğini ve ona danışmasının iyi olacağını kısaca söyle. Kaloriyi belirgin biçimde düşüren ya da proteini azaltan isteklerde açıkça uyar.
+- Yenen bir şeyi kaydedemezsin. Kullanıcı bir şey yediğini söylerse uygulamada nasıl kaydedeceğini kısaca hatırlat: öğüne dokununca kalemler açılır; "Hepsini yedim" hepsini işaretler; satırın sağındaki miktar düğmesi porsiyonu değiştirir ve muadil seçtirir; kalem düğmesi yenen şeyi aratır ya da yazdırır; kamera fotoğraftan kaydeder. Plandan sapınca kalan öğünlere telafi satırları kendiliğinden eklenir.
 
 Program:
 ${JSON.stringify(PLAN)}`;
+
+/* ---------- Asistanın değişiklik araçları ----------
+   Asistan bir değişiklik isteyince araç çağırır; araç hiçbir şeyi kendisi değiştirmez. Cevabın altında tek bir onay
+   kartı çıkar, kullanıcı "Uygula"ya basınca hepsi birlikte uygulanır. Mesajda: acts = [{ name, input }],
+   ast = 'done' | 'no' (yoksa bekliyor). Geçmiş API'ye düz metin olarak gider (araç blokları değil): her önerinin
+   özeti ve sonucu cevabın sonuna eklenir; böylece eski sohbetler araç eşleşmesi gerektirmez.
+   Program kalemleri diyetisyenin içeriğidir: kart uyarı taşır. Program değişikliği diyet-plan'a yazılır ve sayfa
+   yeniden yüklenir (sohbet sekmesine dönülür). */
+const ZAMAN = 'Ne zaman: öğün kimliği (o öğünden sonra), "yat" (yatmadan önce), "SS:DD" (belirli saat) ya da "" (saat önemsiz).';
+const TOOLS = () => [
+  { name: 'takviye', description: 'Kullanıcının kendi takviye listesine takviye ekler, düzenler ya da siler. Takviyeler programın parçası değildir. Her takviye için ayrı çağır.',
+    input_schema: { type: 'object', properties: { islem: { type: 'string', enum: ['ekle', 'duzenle', 'sil'] },
+      kimlik: { type: 'string', description: 'Düzenle ve silde mevcut takviyenin kimliği (<durum>daki takviye listesinde).' },
+      ad: { type: 'string', description: 'Örn. Omega 3' }, miktar: { type: 'string', description: 'Örn. 1 kapsül, 3 damla' },
+      zaman: { type: 'string', description: ZAMAN } }, required: ['islem'] } },
+  ...(CYCLE ? [{ name: 'dongu_gunu', description: `Programın gün döngüsünü kaydırır: bugünün programın kaçıncı günü olduğunu belirler (1-${CYCLE.n}).`,
+    input_schema: { type: 'object', properties: { bugun: { type: 'integer', description: 'Bugün programın kaçıncı günü' } }, required: ['bugun'] } }] : []),
+  { name: 'ogun_saati', description: 'Bir öğünün saatini değiştirir.',
+    input_schema: { type: 'object', properties: { ogun: { type: 'string', description: 'Öğün kimliği' }, saat: { type: 'string', description: 'Hafta içi saati, SS:DD' },
+      hafta_sonu: { type: 'string', description: 'Hafta sonu saati, SS:DD; verilmezse ve önceden aynıysa hafta içiyle aynı olur' } }, required: ['ogun', 'saat'] } },
+  { name: 'su_hedefi', description: 'Günlük su hedefini bardak olarak değiştirir.',
+    input_schema: { type: 'object', properties: { bardak: { type: 'integer' } }, required: ['bardak'] } },
+  { name: 'gorunum', description: 'Uygulamanın temasını değiştirir.',
+    input_schema: { type: 'object', properties: { tema: { type: 'string', enum: ['acik', 'koyu', 'sistem'] } }, required: ['tema'] } },
+  { name: 'kalori_gorunumu', description: 'Kalori sayılarının uygulamada görünüp görünmeyeceği (diyetisyen ayarı).',
+    input_schema: { type: 'object', properties: { goster: { type: 'boolean' } }, required: ['goster'] } },
+  { name: 'program_kalemi', description: 'Diyetisyenin programındaki bir kalemi ekler, çıkarır ya da değiştirir. Diyetisyenin programına müdahaledir; yalnızca kullanıcı açıkça isterse kullan.',
+    input_schema: { type: 'object', properties: { islem: { type: 'string', enum: ['ekle', 'cikar', 'degistir'] },
+      ogun: { type: 'string', description: 'Ekle ve çıkarda öğün kimliği' },
+      kalem: { type: 'string', description: 'Çıkar ve değiştirde programdaki kalem kimliği (items anahtarı)' },
+      ad: { type: 'string', description: 'Miktarıyla birlikte ad, örn. "1 dilim tam buğday ekmeği (25 g)"' }, kcal: { type: 'number' }, protein: { type: 'number' },
+      gunler: { type: 'array', items: { type: 'integer' }, description: 'Döngülü programda hangi günler (1\'den); boş ya da yoksa her gün' } }, required: ['islem'] } },
+];
+const PLAN_TOOLS = ['dongu_gunu', 'ogun_saati', 'su_hedefi', 'kalori_gorunumu', 'program_kalemi'];
+const mealBy = x => PLAN.meals.find(m => m.id === x) || PLAN.meals.find(m => fold(m.title) === fold(x || ''));
+const supBy = (id, n) => SUPS().find(s => s.id === id) || (n ? SUPS().find(s => fold(s.n) === fold(n)) : null);
+const okHM = t => /^([01]\d|2[0-3]):[0-5]\d$/.test(t || '');
+const zamanOf = z => { z = String(z || '').trim(); if (z === 'yat' || okHM(z) || !z) return z; const m = mealBy(z); return m ? m.id : null; };
+const dayList = g => !CYCLE || !Array.isArray(g) || !g.length ? [] : [...new Set(g.map(Math.round))].filter(i => i >= 1 && i <= CYCLE.n).sort((a, b) => a - b);
+const daysTxt = L => L.length ? ` (${L.join(', ')}. gün)` : '';
+/* Önerinin insan diliyle özeti; err varsa uygulanamaz. */
+function actInfo(t) {
+  const x = t.input || {};
+  switch (t.name) {
+    case 'takviye': {
+      const z = zamanOf(x.zaman), at = z == null ? null : z;
+      if (x.islem === 'ekle') return !x.ad ? { err: 'Takviyenin adı yok.' } : { txt: `Takviye ekle: ${x.ad}${x.miktar ? ', ' + x.miktar : ''} · ${supAt(at || '').toLocaleLowerCase('tr')}` };
+      const s = supBy(x.kimlik, x.ad); if (!s) return { err: `"${x.ad || x.kimlik || ''}" takviyesi listende yok.` };
+      if (x.islem === 'sil') return { txt: `Takviyeyi sil: ${s.n}` };
+      return { txt: `Takviyeyi düzenle: ${x.ad || s.n}${(x.miktar ?? s.dose) ? ', ' + (x.miktar ?? s.dose) : ''} · ${supAt(x.zaman != null && at != null ? at : anc(s)).toLocaleLowerCase('tr')}` };
+    }
+    case 'dongu_gunu': { const n = Math.round(x.bugun); return !CYCLE || !(n >= 1 && n <= CYCLE.n) ? { err: 'Gün numarası geçersiz.' } : { txt: `Bugünü programın ${n}. günü yap`, plan: 1 }; }
+    case 'ogun_saati': { const m = mealBy(x.ogun); if (!m) return { err: 'Öğün bulunamadı.' }; if (!okHM(x.saat) || (x.hafta_sonu && !okHM(x.hafta_sonu))) return { err: 'Saat geçersiz.' };
+      return { txt: `${m.title} saati: ${x.saat}${x.hafta_sonu && x.hafta_sonu !== x.saat ? `, hafta sonu ${x.hafta_sonu}` : ''}`, plan: 1 }; }
+    case 'su_hedefi': { const n = Math.round(x.bardak); return !(n >= 1 && n <= 30) ? { err: 'Su hedefi geçersiz.' } : { txt: `Su hedefi: günde ${n} bardak`, plan: 1 }; }
+    case 'gorunum': return { txt: `Görünüm: ${{ acik: 'açık', koyu: 'koyu', sistem: 'sistemle aynı' }[x.tema] || x.tema}` };
+    case 'kalori_gorunumu': return { txt: x.goster ? 'Kalori sayıları görünsün' : 'Kalori sayıları gizlensin', plan: 1, warn: 1 };
+    case 'program_kalemi': {
+      const it = PLAN.items[x.kalem], m = mealBy(x.ogun), g = dayList(x.gunler);
+      if (x.islem === 'ekle') return !m || !x.ad ? { err: 'Öğün ya da kalem adı eksik.' } : { txt: `${m.title} öğününe ekle: ${x.ad}${KC && x.kcal ? ` · ${num(x.kcal)} kcal` : ''}${daysTxt(g)}`, plan: 1, warn: 1 };
+      if (!it) return { err: 'Kalem programda bulunamadı.' };
+      if (x.islem === 'cikar') return !m ? { err: 'Öğün bulunamadı.' } : { txt: `${m.title} öğününden çıkar: ${it.name}${daysTxt(g)}`, plan: 1, warn: 1 };
+      return { txt: `Kalemi değiştir: ${it.name}${x.ad && x.ad !== it.name ? ' → ' + x.ad : ''}${KC && x.kcal != null ? ` · ${num(x.kcal)} kcal` : ''}${x.protein != null ? ` · ${num1(x.protein)} g protein` : ''}`, plan: 1, warn: 1 };
+    }
+  }
+  return { err: 'Bu değişikliği yapamıyorum.' };
+}
+/* Program kopyası üzerinde bir öneriyi uygular. */
+function planApply(p, t) {
+  const x = t.input || {}, m = p.meals.find(y => y.id === (mealBy(x.ogun) || {}).id);
+  switch (t.name) {
+    case 'dongu_gunu': p.cycle.start = addDays(today, -(Math.round(x.bugun) - 1)); break;
+    case 'ogun_saati': { const same = !m.wknd || m.wknd === m.time; m.time = x.saat; if (x.hafta_sonu) m.wknd = x.hafta_sonu; else if (same) m.wknd = x.saat; break; }
+    case 'su_hedefi': p.daily = p.daily || {}; p.daily.water = { ml: 250, ...(p.daily.water || {}), goal: Math.round(x.bardak) }; break;
+    case 'kalori_gorunumu': p.prefs = { ...(p.prefs || {}), kcal: !!x.goster }; break;
+    case 'program_kalemi': {
+      const g = dayList(x.gunler), all = !p.cycle || !g.length;
+      /* Belirli günlere dokunulacaksa öğün gün gün listeye açılır. */
+      if (!all && !m.days) m.days = Array.from({ length: p.cycle.n }, () => [...m.items]);
+      const each = fn => { if (m.days) m.days = m.days.map((L, i) => all || g.includes(i + 1) ? fn(L) : L); else m.items = fn(m.items); if (m.days) m.items = [...m.days[0]]; };
+      if (x.islem === 'ekle') {
+        let id = fold(x.ad).replace(/ /g, '-').slice(0, 18) || 'kalem', i = 2; const b = id; while (p.items[id]) id = b + '-' + i++;
+        p.items[id] = { k: Math.max(0, +x.kcal || 0), p: Math.max(0, +x.protein || 0), name: x.ad.trim(), chip: (x.ad.replace(/^[\d.,/-]+\s*\S*\s*/, '').split(/[(,]/)[0].trim().slice(0, 24) || x.ad).replace(/^./, c => c.toLocaleUpperCase('tr')) };
+        each(L => [...L, id]);
+      } else if (x.islem === 'cikar') each(L => L.filter(id => id !== x.kalem));
+      else { const it = p.items[x.kalem]; if (x.ad) it.name = x.ad.trim(); if (x.kcal != null) it.k = Math.max(0, +x.kcal); if (x.protein != null) it.p = Math.max(0, +x.protein); }
+      break;
+    }
+  }
+}
+function actsApply(m) {
+  const L = (m.acts || []).filter(t => !actInfo(t).err), P2 = L.filter(t => PLAN_TOOLS.includes(t.name));
+  let p2 = null;
+  if (P2.length) { p2 = JSON.parse(JSON.stringify(PLAN)); P2.forEach(t => planApply(p2, t)); const e = planCheck(p2); if (e) { chatErr = 'Değişiklik uygulanamadı: ' + e; return; } }
+  L.forEach(t => { const x = t.input || {};
+    if (t.name === 'gorunum') setTheme(x.tema === 'acik' ? 'light' : x.tema === 'koyu' ? 'dark' : '');
+    if (t.name !== 'takviye') return;
+    const at = zamanOf(x.zaman), s = supBy(x.kimlik, x.ad);
+    if (x.islem === 'ekle') (S.supps || (S.supps = [])).push({ id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), n: x.ad.trim(), dose: (x.miktar || '').trim(), at: at || '' });
+    else if (x.islem === 'sil') S.supps = SUPS().filter(y => y !== s);
+    else Object.assign(s, { n: (x.ad || s.n).trim(), dose: (x.miktar ?? s.dose).trim(), ...(x.zaman != null && at != null ? { at } : {}) }); });
+  m.ast = 'done'; save(); chatsSave();
+  if (p2) { try { localStorage.setItem(PLANKEY, JSON.stringify(p2)); sessionStorage.setItem('diyet-tab', 'chat'); } catch (e) { return; } reloadClean(); }
+}
+/* Onay kartı: önerilerin listesi, diyetisyen uyarısı, tek ana düğme. */
+function actCard(m, i) {
+  const L = m.acts.map(actInfo), ok = L.filter(x => !x.err), warn = ok.some(x => x.warn);
+  const rows = L.map(x => `<div class="pr ${x.err ? 'bad' : ''}">${ic(x.err ? 'x' : x.plan ? 'list' : 'pill')}<span>${esc(x.err || x.txt)}</span></div>`).join('');
+  const foot = m.ast === 'done' ? `<div class="pst">${ic('check')}Uygulandı</div>` : m.ast === 'no' ? `<div class="pst">Vazgeçildi</div>`
+    : !ok.length ? '' : chatBusy ? '' : `<button class="primary" data-act="actok" data-i="${i}">${ic('check')}${ok.length > 1 ? `${ok.length} değişikliği uygula` : 'Uygula'}</button><button class="textbtn" data-act="actno" data-i="${i}">Vazgeç</button>`;
+  return `<div class="prop"><div class="pt">Önerilen değişiklik${L.length > 1 ? 'ler' : ''}</div>${rows}
+    ${warn && !m.ast ? `<p class="pw">Bu, diyetisyeninin programını değiştirir. Uygulamadan önce ona danışmanı öneririm.</p>` : ''}
+    ${ok.some(x => x.plan) && !m.ast ? `<p class="pn">Program güncellenir; uygulama yeniden açılır.</p>` : ''}${foot}</div>`;
+}
+/* Geçmişte asistan mesajı: metin + önerilerin özeti ve sonucu. */
+const apiText = m => !m.acts ? m.content : (m.content + '\n\n' + m.acts.map(t => { const x = actInfo(t);
+  return `[Araçla önerdin: ${x.err || x.txt}. ${x.err ? 'Uygulanamadı.' : m.ast === 'done' ? 'Kullanıcı uyguladı.' : m.ast === 'no' ? 'Kullanıcı vazgeçti.' : 'Kullanıcı henüz onaylamadı.'}]`; }).join('\n')).trim();
 
 /* Günün anlık durumu, düz metin. */
 function dayContext() {
@@ -1472,7 +1592,7 @@ function dayContext() {
   const W = WORKOUTS[parse(k).getDay()];
   lines.push(`Su: ${d.water}/${WATER_GOAL} bardak. Kahve: ${d.coffee}/${COFFEE_MAX}. Yürüyüş: ${d.walk ? 'yapıldı' : 'yapılmadı'}.`,
     W ? `Bugün antrenman var (${TRAIN.time}, ${W.name}): ${d.gym ? 'yapıldı' : 'henüz yapılmadı'}.` : 'Bugün planlı antrenman yok.');
-  if (SUPS().length) lines.push('Kullanıcının kendi takviyeleri (programın parçası değil): ' + SUPS().map(s => `${s.n}${s.dose ? ' ' + s.dose : ''} (${supAt(anc(s)).toLocaleLowerCase('tr')}): ${supTaken(k, s.id) ? 'alındı' : 'alınmadı'}`).join('; ') + '.');
+  if (SUPS().length) lines.push('Kullanıcının kendi takviyeleri (programın parçası değil): ' + SUPS().map(s => `${s.n}${s.dose ? ' ' + s.dose : ''} (${supAt(anc(s)).toLocaleLowerCase('tr')}, kimlik ${s.id}): ${supTaken(k, s.id) ? 'alındı' : 'alınmadı'}`).join('; ') + '.');
   const ws = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1);
   if (ws.length) lines.push(`Son tartı: ${ws[ws.length - 1].kg.toLocaleString('tr-TR')} kg (${fmtDM(ws[ws.length - 1].d)}); ilk kayıt ${ws[0].kg.toLocaleString('tr-TR')} kg. Hedef ${PLAN.goal.kg} kg.`);
   return lines.join('\n');
@@ -1486,7 +1606,8 @@ const TYPING = '<span class="typing"><i></i><i></i><i></i></span>';
 function chatView() {
   const c = curChat(), M = c ? c.m : [], last = M.length - 1;
   const msgs = M.map((m, i) => m.role === 'user' ? `<div class="msg u">${esc(m.show || '')}</div>`
-    : `<div class="msg a" ${i === last ? 'id="live"' : ''}>${m.content ? fmtMsg(m.content) : TYPING}${m.cut ? '<span class="cut">Yarıda kesildi</span>' : ''}</div>
+    : `<div class="msg a" ${i === last ? 'id="live"' : ''}>${m.content ? fmtMsg(m.content) : m.acts ? '' : TYPING}${m.cut ? '<span class="cut">Yarıda kesildi</span>' : ''}</div>
+      ${m.acts && !(chatBusy && i === last) ? actCard(m, i) : ''}
       ${m.content && !(chatBusy && i === last) ? `<div class="mact"><button data-act="chatcopy" data-i="${i}" aria-label="Kopyala">${ic('copy')}</button></div>` : ''}`).join('');
   return `<div class="cbar"><button class="round" data-act="chathist" aria-label="Sohbetler">${ic('hist')}</button><b>${c ? esc(chatTitle(c)) : 'Asistan'}</b><button class="round" data-act="chatnew" aria-label="Yeni sohbet" ${!c ? 'disabled' : ''}>${ic('compose')}</button></div>
     ${M.length ? `<div class="chat">${msgs}</div>` : `<div class="cempty"><span class="cico">${ic('chat')}</span><h2>Ne sormak istersin?</h2><p>Programın ve ${sel === today ? 'bugünün' : 'günün'} kaydı elimde; cevaplar buna göre.</p>
@@ -1532,9 +1653,9 @@ async function chatSend(text) {
   try {
     const r = await aiFetch({ model: CHAT_MODEL, max_tokens: 4000, stream: true, thinking: { type: 'disabled' }, output_config: { effort: 'low' },
       system: [{ type: 'text', text: CHAT_SYSTEM(), cache_control: { type: 'ephemeral' } }],
-      messages: c.m.slice(0, -1).filter(m => m.content).map(({ role, content }) => ({ role, content })) }, ctl.signal);
+      tools: TOOLS(), messages: c.m.slice(0, -1).map(m => ({ role: m.role, content: m.role === 'assistant' ? apiText(m) : m.content })).filter(m => m.content) }, ctl.signal);
     if (!r.ok) throw aiErr(r, await r.json().catch(() => ({})));
-    const rd = r.body.getReader(), dec = new TextDecoder(), usage = {}; let buf = '', stop = '';
+    const rd = r.body.getReader(), dec = new TextDecoder(), usage = {}, blk = {}; let buf = '', stop = '';
     for (;;) {
       const { done, value } = await rd.read(); if (done) break;
       buf += dec.decode(value, { stream: true }); let i;
@@ -1544,15 +1665,20 @@ async function chatSend(text) {
         const ev = JSON.parse(line.slice(5));
         if (ev.type === 'message_start') Object.assign(usage, ev.message.usage);
         else if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta') { a.content += ev.delta.text; paint(); }
+        /* Araç çağrısı: girdi parça parça JSON olarak gelir, blok bitince öneri olur. */
+        else if (ev.type === 'content_block_start' && ev.content_block.type === 'tool_use') blk[ev.index] = { name: ev.content_block.name, j: '' };
+        else if (ev.type === 'content_block_delta' && ev.delta.type === 'input_json_delta' && blk[ev.index]) blk[ev.index].j += ev.delta.partial_json;
+        else if (ev.type === 'content_block_stop' && blk[ev.index]) { const b = blk[ev.index]; let input = {}; try { input = JSON.parse(b.j || '{}'); } catch (x) {}
+          (a.acts || (a.acts = [])).push({ name: b.name, input }); delete blk[ev.index]; }
         else if (ev.type === 'message_delta') { stop = ev.delta.stop_reason || stop; Object.assign(usage, ev.usage); }
         else if (ev.type === 'error') throw new Error(ev.error && ev.error.message || 'Akış kesildi.');
       }
     }
     track(CHAT_MODEL, usage);
     if (stop === 'refusal' && !a.content) throw new Error('Bu soruya cevap veremiyorum.');
-    if (!a.content) throw new Error('Boş cevap geldi; yeniden dene.');
+    if (!a.content && !a.acts) throw new Error('Boş cevap geldi; yeniden dene.');
   } catch (e) {
-    if (e.name === 'AbortError' && a.content) a.cut = true;   /* durdurulan cevabın gelen kısmı kalır */
+    if (e.name === 'AbortError' && (a.content || a.acts)) a.cut = true;   /* durdurulan cevabın gelen kısmı kalır */
     else {
       /* Başarısız soru-cevap çifti geçmişten çıkar, soru kutuya geri döner. */
       c.m.splice(c.m.indexOf(q), 2); if (!c.m.length) { CHATS = CHATS.filter(x => x !== c); CUR = null; }
@@ -1662,6 +1788,8 @@ document.addEventListener('click', e => {
       try { navigator.clipboard.writeText(m.content).then(done, () => {}); } catch (x) {} return; }
     case 'chatq': chatSend(el.textContent); return;
     case 'chatsend': if (chatBusy) { if (chatAbort) chatAbort.abort(); return; } chatSend(document.getElementById('said2').value); return;
+    case 'actok': { const m = (curChat() || { m: [] }).m[+el.dataset.i]; if (!m || chatBusy || m.ast) return; chatErr = ''; actsApply(m); buzz(); break; }
+    case 'actno': { const m = (curChat() || { m: [] }).m[+el.dataset.i]; if (!m || chatBusy || m.ast) return; m.ast = 'no'; chatsSave(); break; }
     case 'chatnew': if (chatBusy) return; CUR = null; chatErr = ''; closeSheet(); tab = 'chat'; render(); window.scrollTo(0, 0); { const t = document.getElementById('said2'); t && t.focus(); } return;
     case 'close': closeSheet(); return;
     case 'all': lockMain(sel, meal); A.adds.filter(x => x.meal === meal.id && x.xi < 0).forEach(({ xi, ...x }) => d.extras.push({ ...x, adj: true }));
@@ -1759,6 +1887,8 @@ document.addEventListener('visibilitychange', () => {
   if (t !== today) { if (sel === today) sel = t; today = t; } if (!document.body.classList.contains('sheet-open')) render();
 });
 chatsLoad();
+/* Asistanın program değişikliğinden sonra sayfa yeniden yüklenince sohbete dönülür. */
+try { if (sessionStorage.getItem('diyet-tab') === 'chat') { sessionStorage.removeItem('diyet-tab'); if (CHATS.length) { tab = 'chat'; CUR = CHATS[0].id; chatScroll = true; } } } catch (e) {}
 setInterval(() => { if (!document.hidden && tab === 'today' && !document.body.classList.contains('sheet-open')) render(); }, 60000);
 /* Açık öğünün başlığı ekranın tepesine yapışınca gölge alır. */
 const stuck = () => { const h = document.querySelector('.mh'); if (!h) return; const c = h.parentElement.getBoundingClientRect(), t = parseFloat(getComputedStyle(h).top) || 0;
