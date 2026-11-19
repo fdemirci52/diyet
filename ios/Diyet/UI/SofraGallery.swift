@@ -9,7 +9,7 @@ struct SofraGallery: View {
             DemoToday().tabItem { Label("Bugün", systemImage: "checkmark.circle") }
             DemoWeek().tabItem { Label("Hafta", systemImage: "chart.bar") }
             placeholder("Asistan").tabItem { Label("Asistan", systemImage: "bubble.left") }
-            placeholder("İlerleme").tabItem { Label("İlerleme", systemImage: "square.grid.3x3") }
+            DemoProgress().tabItem { Label("İlerleme", systemImage: "square.grid.3x3") }
             placeholder("Program").tabItem { Label("Program", systemImage: "list.bullet") }
         }
         .tint(Theme.Palette.fg)
@@ -197,6 +197,54 @@ struct DemoWeek: View {
     }
 }
 
+// MARK: - İlerleme
+
+struct DemoProgress: View {
+    @State private var weights = DemoData.weights
+    private var logged: [HeatDay] { DemoData.heat.joined().filter { $0.pct != nil } }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Programın başından beri").font(Theme.Typo.secondary).foregroundStyle(Theme.Palette.muted)
+                    Text("İlerleme").font(Theme.Typo.title).foregroundStyle(Theme.Palette.fg)
+                }
+                .padding(.horizontal, Theme.Space.x1).padding(.bottom, Theme.Space.x4)
+
+                ScoreCalendarCard(average: logged.isEmpty ? nil : logged.reduce(0) { $0 + ($1.pct ?? 0) } / logged.count, logged: logged.count, weeks: DemoData.heat)
+
+                SectionTitle("Son 30 gün")
+                DialRow {
+                    DialCard(title: "Uyum", value: "%91", target: "27 / 30 gün", progress: 0.91)
+                    DialCard(title: "Protein", value: "136", unit: "g", target: "günlük ort.", progress: 136.0 / 148)
+                    DialCard(title: "Su", value: "2,1", unit: "L", target: "günlük ort.", progress: 2.1 / 2.5, color: Theme.Palette.water)
+                }
+                .padding(.bottom, Theme.Space.x2)
+                LedgerCard(rows: [.init(title: "Antrenman", value: "11 / 13"), .init(title: "Yürüyüş", value: "9 / 13")])
+
+                SectionTitle("Son 30 günde sofranda")
+                TopFoodsCard(items: DemoData.top)
+
+                SectionTitle("Aylar")
+                MonthsCard(rows: [.init(month: "Kasım", days: 18, score: 93, gym: 7, kg: 90.6), .init(month: "Ekim", days: 29, score: 88, gym: 12, kg: 91.4),
+                                  .init(month: "Eylül", days: 17, score: 81, gym: 6, kg: 93.1)])
+
+                SectionTitle("Kilo")
+                WeightCard(entries: weights, goal: 85) { v in
+                    let today = Calendar.current.startOfDay(for: DemoData.today)
+                    withAnimation(Theme.Motion.settle) { weights = weights.filter { $0.date != today } + [WeightEntry(date: today, kg: v)] }
+                }
+                Text("Haftada bir, aynı saatte tartıl.").font(Theme.Typo.caption).foregroundStyle(Theme.Palette.muted)
+                    .padding(.horizontal, Theme.Space.x1).padding(.top, Theme.Space.x2)
+            }
+            .padding(.horizontal, Theme.Space.page).padding(.top, Theme.Space.x2).padding(.bottom, Theme.Space.x8)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(Theme.Palette.bg.ignoresSafeArea())
+    }
+}
+
 // MARK: - Örnek veri (plan.js, PLAN_DEFAULT)
 
 enum DemoData {
@@ -232,6 +280,36 @@ enum DemoData {
                  items: [t("yogurt-a", "Yoğurt", "3-4 yk", "yogurt"), t("ekmek-a", "Ekmek", "2 dilim", "tam-bugday-ekmegi"), t("salata-a", "Salata", "1 porsiyon", "yesil-salata")],
                  kcal: 570, protein: 49, note: "Antrenmandan sonra: bu öğünü ve ekmeğini atlama."),
         DemoMeal(id: "gece", title: "Gece", time: "21:00", items: [t("psut", "Protein süt", "1 bardak", "protein-sut"), t("kabak", "Kabak çekirdeği", "1 avuç içi", "kabak-cekirdegi")], kcal: 275, protein: 28),
+    ]
+    /// Örnek gün: 18 Kasım 2026 Çarşamba.
+    static let today: Date = Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 18))!
+    /// 26 hafta; program 14 Eylül'de başlamış, öncesi kayıtsız. Değerler sabit bir diziden, her açılışta aynı.
+    static let heat: [[HeatDay]] = {
+        var cal = Calendar(identifier: .gregorian); cal.firstWeekday = 2
+        let monday = cal.date(byAdding: .day, value: -2, to: today)!
+        let start = cal.date(from: DateComponents(year: 2026, month: 9, day: 14))!
+        var seed: UInt64 = 42
+        func next() -> Int { seed = seed &* 6364136223846793005 &+ 1442695040888963407; return Int((seed >> 33) % 100) }
+        return (0..<26).map { w in
+            (0..<7).map { d in
+                let date = cal.date(byAdding: .day, value: (w - 25) * 7 + d, to: monday)!
+                let r = next(), ramp = min(1, max(0, date.timeIntervalSince(start) / (86400 * 50)))
+                var pct: Int? = nil
+                if date >= start && date <= today && r > 7 { pct = min(100, Int(64 + ramp * 18) + r * 22 / 100 + (d >= 5 ? -12 : 0)) }
+                if date == today { pct = 96 }
+                return HeatDay(date: date, pct: pct, isToday: date == today, isFuture: date > today)
+            }
+        }
+    }()
+    static let weights: [WeightEntry] = {
+        let kg: [(Int, Int, Double)] = [(9, 14, 94.2), (9, 21, 93.6), (9, 28, 93.1), (10, 5, 92.8), (10, 12, 92.1), (10, 19, 92.3), (10, 26, 91.4), (11, 2, 91.2), (11, 9, 90.9), (11, 16, 90.6)]
+        return kg.map { WeightEntry(date: Calendar.current.date(from: DateComponents(year: 2026, month: $0.0, day: $0.1))!, kg: $0.2) }
+    }()
+    static let top: [TopFoodsCard.Item] = [
+        .init(id: "yogurt", name: "Yoğurt", icon: "yogurt", count: 41), .init(id: "ekmek", name: "Tam buğday ekmeği", icon: "tam-bugday-ekmegi", count: 38),
+        .init(id: "yumurta", name: "Yumurta", icon: "haslanmis-yumurta", count: 27), .init(id: "salata", name: "Salata", icon: "yesil-salata", count: 26),
+        .init(id: "peynir", name: "Peynir", icon: "beyaz-peynir", count: 24), .init(id: "kofte", name: "Izgara köfte", icon: "izgara-kofte", count: 11),
+        .init(id: "tavuk", name: "Tavuk", icon: "izgara-tavuk-gogsu", count: 9), .init(id: "balik", name: "Balık", icon: "levrek-izgara", count: 8),
     ]
     /// plan.js rota: öğle ve akşam ana yemekleri, Pazartesi'den Pazar'a. Kurubaklagilin ikonu yok.
     static let week: [WeekMainsCard.Day] = {
