@@ -165,6 +165,68 @@ const TUNE = PLAN.tune;
 /* Önerinin düşeceği öğün: 'main', 'first', 'last' ya da öğün kimliği; liste ise ilk bulunan. */
 const mealAt = (meals, at) => [].concat(at).map(a => a === 'main' ? meals.find(m => m.main) : a === 'first' ? meals[0] : a === 'last' ? meals[meals.length - 1] : meals.find(m => m.id === a)).find(Boolean);
 const fill = (t, n, x) => t.replace('{n}', n).replace('{g}', n * (x.g || 1));
+/* ---------- Besin grupları ----------
+   Diyetisyenin değişim listesindeki gruplar: prot (et, peynir, yumurta, lor, kurubaklagil), carb (ekmek ve muadilleri),
+   dairy (yoğurt, ayran), fat (yağ, zeytin, kuruyemiş), fruit, veg. Telafi bir eksiği yalnızca aynı gruptan ve gerçekten
+   karşılanmamışsa önerir. Grup addaki sözcüklerden çıkar: sözcük kökle başlar; noktalı kök tam sözcük ya da kısa ekli
+   olmalı (et, etli; yağsız sayılmaz). -siz/-suz ile biten sözcük yok sayılır. Plan kalemi grp taşıyorsa o geçerlidir.
+   Sıra önceliktir: "kabak çekirdeği" yağ, "ton balıklı salata" protein. */
+const GRPS = [
+  ['prot', 'protein whey quark skyr peynir lor. cokelek kasar tulum hellim yumurta omlet menemen et. kiyma kofte tavu hindi balik ton. somon levrek hamsi uskumru sardalya bonfile antrikot bifte kurubaklagil fasulye nohut mercimek barbunya borulce bakla.'],
+  ['fat', 'cekirde ceviz badem findi avokado zeytin yag. tereyag tahin fistik'],
+  ['carb', 'ekme yulaf bulgur makarna pirinc pilav patates lavas galeta leblebi bazlama simit kraker'],
+  ['dairy', 'yogurt ayran kefir caci sut.'],
+  ['fruit', 'meyve elma portakal mandalina muz. cilek kayisi kivi kavun karpuz uzum armut kiraz seftali incir hurma nar.'],
+  ['veg', 'salata sogus domates yesillik sebze roka marul maydanoz biber kabak brokoli ispanak mantar havuc semizotu'],
+].map(([g, w]) => [g, w.split(' ').map(x => x.endsWith('.') ? new RegExp(`^${x.slice(0, -1)}(li|lu|i|u|e|a)?$`) : x)]);
+const kwHit = (w, kw) => typeof kw === 'string' ? w.startsWith(kw) : kw.test(w);
+/* Metindeki gruplar, öncelik sırasıyla. "Kabak çekirdeği" gibi tohumlarda öndeki sebze adı sayılmaz. */
+function grpsIn(t) {
+  const w = fold(t).split(' '), hit = new Set();
+  w.forEach((x, i) => { if (!x || /(siz|suz)$/.test(x) || /^cekirde/.test(w[i + 1] || '')) return;
+    const g = GRPS.find(([, kws]) => kws.some(kw => kwHit(x, kw))); if (g) hit.add(g[0]); });
+  return GRPS.map(([g]) => g).filter(g => hit.has(g));
+}
+const GRP_MEMO = {};
+const grpOf = it => it.grp || (GRP_MEMO[it.name] ??= grpsIn([it.chip, it.name, ...(it.opts || [])].join(' '))[0] || '');
+/* Bir değişim (porsiyon) karşılığı yaklaşık kcal ve protein: 1 dilim peynir / 1 yumurta / 30 g et, 1 dilim ekmek,
+   3-4 yk yoğurt, 1 tk yağ, 1 porsiyon meyve, söğüş. Yalnızca adı kütüphanede olmayan yazılmış yiyecekte kullanılır. */
+const STD = { prot: [80, 6], carb: [70, 2.5], dairy: [60, 4], fat: [45, .5], fruit: [70, 1], veg: [30, 1] };
+const spread = (by, gs, k) => { (gs.length ? gs : ['']).forEach(g => by[g] = (by[g] || 0) + k / (gs.length || 1)); };
+const libExact = t => { const f = fold(t); return (S.foods || {})[f] || FOODS.find(x => fold(x.n) === f || (x.a || []).some(a => fold(a) === f)); };
+/* Elle yazılmış yiyeceğin tahmini: virgül, artı ya da "ve" ile ayrılan her parça kütüphanede birebir varsa onun değeri,
+   yoksa içindeki her besin grubu bir değişim. Öndeki küçük sayı protein ve ekmekte adet sayılır ("3 yumurtalı omlet").
+   Hiçbir şey tanınmazsa null: kayıt planın değeriyle sayılır. by: grup başına kcal. */
+function guess(t) {
+  let k = 0, p = 0, any = false; const by = {};
+  String(t || '').split(/\s*(?:[,+;&/]|\s(?:ve|ile)\s)\s*/i).forEach(part => { if (!part.trim()) return;
+    const f = libExact(part);
+    if (f) { any = true; k += f.k; p += f.p; spread(by, grpsIn(f.n), f.k); return; }
+    const gs = grpsIn(part); if (!gs.length) return;
+    const pa = parseAmt(part), n = pa && gs.length === 1 && ['prot', 'carb'].includes(gs[0]) && ['', 'adet', 'dilim', 'tane'].includes(pa.u) && Number.isInteger(pa.a) && pa.a >= 1 && pa.a <= 4 ? pa.a : 1;
+    gs.forEach(g => { any = true; k += STD[g][0] * n; p += STD[g][1] * n; by[g] = (by[g] || 0) + STD[g][0] * n; });
+  });
+  return any ? { k: Math.round(k), p: r1(p), by } : null;
+}
+/* Kalemin yerine elle yazılan bir şey mi (programın seçeneği, muadili ya da kütüphaneden değil)? */
+const isTxt = (it, st) => st.s === 'swap' && !st.alt && !st.src && ![...(it.subs || []), ...(it.sugg || [])].includes(st.base || st.sub);
+/* Yenen değer: kayıtta varsa o; değersiz eski yazılmış muadilde addan tahmin; yoksa planınki. */
+function ateOf(it, st) {
+  if (!st || st.s === 'skip') return { k: 0, p: 0 };
+  if (st.k != null) return { k: st.k, p: st.p ?? it.p };
+  if (isTxt(it, st)) { const g = guess(st.base || st.sub), q = st.q || 1; if (g) return { k: Math.round(g.k * q), p: r1(g.p * q) }; }
+  return { k: it.k, p: it.p };
+}
+/* Yenenin besin gruplarına dağılımı (kcal). Programın kendi seçenek ve muadilleri kalemin grubundan sayılır. */
+function ateBy(it, st, a, g) {
+  const by = {}; if (st.s === 'skip' || !a.k) return by;
+  if (st.s === 'swap' && st.src) spread(by, grpsIn(st.src.n), a.k);
+  else if (isTxt(it, st)) { const x = guess(st.base || st.sub);
+    if (x && x.k) Object.entries(x.by).forEach(([y, v]) => by[y] = v * a.k / x.k); else by[g] = a.k; }
+  else by[g] = a.k;
+  return by;
+}
+
 function balance(k) {
   const d = peek(k), open = []; let gk = 0, gp = 0, tk = 0, tp = 0, rk = 0, rp = 0, any = false;
   MEALS.forEach(m => itemsOf(m, k).forEach(it => {
@@ -172,33 +234,63 @@ function balance(k) {
     const st = stOf(d, m, it);
     if (!st) return open.push({ m, it, key: m.id + '.' + it.id });
     any = true; rk += it.k; rp += it.p;
-    const skip = st.s === 'skip'; gk += it.k - (skip ? 0 : st.k ?? it.k); gp += it.p - (skip ? 0 : st.p ?? it.p);
+    const a = ateOf(it, st); gk += it.k - a.k; gp += it.p - a.p;
   }));
   (d.extras || []).forEach(e => { gk -= e.k; gp -= e.p; any = true; });
   return { gk, gp, tk, tp, open, any, ek: rk - gk, ep: rp - gp };
 }
+/* Telafi defteri: kapanmış öğünlerin plana göre farkı (kcal, protein), besin grubu başına karşılanmamış kcal (G)
+   ve eksiğin nereden geldiği (why). Öğün kapanmış sayılır: bütün kalemleri işaretli ya da sonraki bir öğün kaydedilmiş.
+   Yarım işaretlenmiş öğün henüz yazılıyordur (peyniri azaltıp salataya tulum eklemek gibi); farkı telafiye girmez.
+   Açık öğündeki kabul edilmiş telafi sayılmaz: öneri kabul edilince değişmez, işaretli görünür. */
+const ADJ_GRP = { 'x-prot': 'prot', 'x-ekmek': 'carb', 'x-ara': 'fruit' };
+function ledger(k) {
+  const d = peek(k), G = {}, why = {}; let gk = 0, gp = 0, paid = 0;
+  const has = m => (d.extras || []).some(e => e.meal === m.id) || itemsOf(m, k).some(i => stOf(d, m, i));
+  MEALS.forEach((m, mi) => {
+    const its = itemsOf(m, k).filter(i => !i.optional), open = its.some(i => !stOf(d, m, i));
+    if (open && !MEALS.slice(mi + 1).some(has)) return;
+    its.forEach(it => { const st = stOf(d, m, it); if (!st) return;
+      const g = grpOf(it), a = ateOf(it, st), by = ateBy(it, st, a, g);
+      gk += it.k - a.k; gp += it.p - a.p; G[g] = (G[g] || 0) + it.k;
+      Object.entries(by).forEach(([x, v]) => G[x] = (G[x] || 0) - v);
+      const miss = it.k - (by[g] || 0); if (miss >= 20) (why[g] = why[g] || []).push({ m, it, miss, skip: st.s === 'skip' });
+    });
+    (d.extras || []).forEach(e => { if (e.meal !== m.id || (e.adj && open)) return;
+      gk -= e.k; gp -= e.p; if (e.adj) paid += e.k;
+      const by = {}; spread(by, e.adj ? [ADJ_GRP[e.id] || ''] : grpsIn(e.name), e.k);
+      Object.entries(by).forEach(([x, v]) => G[x] = (G[x] || 0) - v); });
+  });
+  return { gk, gp, G, why, paid };
+}
+/* Telafi: yalnızca gerçekten eksik kalan, aynı besin grubundan karşılanır.
+   Protein grubundan bir değişim yerine konmadan kaldıysa ya da gün 8 g eksikse protein; ekmek grubundan en az yarım dilim eksik kaldıysa ve gün de eksikteyse ekmek;
+   gün 150 kcal'den fazla eksikse ara öğün. Yerine aynı gruptan bir şey yenmişse (peynir azalıp salataya tulum
+   eklenmiş) eksik yoktur. Fazlada 120 kcal'den sonra kısılır.
+   Kullanıcı "gerek yok" dediği öneriyi (days[k].noadj) karşılanmış sayar; o eksik başka bir öneriye kaymaz. */
 function adjust(k) {
   const b = balance(k), out = { over: {}, adds: [], why: '', note: '' };
   if (k !== today || !b.any || !TUNE_ON) return out;
-  let { gk, gp } = b;
   const meals = [...new Set(b.open.map(o => o.m))].filter(m => m.time);
   if (!meals.length) return out;
-  /* Kabul edilen telafiler öneriyi değiştirmesin: açık öğünlerdeki telafi kayıtları farka geri eklenir,
-     öneriler hep aynı farktan hesaplanır ve kabul edilenler işaretli görünür. */
-  const d0 = peek(k), openIds = new Set(b.open.map(o => o.m.id));
-  (d0.extras || []).forEach(e => { if (e.adj && openIds.has(e.meal)) { gk += e.k; gp += e.p; } });
+  const L = ledger(k), d0 = peek(k), no = d0.noadj || {};
+  let { gk, gp } = L;
+  /* Neden satırı: eksiğin geldiği kalemler öğün öğün ("Kahvaltı: peynir eksik"), bütünüyle atlanan öğün tek sözle. */
+  const reason = gs => { const by = new Map();
+    gs.filter(g => (L.G[g] || 0) > 0).flatMap(g => L.why[g] || []).sort((x, y) => y.miss - x.miss).forEach(x => by.set(x.m, [...(by.get(x.m) || []), x]));
+    return [...by].slice(0, 2).map(([m, xs]) => mealStat(m, k).skip === mealStat(m, k).total ? `${m.title} atlandı`
+      : `${m.title}: ${xs.slice(0, 2).map(x => lc(x.it.chip || x.it.name)).join(', ')} ${xs.every(x => x.skip) ? 'atlandı' : 'eksik'}`).join(' · '); };
   /* Telafi zincirlenmesin: önceki öğünlerde yenen telafi 250 kcal'i geçtiyse yenisi önerilmez. */
-  const paid = (d0.extras || []).reduce((t, e) => t + (e.adj && !openIds.has(e.meal) ? e.k : 0), 0);
-  const add = (meal, id, name, kk, pp) => { if (paid >= 250) return; out.adds.push({ meal: meal.id, id, name, k: kk, p: pp }); gk -= kk; gp -= pp; };
+  const add = (meal, id, name, kk, pp, why) => { if (L.paid >= 250) return; out.adds.push({ meal: meal.id, id, name, k: kk, p: pp, why, off: !!no[id] }); gk -= kk; gp -= pp; };
   /* Birimli öneri: max varsa açığa göre 1..max birim, yoksa tek birim. */
-  const offer = (x, id, gap, per) => { const m = mealAt(meals, x.at); if (!m) return false;
-    const n = x.max ? Math.min(x.max, Math.max(1, Math.round(gap / per))) : 1; add(m, id, fill(x.name, n, x), x.k * n, x.p * n); return true; };
-  if (gp >= 8 && gk > -100) TUNE.protein.some(x => offer(x, 'x-prot', gp, x.p));
-  if (gk >= 60 && TUNE.carb) offer(TUNE.carb, 'x-ekmek', gk, TUNE.carb.k);
-  if (gk >= 90 && TUNE.snack) offer(TUNE.snack, 'x-ara', gk, TUNE.snack.k);
+  const offer = (x, id, gap, per, why) => { const m = mealAt(meals, x.at); if (!m) return false;
+    const n = x.max ? Math.min(x.max, Math.max(1, Math.round(gap / per))) : 1; add(m, id, fill(x.name, n, x), x.k * n, x.p * n, why); return true; };
+  /* Protein: gün 8 g eksikse ya da protein grubundan bir değişim (1 dilim peynir, 1 yumurta) yerine konmadan kaldıysa. */
+  if ((gp >= 8 || ((L.G.prot || 0) >= 70 && gp >= 4)) && gk > -100) { const w = reason(['prot']) || `Bugün protein ${num(gp)} g eksik`; TUNE.protein.some(x => offer(x, 'x-prot', gp, x.p, w)); }
+  if (TUNE.carb && (L.G.carb || 0) >= 50 && gk >= 60) offer(TUNE.carb, 'x-ekmek', Math.min(L.G.carb, gk), TUNE.carb.k, reason(['carb']));
+  if (TUNE.snack && gk >= 150) offer(TUNE.snack, 'x-ara', gk, TUNE.snack.k, reason(['fat', 'fruit', 'dairy', 'veg', '']) || reason(Object.keys(L.why)) || `Bugün ${num(gk)} kcal eksik`);
   out.adds.forEach(a => a.xi = (d0.extras || []).findIndex(e => e.adj && e.id === a.id && e.meal === a.meal));
-  if (out.adds.length) out.why = 'Eksik kalanı dengelemek için eklendi';
-  if (gk <= -80) {
+  if (gk <= -120) {
     let need = -gk, cut = 0;
     for (const { item: id, name, k: dk, p: dp } of TUNE.cuts) for (const o of b.open) {
       if (o.it.id !== id || need < 40 || cut >= 300) continue;
@@ -317,7 +409,7 @@ function rowHTML(meal, it, d, ov) {
 function mealSum(meal, k) {
   const d = peek(k); let pk = 0, pp = 0, ek = 0, ep = 0, n = 0, ok = 0;
   itemsOf(meal, k).forEach(it => { if (it.optional) return; n++; pk += it.k; pp += it.p; const s = stOf(d, meal, it);
-    if (s) ok++; if (s && s.s !== 'skip') { ek += s.k ?? it.k; ep += s.p ?? it.p; } });
+    if (s) ok++; if (s) { const a = ateOf(it, s); ek += a.k; ep += a.p; } });
   (d.extras || []).forEach(e => { if (e.meal === meal.id && !e.pl) { ek += e.k; ep += e.p; } });
   return { pk, pp, ek, ep, n, ok };
 }
@@ -330,7 +422,9 @@ function mealPanel(meal, k, A, st) {
   if (note) h += `<button class="mnote" data-act="note" data-meal="${meal.id}">${ic('pen')}<span>${esc(note)}</span></button>`;
   if (meal.modes) h += `<div class="seg">${meal.modes.map((m, i) => `<button class="${(d.mode[meal.id] || 0) === i ? 'on' : ''}" data-act="mode" data-meal="${meal.id}" data-i="${i}">${m}</button>`).join('')}</div>`;
   h += itemsOf(meal, k).map(it => rowHTML(meal, it, d, A.over[meal.id + '.' + it.id])).join('');
-  h += A.adds.filter(a => a.meal === meal.id).map(a => `<div class="row ${a.xi >= 0 ? 'done' : 'plus'}" data-act="add" data-i="${A.adds.indexOf(a)}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(a.name)}</span><span class="m">${A.why}</span></span></div>`).join('');
+  /* Telafi önerisi: dokununca kabul edilir; sağdaki çarpı "gerek yok" der, satır üstü çizili kalır, dokununca geri gelir. */
+  h += A.adds.filter(a => a.meal === meal.id).map(a => { const i = A.adds.indexOf(a), on = a.xi >= 0, no = !on && a.off;
+    return `<div class="row ${on ? 'done' : no ? 'skip' : 'plus'}" data-act="add" data-i="${i}"><span class="chk">${ic(no ? 'dash' : 'check')}</span><span class="b"><span class="n">${esc(a.name)}</span><span class="m">${esc(no ? 'Gerek yok dedin' : a.why || 'Eksik kalanı dengelemek için')}</span></span>${on || no ? '' : `<button class="amt dot" data-act="noadj" data-i="${i}" aria-label="Gerek yok">${ic('x')}</button>`}</div>`; }).join('');
   h += (d.extras || []).map((e, i) => e.meal !== meal.id || (e.adj && A.adds.some(a => a.xi === i)) ? '' : `<div class="row ${e.pl ? '' : 'done'}" data-act="${e.adj ? 'unextra' : 'xedit'}" data-i="${i}"><span class="chk">${ic('check')}</span><span class="b"><span class="n">${esc(e.name)}</span><span class="m">${e.adj ? 'Telafi' : e.pl ? 'Planlandı' : 'Plan dışı'}${KC ? ` · yaklaşık ${num(e.k)} kcal` : ''}</span></span></div>`).join('');
   const sups = meal.time ? supList(meal.id) : [], left = supLeft(meal, k).length;
   if (sups.length) h += `<p class="rsect">Takviye · öğünden sonra</p>` + sups.map(s => supRow(s, k)).join('');
@@ -359,7 +453,7 @@ function mealEvent(meal, k, A, next, open) {
   const cls = wait.length ? '' : done ? (allSkip ? 'skipd' : 'done') : isNow ? 'now' : '';
   let sub = pl ? 'Planlandı · ' + ate.filter(e => e.pl).map(e => e.name).join(' · ')
     : st.resolved ? (allSkip ? 'Atlandı' : st.skip === st.total ? ate.map(e => e.name).join(' · ') : st.skip ? `${st.ok} / ${st.total} kalem` : 'Tamam')
-    : itemsOf(meal, k).filter(i => !i.optional).map(short).join(' · ') + (A.adds.some(a => a.meal === meal.id) ? ' · + telafi' : '');
+    : itemsOf(meal, k).filter(i => !i.optional).map(short).join(' · ') + (A.adds.some(a => a.meal === meal.id && (a.xi >= 0 || !a.off)) ? ' · + telafi' : '');
   if (wait.length) sub = 'Takviye bekliyor · ' + wait.map(s => s.n).join(' · ');
   let right = meal.time ? `<span class="t">${timeOf(meal, k)}</span>` : '';
   if (open === meal.id && !st.resolved && !pl) sub = st.ok + st.skip ? `${st.ok + st.skip} / ${st.total} tamam` : itemsOf(meal, k).filter(i => !i.optional).length + ' kalem';
@@ -706,7 +800,11 @@ function openSheet(id) {
 }
 /* Seçili seçeneğin ölçeksiz metni ve ayrıştırılmış miktarı. */
 const itBase = (it, c) => c.t === 'opt' ? (it.opts ? it.opts[c.i] : it.name) : c.t === 'sub' ? it.subs[c.i] : c.t === 'sugg' ? it.sugg[c.i] : c.t === 'lib' ? c.x.n : c.text;
-const itVal = (it, c, q) => c.t === 'lib' ? { k: Math.round(c.x.k * q), p: r1(c.x.p * q) } : { k: Math.round(it.k * q), p: r1(it.p * q) };
+/* Yenen değer: kütüphaneden seçilen kendi değeriyle, yazılan addan tahminle (tanınmazsa planınki), gerisi planın değeriyle. */
+function itVal(it, c, q) {
+  const g = c.t === 'lib' ? c.x : c.t === 'txt' && guess(c.text) || it;
+  return { k: Math.round(g.k * q), p: r1(g.p * q) };
+}
 function itemSheet() {
   const [meal, it] = findItem(IT.id), st = peek(sel).items[IT.id], s = st ? st.s : ''; sheet = IT.id;
   const c = IT.c, base = itBase(it, c), pa = c.t === 'lib' ? null : parseAmt(base), V = itVal(it, c, IT.q), P = itemView(it, null);
@@ -737,7 +835,7 @@ function itApply(A) {
   if (c.t === 'opt') { const o = A.over[IT.id]; d.items[IT.id] = q === 1 && !c.i && o ? { s: 'done', name: o.name, k: o.k, p: o.p } : { s: 'done', ...(c.i ? { o: c.i } : {}), ...sc }; }
   else if (c.t === 'sub' || c.t === 'sugg') { const b = itBase(it, c); d.items[IT.id] = { s: 'swap', sub: scaleText(b, q), base: b, ...(c.t === 'sub' ? { alt: 1 } : {}), ...sc }; }
   else if (c.t === 'lib') d.items[IT.id] = { s: 'swap', sub: q === 1 ? c.x.n : `${c.x.n} × ${qLab(q)}`, k: V.k, p: V.p, q, src: { n: c.x.n, k: c.x.k, p: c.x.p, u: c.x.u || '' } };
-  else d.items[IT.id] = { s: 'swap', sub: scaleText(c.text, q), base: c.text, ...sc };
+  else d.items[IT.id] = { s: 'swap', sub: scaleText(c.text, q), base: c.text, ...(q === 1 ? {} : { q }), k: V.k, p: V.p };
 }
 /* Kod ya da anahtar girilince yarım kalan iş (ör. programı aktarma) kaldığı yerden sürer. */
 let afterKey = null;
@@ -1346,7 +1444,7 @@ function dumpItem(m, it, s, k) {
   if (!s) return it.optional ? '' : `<li class="un"><span>${esc(plan)}</span><em>işaretlenmedi</em></li>`;
   if (s.s === 'skip') return `<li class="sk"><span>${esc(plan)}</span><em>${s.pl ? 'yerine başka şey planlandı' : 'atlandı'}</em></li>`;
   const tag = s.s === 'swap' ? `${plan} yerine` : s.q && s.q !== 1 ? `planda ${itemView(it, null).amt || '1 porsiyon'}` : s.name ? 'azaltılmış porsiyon' : '';
-  return `<li><span>${esc(viewText(it, s))}</span>${tag ? `<em>${esc(tag)}</em>` : ''}${KC && (s.k ?? it.k) ? `<b>${num(s.k ?? it.k)}</b>` : ''}</li>`;
+  return `<li><span>${esc(viewText(it, s))}</span>${tag ? `<em>${esc(tag)}</em>` : ''}${KC && ateOf(it, s).k ? `<b>${num(ateOf(it, s).k)}</b>` : ''}</li>`;
 }
 function dumpDay(k) {
   const d = peek(k), B = balance(k), sc = dayScore(k), w = S.weights.find(x => x.d === k), W = WORKOUTS[parse(k).getDay()];
@@ -1588,7 +1686,7 @@ function dayContext() {
       return `  - ${s.name || (s.q || s.o ? viewText(it, s) : nm)}: yendi${s.q && s.q !== 1 ? ` (planda ${itemView(it, null).amt || '1 porsiyon'})` : ''}`; });
     if ((d.notes || {})[m.id]) rows.push(`  - kullanıcının notu: ${d.notes[m.id]}`);
     (d.extras || []).filter(e => e.meal === m.id).forEach(e => rows.push(`  - ${e.adj ? 'telafi' : e.pl ? 'planlandı, henüz yenmedi' : 'plan dışı'}: ${e.name} · ${num(e.k)} kcal, ${num(e.p)} g protein`));
-    A.adds.filter(a => a.meal === m.id && a.xi < 0).forEach(a => rows.push(`  - uygulamanın telafi önerisi: ${a.name} · ${a.k} kcal`));
+    A.adds.filter(a => a.meal === m.id && a.xi < 0).forEach(a => rows.push(`  - uygulamanın telafi önerisi${a.off ? ' (kullanıcı gerek yok dedi)' : ''}: ${a.name} · ${a.k} kcal${a.why ? ' · neden: ' + a.why : ''}`));
     lines.push(head, ...rows);
   });
   lines.push(`Planın günlük toplamı: ${num(B.tk)} kcal, ${num(B.tp)} g protein.`,
@@ -1731,7 +1829,10 @@ document.addEventListener('click', e => {
     case 'toggle': { const id = el.dataset.id, m = MEALS.find(x => x.id === id.split('.')[0]);
       if (d.items[id]) delete d.items[id]; else { lockMain(sel, m); d.items[id] = eaten(id); }
       if (mealStat(m, sel).resolved && m.time) delete openEv[sel]; buzz(); break; }
-    case 'add': { const x = A.adds[+el.dataset.i]; if (x.xi >= 0) d.extras.splice(x.xi, 1); else { const { xi, ...keep } = x; d.extras.push({ ...keep, adj: true }); } buzz(); break; }
+    case 'add': { const x = A.adds[+el.dataset.i]; if (x.xi >= 0) d.extras.splice(x.xi, 1);
+      else if (x.off) { delete d.noadj[x.id]; if (!Object.keys(d.noadj).length) delete d.noadj; }
+      else { const { xi, why, off, ...keep } = x; d.extras.push({ ...keep, adj: true }); } buzz(); break; }
+    case 'noadj': (d.noadj || (d.noadj = {}))[A.adds[+el.dataset.i].id] = 1; buzz(); break;
     case 'unextra': d.extras.splice(+el.dataset.i, 1); break;
     case 'xedit': xOpen(+el.dataset.i); return;
     case 'xq': xSync(); XE.q = +el.dataset.v; xSheet(); buzz(); return;
@@ -1799,7 +1900,7 @@ document.addEventListener('click', e => {
     case 'actno': { const m = (curChat() || { m: [] }).m[+el.dataset.i]; if (!m || chatBusy || m.ast) return; m.ast = 'no'; chatsSave(); break; }
     case 'chatnew': if (chatBusy) return; CUR = null; chatErr = ''; closeSheet(); tab = 'chat'; render(); window.scrollTo(0, 0); { const t = document.getElementById('said2'); t && t.focus(); } return;
     case 'close': closeSheet(); return;
-    case 'all': lockMain(sel, meal); A.adds.filter(x => x.meal === meal.id && x.xi < 0).forEach(({ xi, ...x }) => d.extras.push({ ...x, adj: true }));
+    case 'all': lockMain(sel, meal); A.adds.filter(x => x.meal === meal.id && x.xi < 0 && !x.off).forEach(({ xi, why, off, ...x }) => d.extras.push({ ...x, adj: true }));
       setAll(meal, (c, i, k) => c || (i.optional ? null : eaten(k))); if (supLeft(meal, sel).length) openEv[sel] = meal.id; else delete openEv[sel]; buzz(); break;
     case 'skipmeal': lockMain(sel, meal); setAll(meal, (c, i) => i.optional ? null : { s: 'skip' }); delete openEv[sel]; break;
     case 'clear': setAll(meal, () => null); d.extras = d.extras.filter(x => x.meal !== meal.id); openEv[sel] = meal.id; break;
