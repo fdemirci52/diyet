@@ -9,15 +9,93 @@ struct SofraGallery: View {
         TabView {
             DemoToday().tabItem { Label("Bugün", systemImage: "checkmark.circle") }
             DemoWeek().tabItem { Label("Hafta", systemImage: "chart.bar") }
-            placeholder("Asistan").tabItem { Label("Asistan", systemImage: "bubble.left") }
+            DemoChat().tabItem { Label("Asistan", systemImage: "bubble.left") }
             DemoProgress().tabItem { Label("İlerleme", systemImage: "square.grid.3x3") }
             DemoProgram().tabItem { Label("Program", systemImage: "list.bullet") }
         }
         .tint(Theme.Palette.fg)
         .preferredColorScheme(theme == "light" ? .light : theme == "dark" ? .dark : nil)
     }
-    private func placeholder(_ t: String) -> some View {
-        ZStack { Theme.Palette.bg.ignoresSafeArea(); Text("\(t) henüz çizilmedi").font(Theme.Typo.secondary).foregroundStyle(Theme.Palette.muted) }
+}
+
+// MARK: - Asistan
+
+/// Örnek sohbet: cevaplar hazır metin, sözcük sözcük akar; gerçek çağrı yok.
+struct DemoChat: View {
+    @State private var messages: [ChatMessage] = DemoData.chat
+    @State private var title = "Galeta yerine ne olur"
+    @State private var draft = ""
+    @State private var history = false
+    @State private var chats = DemoData.chats
+    @State private var stream: Task<Void, Never>?
+    @FocusState private var focused: Bool
+    private var busy: Bool { messages.last?.streaming == true }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Space.x5) {
+                    if messages.isEmpty {
+                        ChatEmptyState(prompts: ["Bugün ne kadar proteinim kaldı?", "Akşam dışarıda yiyeceğim, ne seçeyim?", "Su hedefimi 12 bardak yap"]) { send($0) }
+                            .padding(.top, Theme.Space.x2)
+                    }
+                    ForEach(messages) { m in
+                        ChatMessageView(message: m, onApply: { setAction(m.id, .done) }, onDecline: { setAction(m.id, .declined) },
+                                        onCopy: { UIPasteboard.general.string = m.text })
+                    }
+                    Color.clear.frame(height: 1).id("end")
+                }
+                .padding(.horizontal, Theme.Space.page).padding(.top, Theme.Space.x2).padding(.bottom, Theme.Space.x4)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .defaultScrollAnchor(.bottom)
+            .onChange(of: messages.last?.text) { proxy.scrollTo("end", anchor: .bottom) }
+            .onChange(of: focused) { if focused { proxy.scrollTo("end", anchor: .bottom) } }
+        }
+        .background(Theme.Palette.bg.ignoresSafeArea())
+        .safeAreaInset(edge: .top, spacing: 0) {
+            ChatTopBar(title: messages.isEmpty ? "Yeni sohbet" : title, onHistory: { history = true }, onNew: { stop(); messages = []; title = "Yeni sohbet" })
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            ChatComposer(text: $draft, busy: busy, focus: $focused, onSend: { send(draft) }, onStop: stop)
+        }
+        .sheet(isPresented: $history) {
+            ChatHistorySheet(chats: chats, current: "c1", onOpen: { _ in history = false; messages = DemoData.chat; title = "Galeta yerine ne olur" },
+                             onDelete: { id in chats.removeAll { $0.id == id } })
+        }
+    }
+
+    private func setAction(_ id: UUID, _ s: ChatAction.State) {
+        guard let i = messages.firstIndex(where: { $0.id == id }) else { return }
+        withAnimation(Theme.Motion.settle) { messages[i].action?.state = s }
+    }
+    private func stop() {
+        stream?.cancel()
+        if let i = messages.indices.last, messages[i].streaming { messages[i].streaming = false }
+    }
+    private func send(_ raw: String) {
+        let q = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty, !busy else { return }
+        if messages.isEmpty { title = String(q.prefix(28)) }
+        draft = ""
+        let water = q.lowercased(with: Locale(identifier: "tr_TR")).contains("su hedef")
+        let full = water ? "Su hedefini 12 bardağa çıkarabilirim. Onaylarsan Bugün ekranındaki kadran da 3 litreye göre dolar."
+                         : "Bugün **94 g** protein aldın, hedefe **54 g** kaldı. Akşam ve gece öğünü planlandığı gibi giderse yaklaşık 77 g daha gelir, yani hedefi geçersin.\n- Akşam: balık 250 g, yoğurt, ekmek\n- Gece: protein süt ve kabak çekirdeği\nEk bir şey yemene gerek yok."
+        messages.append(ChatMessage(role: .user, text: q))
+        var reply = ChatMessage(role: .assistant, text: "", streaming: true)
+        if water { reply.action = ChatAction(lines: ["Su hedefi: 10 → 12 bardak"]) }
+        else { reply.foods = [DemoData.t("c-balik", "Balık", "250 g", "levrek-izgara", caption: "40 g protein"), DemoData.t("c-psut", "Protein süt", "1 bardak", "protein-sut", caption: "22 g protein")] }
+        messages.append(reply)
+        let id = reply.id
+        stream = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            for w in full.split(separator: " ", omittingEmptySubsequences: false) {
+                guard !Task.isCancelled, let i = messages.firstIndex(where: { $0.id == id }) else { return }
+                messages[i].text += (messages[i].text.isEmpty ? "" : " ") + w
+                try? await Task.sleep(for: .milliseconds(45))
+            }
+            if let i = messages.firstIndex(where: { $0.id == id }) { messages[i].streaming = false }
+        }
     }
 }
 
@@ -397,6 +475,19 @@ enum DemoData {
         .init(id: "yumurta", name: "Yumurta", icon: "haslanmis-yumurta", count: 27), .init(id: "salata", name: "Salata", icon: "yesil-salata", count: 26),
         .init(id: "peynir", name: "Peynir", icon: "beyaz-peynir", count: 24), .init(id: "kofte", name: "Izgara köfte", icon: "izgara-kofte", count: 11),
         .init(id: "tavuk", name: "Tavuk", icon: "izgara-tavuk-gogsu", count: 9), .init(id: "balik", name: "Balık", icon: "levrek-izgara", count: 8),
+    ]
+    static let chat: [ChatMessage] = [
+        ChatMessage(role: .user, text: "İkindide galeta yerine ne yiyebilirim?"),
+        ChatMessage(role: .assistant, text: "Programda galetanın iki muadili var; ikisi de aynı değişim, **yaklaşık 100 kcal**.\n- Antrenman günü olduğu için karbonhidratı atlamamak iyi olur.\n- Protein bar seçeneği de programda var ama o zaman meyveyi de bırakırsın.",
+                    foods: [t("c1", "Leblebi", "½ çay bardağı", "leblebi"), t("c2", "Pirinç patlağı", "2 adet", "pirinc-patlagi"), t("c3", "Protein bar", "1 adet", "protein-bar", caption: "meyve yerine de")]),
+        ChatMessage(role: .user, text: "Akşam öğününü 19:30'a al"),
+        ChatMessage(role: .assistant, text: "Akşam öğününü hafta içi 19:30'a alabilirim. Gece öğünü 21:00'de kalır.",
+                    action: ChatAction(lines: ["Akşam, hafta içi: 20:00 → 19:30"])),
+    ]
+    static let chats: [ChatSummary] = [
+        .init(id: "c1", title: "Galeta yerine ne olur", group: "Bugün", count: 4), .init(id: "c2", title: "Dışarıda akşam yemeği", group: "Dün", count: 6),
+        .init(id: "c3", title: "Kreatin ne zaman alınır", group: "Bu hafta", count: 2), .init(id: "c4", title: "Yulaf yerine ne olur", group: "Bu hafta", count: 8),
+        .init(id: "c5", title: "Hafta sonu saatleri", group: "Daha eski", count: 3),
     ]
     static let planMeals: [PlanMealsCard.Meal] = {
         let side = [t("y", "Yoğurt", "3-4 yk", "yogurt"), t("e", "Ekmek", "2 dilim", "tam-bugday-ekmegi"), t("s", "Salata", "1 porsiyon", "yesil-salata")]
