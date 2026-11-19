@@ -4,15 +4,17 @@ import SwiftUI
 /// Bileşenlerin bir arada, dokunulabilir örneği: beş sekmeli kabuk, Bugün ve Hafta. Veri plan.js'teki Çarşamba günü,
 /// gün ortası (14:10). Gerçek ekran DiyetKit'e bağlanınca bu dosya yalnızca önizleme için kalır (DEBUG).
 struct SofraGallery: View {
+    @AppStorage("diyet-theme") private var theme = ""
     var body: some View {
         TabView {
             DemoToday().tabItem { Label("Bugün", systemImage: "checkmark.circle") }
             DemoWeek().tabItem { Label("Hafta", systemImage: "chart.bar") }
             placeholder("Asistan").tabItem { Label("Asistan", systemImage: "bubble.left") }
             DemoProgress().tabItem { Label("İlerleme", systemImage: "square.grid.3x3") }
-            placeholder("Program").tabItem { Label("Program", systemImage: "list.bullet") }
+            DemoProgram().tabItem { Label("Program", systemImage: "list.bullet") }
         }
         .tint(Theme.Palette.fg)
+        .preferredColorScheme(theme == "light" ? .light : theme == "dark" ? .dark : nil)
     }
     private func placeholder(_ t: String) -> some View {
         ZStack { Theme.Palette.bg.ignoresSafeArea(); Text("\(t) henüz çizilmedi").font(Theme.Typo.secondary).foregroundStyle(Theme.Palette.muted) }
@@ -245,6 +247,90 @@ struct DemoProgress: View {
     }
 }
 
+// MARK: - Program
+
+struct DemoProgram: View {
+    enum Page: String, Hashable { case kurallar, saatler, muadil, gidalar, takviye, gorunum, antrenman, vucut, ai, baglanti, veri }
+    @AppStorage("diyet-theme") private var theme = ""
+    @State private var path: [Page] = []
+    private let rows: [(Page, String, String, String)] = [
+        (.kurallar, "list.bullet", "Kurallar", "9 madde"), (.saatler, "clock", "Öğün saatleri", "Hafta içi ve hafta sonu"),
+        (.muadil, "arrow.left.arrow.right", "Muadiller", "Neyin yerine ne yenir"), (.gidalar, "fork.knife", "Gıdalarım", "Kendi ürünlerin"),
+        (.takviye, "pills", "Takviyeler", "Ne zaman alacağını hatırlat"), (.antrenman, "dumbbell", "Antrenman", "Pzt üst, Çar alt, Cum full body"),
+        (.vucut, "figure.stand", "Vücut analizi", "13 Kasım ölçümü"), (.gorunum, "sun.max", "Görünüm", ""),
+        (.ai, "bubble.left", "Yapay zekâ", "Davet kodu gerekli"), (.baglanti, "link", "Program bağlantısı", "Yükle ya da paylaş"), (.veri, "arrow.down.to.line", "Yedek", "İndir ya da geri yükle"),
+    ]
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Diyetisyen programı, 13 Kasım").font(Theme.Typo.secondary).foregroundStyle(Theme.Palette.muted)
+                        Text("Program").font(Theme.Typo.title).foregroundStyle(Theme.Palette.fg)
+                    }
+                    .padding(.horizontal, Theme.Space.x1).padding(.bottom, Theme.Space.x4)
+
+                    GoalCard(value: "85", text: "Göbeksiz, kas ağırlıklı. Önce yağ ver, sonra kaloriyi artırıp tırman.",
+                             stats: [.init(title: "Şu an", value: "83,9", unit: "kg", note: "%14,5 yağ"), .init(title: "Günlük plan", value: "2.160", unit: "kcal", note: "148 g protein")])
+
+                    SectionTitle("Günlük program")
+                    PlanMealsCard(meals: DemoData.planMeals)
+                    Text("Öğle ve akşamın ana yemeği gün gün değişir; haftalık dağılım Hafta sekmesinde.").font(Theme.Typo.caption).foregroundStyle(Theme.Palette.muted)
+                        .padding(.horizontal, Theme.Space.x1).padding(.top, Theme.Space.x2)
+
+                    SectionTitle("Program ve ayarlar")
+                    RowsCard {
+                        ForEach(rows, id: \.0) { r in
+                            NavigationLink(value: r.0) {
+                                NavRow(symbol: r.1, title: r.2, subtitle: r.0 == .gorunum ? (theme == "light" ? "Açık" : theme == "dark" ? "Koyu" : "Sistemle aynı") : r.3)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    Text("Kalori ve protein değerleri yaklaşık tahminlerdir.").font(Theme.Typo.caption).foregroundStyle(Theme.Palette.muted)
+                        .padding(.horizontal, Theme.Space.x1).padding(.top, Theme.Space.x2)
+                }
+                .padding(.horizontal, Theme.Space.page).padding(.top, Theme.Space.x2).padding(.bottom, Theme.Space.x8)
+            }
+            .background(Theme.Palette.bg.ignoresSafeArea())
+            .navigationTitle("Program")   // çubuk gizli; alt ekranın geri düğmesi bu adı taşır
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: Page.self) { page($0) }
+        }
+    }
+
+    @ViewBuilder private func page(_ p: Page) -> some View {
+        switch p {
+        case .kurallar:
+            DetailPage(title: "Kurallar", lead: "Diyetisyenin notları.") { ProseCard(rows: DemoData.rules) }
+        case .saatler:
+            DetailPage(title: "Öğün saatleri", lead: "Hafta sonu saatleri kendiliğinden uygulanır.") {
+                SectionTitle("Hafta içi")
+                LedgerCard(rows: [.init(title: "Kahvaltı", value: "11:00"), .init(title: "Öğle", value: "14:00"), .init(title: "İkindi", value: "16:00"), .init(title: "Akşam", value: "20:00"), .init(title: "Gece", value: "21:00")])
+                SectionTitle("Hafta sonu")
+                LedgerCard(rows: [.init(title: "Kahvaltı", value: "10:00"), .init(title: "Öğle", value: "14:00"), .init(title: "İkindi", value: "16:30"), .init(title: "Akşam", value: "19:00"), .init(title: "Gece", value: "21:00")])
+            }
+        case .muadil:
+            DetailPage(title: "Muadiller", lead: "Aynı grup içinde değişim programı bozmaz. Yaklaşık eşdeğerlerdir; diyetisyenin onayladıklarını kullan.") {
+                ForEach(DemoData.swaps) { SwapGroupCard(group: $0) }
+            }
+        case .antrenman:
+            DetailPage(title: "Antrenman", lead: "Haftada üç gün, akşam 18:00-19:00.") {
+                ForEach(DemoData.workouts) { WorkoutCard(workout: $0, isToday: $0.day == "Çarşamba") }
+            }
+        case .vucut:
+            DetailPage(title: "Vücut analizi", lead: "13 Kasım 2026 ölçümü.") { LedgerCard(rows: DemoData.body) }
+        case .gorunum:
+            DetailPage(title: "Görünüm", lead: "Açık ya da koyu tema. Sistemle aynı seçiliyken telefonun ayarını izler.") {
+                ChoiceCard(options: [("", "Sistemle aynı"), ("light", "Açık"), ("dark", "Koyu")], selection: $theme)
+            }
+        default:
+            DetailPage(title: rows.first { $0.0 == p }?.2 ?? "", lead: "Bu ekran henüz çizilmedi.") { EmptyView() }
+        }
+    }
+}
+
 // MARK: - Örnek veri (plan.js, PLAN_DEFAULT)
 
 enum DemoData {
@@ -302,7 +388,8 @@ enum DemoData {
         }
     }()
     static let weights: [WeightEntry] = {
-        let kg: [(Int, Int, Double)] = [(9, 14, 94.2), (9, 21, 93.6), (9, 28, 93.1), (10, 5, 92.8), (10, 12, 92.1), (10, 19, 92.3), (10, 26, 91.4), (11, 2, 91.2), (11, 9, 90.9), (11, 16, 90.6)]
+        // Önce yağ veriliyor (plan.js: 13 Kasım'da 83,9 kg), hedef sonra kasla 85 kg.
+        let kg: [(Int, Int, Double)] = [(9, 14, 86.4), (9, 21, 86.0), (9, 28, 85.7), (10, 5, 85.5), (10, 12, 85.0), (10, 19, 85.1), (10, 26, 84.6), (11, 2, 84.4), (11, 9, 84.1), (11, 13, 83.9)]
         return kg.map { WeightEntry(date: Calendar.current.date(from: DateComponents(year: 2026, month: $0.0, day: $0.1))!, kg: $0.2) }
     }()
     static let top: [TopFoodsCard.Item] = [
@@ -311,6 +398,50 @@ enum DemoData {
         .init(id: "peynir", name: "Peynir", icon: "beyaz-peynir", count: 24), .init(id: "kofte", name: "Izgara köfte", icon: "izgara-kofte", count: 11),
         .init(id: "tavuk", name: "Tavuk", icon: "izgara-tavuk-gogsu", count: 9), .init(id: "balik", name: "Balık", icon: "levrek-izgara", count: 8),
     ]
+    static let planMeals: [PlanMealsCard.Meal] = {
+        let side = [t("y", "Yoğurt", "3-4 yk", "yogurt"), t("e", "Ekmek", "2 dilim", "tam-bugday-ekmegi"), t("s", "Salata", "1 porsiyon", "yesil-salata")]
+        return [
+            .init(id: "uyaninca", title: "Uyanınca", time: "", plates: [t("su", "Ilık limonlu su", "2 bardak", "limonlu-su")], note: "2 bardak ılık limonlu su"),
+            .init(id: "kahvalti", title: "Kahvaltı", time: "11:00", plates: meals[0].items.map { var x = $0; x.state = .pending; return x }),
+            .init(id: "ogle", title: "Öğle", time: "14:00", plates: side, note: "+ günün ana yemeği"),
+            .init(id: "ikindi", title: "İkindi", time: "16:00", plates: meals[2].items + [t("bar", "Protein bar", "1 adet", "protein-bar")], note: "ya da protein bar"),
+            .init(id: "aksam", title: "Akşam", time: "20:00", plates: side, note: "+ günün ana yemeği"),
+            .init(id: "gece", title: "Gece", time: "21:00", plates: meals[4].items),
+        ]
+    }()
+    static let rules: [ProseCard.Row] = [
+        .init(title: "Çay açık ve şekersiz", note: "Yemekten en az 40 dk sonra; demir emilimini bozmasın diye"),
+        .init(title: "Kahve günde en fazla 2 fincan", note: "Sade; her fincanla birlikte 2 bardak su"),
+        .init(title: "Ara öğün atlama"), .init(title: "Ekmekleri eksik yeme"),
+        .init(title: "Bir öğün sebze, diğer öğün et ya da kurubaklagil", note: "Öğle ve akşam haftada en çok 2 gün yer değiştirebilir"),
+        .init(title: "Her gün tartılma"), .init(title: "Günde 2-2,5 litre su"),
+        .init(title: "Haftada 3 gün 45 dk yürüyüş", note: "veya 5K / 3 mil Leslie"), .init(title: "Yazanları ne eksik ne fazla ye"),
+    ]
+    static let swaps: [SwapGroupCard.Group] = [
+        .init(base: t("s-ekmek", "Tam buğday ekmeği", "2 dilim, 50 g", "tam-bugday-ekmegi"), alts: [
+            t("s1", "Yulaf ezmesi", "4 yk", "yulaf-ezmesi"), t("s2", "Bulgur pilavı", "6 yk", "bulgur-pilavi"), t("s3", "Tam buğday makarna", "6 yk", "tam-bugday-makarna"),
+            t("s4", "Haşlanmış patates", "1 orta boy", "haslanmis-patates"), t("s5", "Tam buğday lavaş", "1 küçük", "lavas")]),
+        .init(base: t("s-et", "Et, tavuk ya da balık", "30 g", "izgara-tavuk-gogsu"), alts: [
+            t("e1", "Köfte", "1 adet", "izgara-kofte"), t("e2", "Yumurta", "1 adet", "haslanmis-yumurta"), t("e3", "Peynir", "1 dilim", "beyaz-peynir"), t("e4", "Lor", "2 yk", "lor")]),
+        .init(base: t("s-yogurt", "Yoğurt", "3-4 yk", "yogurt"), alts: [t("y1", "Ayran", "1 bardak", "ayran"), t("y2", "Kefir", "1 çay bardağı", "kefir"), t("y3", "Cacık", "1 küçük kase", "cacik")]),
+        .init(base: t("s-yag", "Sıvıyağ", "1 tatlı kaşığı", "zeytinyagi"), alts: [t("g1", "Zeytin", "5-6 adet", "zeytin"), t("g2", "Ceviz içi", "2 adet", "ceviz"), t("g3", "Badem ya da fındık", "6 adet", "badem")]),
+        .init(base: t("s-meyve", "Meyve", "1 porsiyon", "elma"), alts: [
+            t("m1", "Elma", "1 küçük", "elma"), t("m2", "Portakal", "1 adet", "portakal"), t("m3", "Mandalina", "2 adet", "mandalina"), t("m4", "Muz", "1 küçük", "muz"), t("m5", "Çilek", "10-12 adet", "cilek")]),
+        .init(base: t("s-psut", "Protein süt", "1 bardak", "protein-sut"), alts: [t("p1", "Quark", "1 kutu", "quark"), t("p2", "Skyr", "200 g", "skyr"), t("p3", "Whey", "1 ölçü", "protein-shake")]),
+    ]
+    static let workouts: [WorkoutCard.Workout] = {
+        func m(_ a: [(String, String)]) -> [LedgerCard.Row] { a.map { .init(title: $0.0, value: $0.1) } }
+        return [
+            .init(day: "Pazartesi", name: "Üst", pre: "İp 6 dk: 60 sn rahat tempo, 30 sn dinlenme, 4 tur", post: "10-15 dk Zone 2, bisiklet ya da %5-10 eğimli yürüyüş",
+                  moves: m([("Bench", "3×5-8"), ("Ağırlıklı barfiks", "3×5-8"), ("OHP", "2×6-10"), ("Row", "3×8-10"), ("Peck Deck", "2×10-15"), ("Hammer Curl", "2×8-12"), ("Lateral Raise", "3×12-20")])),
+            .init(day: "Çarşamba", name: "Alt", pre: "İp yok; istersen 2 dk çok rahat ısınma", post: "8-10 dk çok hafif bisiklet, koşu yok",
+                  moves: m([("Zercher Squat", "3×5-8"), ("RDL", "3×6-10"), ("Bulgarian Split Squat", "2×8-12"), ("Leg Curl", "2×10-15"), ("Calf Raise", "3×12-20"), ("Boyun 4 yön", "1×15-20"), ("Ab Roller", "2×8-15")])),
+            .init(day: "Cuma", name: "Full body", pre: "İp: 90 sn orta tempo, 60 sn dinlenme, 3 tur", post: "10-15 dk Zone 2, tercihen bisiklet; sert koşu ya da interval yok",
+                  moves: m([("Barbell Squat", "3×5"), ("Paused Bench", "2×6-8"), ("Weighted Dips", "3×6-10"), ("Lat Pulldown", "3×8-12"), ("Leg Curl", "2×10-15"), ("Face Pull", "2×15-20"), ("Lateral Raise", "2×12-20")])),
+        ]
+    }()
+    static let body: [LedgerCard.Row] = [("Kilo", "83,9 kg"), ("Boy", "188 cm"), ("BMI", "23,7"), ("Yağ", "%14,5, 12,2 kg"), ("Kas", "68,2 kg"), ("İç yağlanma", "3 (1-13)"),
+        ("Bazal metabolizma", "2.093 kcal"), ("Metabolik yaş", "24"), ("Bel", "86 cm"), ("Fit puanı", "95 / 100")].map { .init(title: $0.0, value: $0.1) }
     /// plan.js rota: öğle ve akşam ana yemekleri, Pazartesi'den Pazar'a. Kurubaklagilin ikonu yok.
     static let week: [WeekMainsCard.Day] = {
         let names = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"], labels = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
