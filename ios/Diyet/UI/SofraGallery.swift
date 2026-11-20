@@ -123,6 +123,8 @@ struct DemoToday: View {
     @State private var walk = false
     @State private var sheet: ItemSheetModel?
     @State private var menuFor: String?
+    @State private var quickFor: String?
+    @State private var extra: [String: (Int, Int)] = [:]
     @State private var foldTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let nowID = "ogle"
@@ -174,7 +176,22 @@ struct DemoToday: View {
         .sheet(item: $sheet) { s in
             ItemSheet(model: s, onEat: { pick, q in apply(s, pick: pick, q: q); sheet = nil }, onSkip: { setState(s.mealID, s.item.id, .skipped); sheet = nil })
         }
+        .sheet(isPresented: Binding(get: { quickFor != nil }, set: { if !$0 { quickFor = nil } })) {
+            let mid = quickFor ?? ""
+            QuickAddSheet(mealTitle: meals.first { $0.id == mid }?.title ?? "", foods: DemoData.foods) { picks in
+                guard let i = meals.firstIndex(where: { $0.id == mid }) else { return }
+                for p in picks {
+                    let id = "x-\(mid)-\(p.food.id)-\(meals[i].items.count)"
+                    extra[id] = (Int((Double(p.food.kcal) * p.portion).rounded()), Int((p.food.protein * p.portion).rounded()))
+                    var tile = DemoData.t(id, p.food.name, p.portion == 1 ? String(p.food.unit.split(separator: ",")[0]) : "\(PortionStepper.text(p.portion)) porsiyon", p.food.icon, .eaten, caption: "Plan dışı")
+                    tile.amountChanged = p.portion != 1
+                    meals[i].items.append(tile)
+                }
+                quickFor = nil
+            }
+        }
         .confirmationDialog(meals.first { $0.id == menuFor }?.title ?? "", isPresented: Binding(get: { menuFor != nil }, set: { if !$0 { menuFor = nil } }), titleVisibility: .visible) {
+            if let id = menuFor { Button("Başka bir şey ekle") { quickFor = id } }
             Button("Fotoğrafla kaydet") {}
             Button("Yazarak kaydet") {}
             Button("Not ekle") {}
@@ -187,7 +204,7 @@ struct DemoToday: View {
 
     private var dials: some View {
         var k = 0, p = 0
-        for m in meals { for t in m.all where t.state == .eaten { k += DemoData.values[t.id]?.0 ?? 0; p += DemoData.values[t.id]?.1 ?? 0 } }
+        for m in meals { for t in m.all where t.state == .eaten { let v = DemoData.values[t.id] ?? extra[t.id] ?? (0, 0); k += v.0; p += v.1 } }
         let litres = Double(water) * 0.25
         return DialRow {
             DialCard(title: "Kalori", value: k.formatted(.number.locale(tr)), target: "/ 2.160 kcal", progress: Double(k) / 2160)
@@ -331,6 +348,7 @@ struct DemoProgram: View {
     enum Page: String, Hashable { case kurallar, saatler, muadil, gidalar, takviye, gorunum, antrenman, vucut, ai, baglanti, veri }
     @AppStorage("diyet-theme") private var theme = ""
     @State private var path: [Page] = []
+    @State private var foods = DemoData.foods
     private let rows: [(Page, String, String, String)] = [
         (.kurallar, "list.bullet", "Kurallar", "9 madde"), (.saatler, "clock", "Öğün saatleri", "Hafta içi ve hafta sonu"),
         (.muadil, "arrow.left.arrow.right", "Muadiller", "Neyin yerine ne yenir"), (.gidalar, "fork.knife", "Gıdalarım", "Kendi ürünlerin"),
@@ -399,6 +417,8 @@ struct DemoProgram: View {
             }
         case .vucut:
             DetailPage(title: "Vücut analizi", lead: "13 Kasım 2026 ölçümü.") { LedgerCard(rows: DemoData.body) }
+        case .gidalar:
+            FoodsScreen(foods: foods, onSave: { f in foods.removeAll { $0.id == f.id }; foods.insert(f, at: 0) }, onDelete: { id in foods.removeAll { $0.id == id } })
         case .gorunum:
             DetailPage(title: "Görünüm", lead: "Açık ya da koyu tema. Sistemle aynı seçiliyken telefonun ayarını izler.") {
                 ChoiceCard(options: [("", "Sistemle aynı"), ("light", "Açık"), ("dark", "Koyu")], selection: $theme)
@@ -476,6 +496,21 @@ enum DemoData {
         .init(id: "peynir", name: "Peynir", icon: "beyaz-peynir", count: 24), .init(id: "kofte", name: "Izgara köfte", icon: "izgara-kofte", count: 11),
         .init(id: "tavuk", name: "Tavuk", icon: "izgara-tavuk-gogsu", count: 9), .init(id: "balik", name: "Balık", icon: "levrek-izgara", count: 8),
     ]
+    /// foods.js'ten bir kesit ve iki kişisel ürün. İkon kimliği addan türetilir.
+    static let foods: [FoodEntry] = {
+        func f(_ n: String, _ u: String, _ k: Int, _ p: Double, own: Bool = false, icon: String? = nil) -> FoodEntry {
+            FoodEntry(id: (own ? "own-" : "") + FoodEntry.slug(n), name: n, unit: u, kcal: k, protein: p, icon: icon ?? FoodEntry.slug(n), own: own)
+        }
+        return [
+            f("Protein bar", "1 adet, 60 g", 210, 20, own: true), f("Skyr", "1 kutu, 150 g", 95, 16, own: true),
+            f("İskender kebap", "1 porsiyon", 750, 40), f("Adana kebap", "1 porsiyon, lavaşla", 700, 36), f("Tavuk şiş", "1 porsiyon, pilavsız", 420, 45),
+            f("Izgara köfte", "1 restoran porsiyonu", 550, 40), f("Lahmacun", "1 adet", 300, 13), f("Kıymalı pide", "1 adet", 750, 35),
+            f("Tantuni", "1 dürüm", 500, 28), f("Mercimek çorbası", "1 kase", 180, 10), f("Pirinç pilavı", "1 porsiyon", 300, 5),
+            f("Menemen", "1 porsiyon", 280, 14), f("Omlet", "2 yumurtalı", 220, 14), f("Simit", "1 adet", 320, 10),
+            f("Hamburger", "1 adet", 550, 28), f("Pizza", "2 dilim", 560, 24), f("Ayran", "1 bardak", 75, 4),
+            f("Muz", "1 orta boy", 105, 1.3), f("Sütlaç", "1 kase", 270, 7), f("Baklava", "2 dilim", 330, 5), f("Türk kahvesi", "1 fincan, sade", 5, 0.2),
+        ]
+    }()
     static let chat: [ChatMessage] = [
         ChatMessage(role: .user, text: "İkindide galeta yerine ne yiyebilirim?"),
         ChatMessage(role: .assistant, text: "Programda galetanın iki muadili var; ikisi de aynı değişim, **yaklaşık 100 kcal**.\n- Antrenman günü olduğu için karbonhidratı atlamamak iyi olur.\n- Protein bar seçeneği de programda var ama o zaman meyveyi de bırakırsın.",
