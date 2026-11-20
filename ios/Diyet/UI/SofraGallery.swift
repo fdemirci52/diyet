@@ -99,6 +99,23 @@ struct DemoChat: View {
     }
 }
 
+/// Sekmeler arası paylaşılan örnek durum: takviyeler ve bugünkü işaretleri.
+@Observable final class DemoStore {
+    static let shared = DemoStore()
+    var supps: [Supplement] = [
+        Supplement(id: "omega", name: "Omega-3", dose: "1 kapsül", when: .afterMeal(id: "kahvalti", title: "Kahvaltı")),
+        Supplement(id: "kreatin", name: "Kreatin", dose: "5 g", when: .afterMeal(id: "ogle", title: "Öğle")),
+        Supplement(id: "dvit", name: "D vitamini", dose: "1.000 IU", when: .anytime),
+        Supplement(id: "magnezyum", name: "Magnezyum", dose: "200 mg", when: .bedtime),
+    ]
+    var taken: Set<String> = ["omega"]
+    func toggle(_ id: String) { if taken.contains(id) { taken.remove(id) } else { taken.insert(id) } }
+    func after(_ meal: String) -> [Supplement] { supps.filter { if case .afterMeal(let id, _) = $0.when { return id == meal }; return false } }
+    var anytime: [Supplement] { supps.filter { $0.when == .anytime } }
+    var bedtime: [Supplement] { supps.filter { $0.when == .bedtime } }
+    var timed: [Supplement] { supps.filter { if case .time = $0.when { return true }; return false } }
+}
+
 // MARK: - Bugün
 
 struct DemoMeal: Identifiable {
@@ -126,6 +143,7 @@ struct DemoToday: View {
     @State private var quickFor: String?
     @State private var extra: [String: (Int, Int)] = [:]
     @State private var foldTask: Task<Void, Never>?
+    private var store = DemoStore.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let nowID = "ogle"
     private let tr = Locale(identifier: "tr_TR")
@@ -149,6 +167,12 @@ struct DemoToday: View {
                             SimpleRowCard(title: "Antrenman", subtitle: "Alt, 7 hareket", time: "18:00", symbol: "dumbbell", done: gym) { gym.toggle() }
                         }
                     }
+                    ForEach(store.timed) { s in
+                        SupplementEventCard(title: "Takviye", time: s.when.label, items: [s], taken: store.taken) { store.toggle($0) }
+                    }
+                    if !store.bedtime.isEmpty {
+                        SupplementEventCard(title: "Yatarken", items: store.bedtime, taken: store.taken) { store.toggle($0) }
+                    }
                 }
 
                 SectionTitle("Gün boyu")
@@ -166,6 +190,7 @@ struct DemoToday: View {
                         }
                     }
                     .buttonStyle(.plain).sensoryFeedback(.selection, trigger: walk)
+                    ForEach(store.anytime) { s in SupplementRow(supplement: s, taken: store.taken.contains(s.id)) { store.toggle(s.id) } }
                 }
                 .padding(.horizontal, Theme.Space.card).padding(.vertical, Theme.Space.x2)
                 .sofraCard()
@@ -225,7 +250,8 @@ struct DemoToday: View {
 
     private func card(_ m: DemoMeal) -> some View {
         let isNow = m.id == nowID && !m.finished
-        let model = MealCardModel(id: m.id, title: m.title, time: m.time, isNow: isNow, when: m.finished ? "Yendi" : isNow ? "Şimdi" : "",
+        let waiting = m.finished && store.after(m.id).contains { !store.taken.contains($0.id) }
+        let model = MealCardModel(id: m.id, title: m.title, time: m.time, isNow: isNow, when: waiting ? "Takviye bekliyor" : m.finished ? "Yendi" : isNow ? "Şimdi" : "",
                                   info: "\(m.kcal) kcal, \(m.protein) g protein", note: m.note, main: m.main, items: m.items,
                                   primary: m.finished ? nil : m.started ? "Kalanını yedim" : "Hepsini yedim")
         return MealCard(model: model, onToggle: { id in mutate(m.id) { if $0.id == id { $0.state = $0.state.isDone ? .pending : .eaten } } },
@@ -233,7 +259,8 @@ struct DemoToday: View {
                             sheet = ItemSheetModel(mealID: m.id, item: t, options: [t] + (DemoData.options[id] ?? []), kcal: DemoData.values[id]?.0, protein: Double(DemoData.values[id]?.1 ?? 0)) } },
                         onPrimary: { mutate(m.id) { if $0.state == .pending && $0.caption != "İsteğe bağlı" { $0.state = .eaten } } },
                         onMore: { menuFor = m.id },
-                        onClose: { withAnimation(reduceMotion ? nil : Theme.Motion.fold) { open = nil } })
+                        onClose: { withAnimation(reduceMotion ? nil : Theme.Motion.fold) { open = nil } },
+                        extra: { MealSupplements(items: store.after(m.id), taken: store.taken) { store.toggle($0); settle(m.id) } })
     }
 
     private func mutate(_ mid: String, _ f: (inout FoodTileModel) -> Void) {
@@ -256,7 +283,9 @@ struct DemoToday: View {
     /// Son kalem yenince kart bir an boş sofrayı gösterir, sonra tek karta katlanır.
     private func settle(_ mid: String) {
         foldTask?.cancel()
-        guard let m = meals.first(where: { $0.id == mid }), m.finished, open == mid else { return }
+        // Öğün yense de takviyesi alınana kadar kart açık kalır.
+        guard let m = meals.first(where: { $0.id == mid }), m.finished, open == mid,
+              store.after(mid).allSatisfy({ store.taken.contains($0.id) }) else { return }
         foldTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(Theme.Motion.foldDelay))
             guard !Task.isCancelled, open == mid, meals.first(where: { $0.id == mid })?.finished == true else { return }
@@ -349,6 +378,7 @@ struct DemoProgram: View {
     @AppStorage("diyet-theme") private var theme = ""
     @State private var path: [Page] = []
     @State private var foods = DemoData.foods
+    private var store = DemoStore.shared
     private let rows: [(Page, String, String, String)] = [
         (.kurallar, "list.bullet", "Kurallar", "9 madde"), (.saatler, "clock", "Öğün saatleri", "Hafta içi ve hafta sonu"),
         (.muadil, "arrow.left.arrow.right", "Muadiller", "Neyin yerine ne yenir"), (.gidalar, "fork.knife", "Gıdalarım", "Kendi ürünlerin"),
@@ -379,7 +409,8 @@ struct DemoProgram: View {
                     RowsCard {
                         ForEach(rows, id: \.0) { r in
                             NavigationLink(value: r.0) {
-                                NavRow(symbol: r.1, title: r.2, subtitle: r.0 == .gorunum ? (theme == "light" ? "Açık" : theme == "dark" ? "Koyu" : "Sistemle aynı") : r.3)
+                                NavRow(symbol: r.1, title: r.2, subtitle: r.0 == .gorunum ? (theme == "light" ? "Açık" : theme == "dark" ? "Koyu" : "Sistemle aynı")
+                                       : r.0 == .takviye && !store.supps.isEmpty ? "\(store.supps.count) takviye" : r.3)
                             }
                             .buttonStyle(.plain)
                         }
@@ -419,6 +450,10 @@ struct DemoProgram: View {
             DetailPage(title: "Vücut analizi", lead: "13 Kasım 2026 ölçümü.") { LedgerCard(rows: DemoData.body) }
         case .gidalar:
             FoodsScreen(foods: foods, onSave: { f in foods.removeAll { $0.id == f.id }; foods.insert(f, at: 0) }, onDelete: { id in foods.removeAll { $0.id == id } })
+        case .takviye:
+            SupplementsScreen(supplements: store.supps, meals: DemoData.meals.map { ($0.id, $0.title) },
+                              onSave: { s in if let i = store.supps.firstIndex(where: { $0.id == s.id }) { store.supps[i] = s } else { store.supps.append(s) } },
+                              onDelete: { id in store.supps.removeAll { $0.id == id } })
         case .gorunum:
             DetailPage(title: "Görünüm", lead: "Açık ya da koyu tema. Sistemle aynı seçiliyken telefonun ayarını izler.") {
                 ChoiceCard(options: [("", "Sistemle aynı"), ("light", "Açık"), ("dark", "Koyu")], selection: $theme)
