@@ -12,3 +12,10 @@ ORIGINS = "https://fdemirci52.github.io,http://localhost:4173"
 [[kv_namespaces]]
 binding = "DIYET"
 id = "ab57532c655e4395a43c7d8e015e1c4b"
+
+# Hesaplar ve buluttaki kayıtlar. id, `wrangler d1 create diyet` çıktısından gelir; şema migrations/ içinde.
+[[d1_databases]]
+binding = "DB"
+database_name = "diyet"
+database_id = "D1_ID"
+migrations_dir = "migrations"

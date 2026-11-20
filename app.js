@@ -48,7 +48,7 @@ const PRICE = { 'claude-sonnet-5-5': [2, 10], 'claude-haiku-5-5': [0.1, 0.5] };
 const KEY = 'diyet-v1', AIKEY = 'diyet-ai-key', USEKEY = 'diyet-ai-use', CHATKEY = 'diyet-chat';
 let S = { days: {}, weights: [] };
 try { const raw = localStorage.getItem(KEY); if (raw) S = JSON.parse(raw); } catch (e) {}
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} syncSoon(); };
 const aiKey = () => { try { return localStorage.getItem(AIKEY) || ''; } catch (e) { return ''; } };
 
 const pad = n => String(n).padStart(2, '0');
@@ -326,6 +326,7 @@ const P = {
   doc: '<path d="M7 3.500h7l4 4V19a1.500 1.500 0 01-1.500 1.500h-9.500A1.500 1.500 0 015.500 19V5A1.500 1.500 0 017 3.500zM13.500 3.500V8H18M8.500 12.500h7M8.500 16h5"/>',
   photo: '<rect x="4" y="5" width="16" height="14" rx="2.500"/><circle cx="9" cy="10" r="1.600"/><path d="M20 15.500l-4.500-4.500L7 19"/>',
   x: '<path d="M7 7l10 10M17 7L7 17"/>',
+  cloud: '<path d="M7 18.500h10.500a3.500 3.500 0 00.400-7A5.500 5.500 0 007.300 10 4.300 4.300 0 007 18.500z"/>',
   link: '<path d="M10 14a4 4 0 005.700 0l3-3a4 4 0 00-5.700-5.700l-1 1M14 10a4 4 0 00-5.700 0l-3 3a4 4 0 005.700 5.700l1-1"/>',
   search: '<circle cx="11" cy="11" r="6.500"/><path d="M20 20l-4.200-4.200"/>',
   pill: '<path d="M10.500 20.500l10-10a4.950 4.950 0 10-7-7l-10 10a4.950 4.950 0 107 7zM8.500 8.500l7 7"/>',
@@ -699,15 +700,15 @@ function scoreSheet(wk0) {
     <button class="textbtn" data-act="close">Kapat</button>`);
 }
 const PROG = [['kurallar', 'list', 'Kurallar', `${RULES.length} madde`], ['saatler', 'clock', 'Öğün saatleri', 'Hafta içi ve hafta sonu'], ['muadil', 'swap', 'Muadiller', 'Neyin yerine ne yenir'], ['gidalar', 'ogle', 'Gıdalarım', ''], ['takviye', 'pill', 'Takviyeler', ''], ['gorunum', 'sabah', 'Görünüm', ''],
-  ['antrenman', 'gym', 'Antrenman', Object.entries(WORKOUTS).map(([n, w]) => `${DOW[n]} ${w.name.toLocaleLowerCase('tr')}`).join(' · ')], ['vucut', 'person', 'Vücut analizi', `${fmtDM(PLAN.body.date)} ölçümü`], ['ai', 'chat', 'Yapay zekâ', ''], ['baglanti', 'link', 'Program bağlantısı', 'Yükle ya da paylaş'], ['veri', 'down', 'Yedek', 'İndir ya da geri yükle']];
+  ['antrenman', 'gym', 'Antrenman', Object.entries(WORKOUTS).map(([n, w]) => `${DOW[n]} ${w.name.toLocaleLowerCase('tr')}`).join(' · ')], ['vucut', 'person', 'Vücut analizi', `${fmtDM(PLAN.body.date)} ölçümü`], ['ai', 'chat', 'Yapay zekâ', ''], ['baglanti', 'link', 'Program bağlantısı', 'Yükle ya da paylaş'], ['hesap', 'cloud', 'Hesap', ''], ['veri', 'down', 'Yedek', 'İndir ya da geri yükle']];
 function planView() {
   const t = balance(today), last = [...S.weights].sort((a, b) => a.d < b.d ? -1 : 1).pop();
   return `<header class="head"><div><p>${esc(PLAN.dietitian.name || 'Diyetisyen programı')} · ${fmtDM(PLAN.date)}</p><h1>Program</h1></div></header>
     <section class="card pad"><span class="label">Hedef</span><div class="num">${PLAN.goal.kg ? PLAN.goal.kg.toLocaleString('tr-TR') + '<em>kg</em>' : '—'}</div><p class="note" style="padding:8px 0 14px">${esc(PLAN.goal.text)}</p>
       <div class="tiles two" style="margin:0"><div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Şu an</span><strong style="margin-top:8px">${last ? last.kg.toLocaleString('tr-TR') + '<em>kg</em>' : '—'}</strong><small>${PLAN.body.fat ? PLAN.body.fat + ' yağ' : 'Son tartı'}</small></div>
         <div class="tile" style="background:var(--ctl);box-shadow:none"><span class="label">Günlük plan</span>${KC ? `<strong style="margin-top:8px">${num(t.tk)}<em>kcal</em></strong><small>${num(t.tp)} g protein</small>` : `<strong style="margin-top:8px">${num(t.tp)}<em>g</em></strong><small>protein</small>`}</div></div></section>
-    <section class="card">${PROG.filter(([id]) => !(id === 'antrenman' && !Object.keys(WORKOUTS).length) && !(id === 'vucut' && !BODY.length) && !(id === 'muadil' && !SWAPS.length)).map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiCode() ? 'Davet kodu kayıtlı' : aiKey() ? 'API anahtarı kayıtlı' : PROXY_URL ? 'Davet kodu gerekli' : 'API anahtarı gerekli') : id === 'gidalar' ? (Object.keys(S.foods || {}).length ? `${Object.keys(S.foods).length} gıda` : 'Kendi ürünlerin') : id === 'gorunum' ? ({ light: 'Açık', dark: 'Koyu' }[theme()] || 'Sistemle aynı') : id === 'takviye' ? (SUPS().length ? `${SUPS().length} takviye` : 'Ne zaman alacağını hatırlat') : m}</span></span>${ic('right')}</button>`).join('')}</section>
-    <p class="note">Kayıtlar yalnızca bu cihazda tutulur. Kalori ve protein değerleri yaklaşık tahminlerdir.</p>`;
+    <section class="card">${PROG.filter(([id]) => !(id === 'antrenman' && !Object.keys(WORKOUTS).length) && !(id === 'vucut' && !BODY.length) && !(id === 'muadil' && !SWAPS.length)).map(([id, icn, n, m]) => `<button class="nav-row" data-act="prog" data-p="${id}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${id === 'ai' ? (aiCode() ? 'Davet kodu kayıtlı' : aiKey() ? 'API anahtarı kayıtlı' : PROXY_URL ? 'Davet kodu gerekli' : 'API anahtarı gerekli') : id === 'gidalar' ? (Object.keys(S.foods || {}).length ? `${Object.keys(S.foods).length} gıda` : 'Kendi ürünlerin') : id === 'hesap' ? (auth() ? auth().e : 'Giriş yap, kayıtların bulutta dursun') : id === 'gorunum' ? ({ light: 'Açık', dark: 'Koyu' }[theme()] || 'Sistemle aynı') : id === 'takviye' ? (SUPS().length ? `${SUPS().length} takviye` : 'Ne zaman alacağını hatırlat') : m}</span></span>${ic('right')}</button>`).join('')}</section>
+    <p class="note">${auth() ? 'Kayıtların hesabında saklanır.' : 'Kayıtlar yalnızca bu cihazda tutulur.'} Kalori ve protein değerleri yaklaşık tahminlerdir.</p>`;
 }
 function progSheet(p) {
   sheet = p;
@@ -730,7 +731,7 @@ function progSheet(p) {
       ${usageRows()}${aiOk() ? `<button class="textbtn" data-act="aino">Onayı geri al</button>` : ''}${aiKey() ? `<button class="textbtn" data-act="delkey">Anahtarı sil</button>` : ''}`,
     gorunum: () => `<h2>Görünüm</h2><p class="lead">Açık ya da koyu tema. Sistemle aynı seçiliyken telefonun ayarını izler.</p>
       <div class="group">${[['', 'Sistemle aynı'], ['light', 'Açık'], ['dark', 'Koyu']].map(([v, n]) => `<button class="opt" data-act="theme" data-v="${v}"><span>${n}</span>${theme() === v ? ic('check') : ''}</button>`).join('')}</div>`,
-    veri: () => `<h2>Yedek</h2><p class="lead">Kayıtların bu cihazda durur. Telefon değiştirmeden önce yedek al.</p><div class="group"><button class="opt" data-act="export"><span>Yedeği indir</span>${ic('down')}</button><button class="opt" data-act="import"><span>Yedekten yükle</span>${ic('right')}</button></div>`,
+    veri: () => `<h2>Yedek</h2><p class="lead">${auth() ? 'Kayıtların hesabında saklanıyor. İstersen ayrıca bir dosya olarak da indirebilirsin.' : 'Kayıtların bu cihazda durur. Telefon değiştirmeden önce yedek al ya da Hesap bölümünden giriş yap.'}</p><div class="group"><button class="opt" data-act="export"><span>Yedeği indir</span>${ic('down')}</button><button class="opt" data-act="import"><span>Yedekten yükle</span>${ic('right')}</button></div>`,
   };
   showSheet(S2[p]());
 }
@@ -868,7 +869,7 @@ function photoSheet() {
    açık rıza alınır (diyet-ai-ok); rıza yoksa yapay zekâ özellikleri çalışmaz, geri kalan her şey çalışır. */
 const AI_URL = 'https://api.anthropic.com/v1/messages', OKKEY = 'diyet-ai-ok', CODEKEY = 'diyet-ai-code';
 /* Sunucu vekili (server/worker.js). Adres boşken davet kodu seçeneği görünmez, yalnızca kendi anahtarınla çalışır. */
-const PROXY_URL = 'https://diyet-api.basedchimpers.workers.dev';
+const PROXY_URL = (() => { try { return localStorage.getItem('diyet-dev-api'); } catch (e) {} })() || 'https://diyet-api.basedchimpers.workers.dev';
 const aiCode = () => { try { return PROXY_URL && localStorage.getItem(CODEKEY) || ''; } catch (e) { return ''; } };
 const aiAuth = () => aiCode() || aiKey();
 /* Davet kodu varsa vekile, yoksa kullanıcının kendi anahtarıyla doğrudan Anthropic'e. */
@@ -884,6 +885,137 @@ const aiErr = (r, j) => new Error(r.status === 401 ? (aiCode() ? (sheet === 'bui
 let ME = null;
 const loadMe = () => !aiCode() ? Promise.resolve(null) : fetch(PROXY_URL + '/v1/me', { headers: { authorization: 'Bearer ' + aiCode() } })
   .then(r => r.ok ? r.json() : Promise.reject(r.status)).then(j => (ME = j)).catch(x => { ME = { err: x === 401 ? 'Kod geçersiz' : 'Bağlanılamadı' }; return ME; });
+/* ---------- Hesap ve bulut eşitlemesi ----------
+   E-posta koduyla giriş (vekilin /v1/auth uçları). Girişten sonra kayıtlar belge belge buluta yazılır, öteki cihazlarda
+   yazılanlar alınır; telefonda localStorage önbellek olarak kalır, çevrimdışıyken de kayıt alınır.
+   Belgeler: d:<gün> (S.days), f:<gıda> (S.foods), o:<alan> (S'nin öteki alanları: weights, supps…), c:<sohbet>,
+   p (yüklenmiş program), cfg (davet kodu, tema, yapay zekâ onayı, karşılama durumu). API anahtarı buluta gitmez.
+   diyet-auth: { t: belirteç, e: e-posta } · diyet-sync: { rev, h: { belge: özet }, at: son eşitleme (ms) }.
+   Belgenin yereldeki hali son eşitlenen özetten farklıysa yerel değişiklik sayılır ve gönderilir (son yazan kazanır);
+   değilse buluttaki yeni hali uygulanır. İlk girişte önce bulut okunur: iki yerde de olan günden dolu olanı kalır. */
+const AUTHKEY = 'diyet-auth', SYNCKEY = 'diyet-sync';
+const auth = () => { try { return JSON.parse(localStorage.getItem(AUTHKEY) || 'null'); } catch (e) { return null; } };
+const syncSt = () => { try { return JSON.parse(localStorage.getItem(SYNCKEY) || 'null') || { rev: 0 }; } catch (e) { return { rev: 0 }; } };
+const syncPut = o => { try { localStorage.setItem(SYNCKEY, JSON.stringify(o)); } catch (e) {} };
+const hsh = t => { let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619); return (h >>> 0).toString(36) + '.' + t.length; };
+const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { v == null || v === '' ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+const CFG = { code: () => CODEKEY, theme: () => THEMEKEY, ok: () => OKKEY, nw: () => NEWKEY, setup: () => SETUPKEY };
+function syncDocs() {
+  const m = new Map(), put = (k, v) => { if (v !== undefined) m.set(k, JSON.stringify(v)); };
+  for (const [k, v] of Object.entries(S.days || {})) put('d:' + k, v);
+  for (const [k, v] of Object.entries(S.foods || {})) put('f:' + k, v);
+  for (const [k, v] of Object.entries(S)) if (k !== 'days' && k !== 'foods') put('o:' + k, v);
+  for (const c of CHATS.slice(0, 60)) put('c:' + c.id, c);
+  const pl = lsGet(PLANKEY); if (pl) m.set('p', pl);
+  const cfg = {}; for (const [n, f] of Object.entries(CFG)) { const v = lsGet(f()); if (v) cfg[n] = v; } put('cfg', cfg);
+  return m;
+}
+/* Buluttan gelen belgeyi yerele yazar. Program değiştiyse sayfa yeniden yüklenmeli: true döner. */
+function syncApply(k, t) {
+  const v = t == null ? undefined : JSON.parse(t), [kind, id] = [k.slice(0, 2), k.slice(2)];
+  if (kind === 'd:') { if (v === undefined) delete S.days[id]; else S.days[id] = v; }
+  else if (kind === 'f:') { S.foods = S.foods || {}; if (v === undefined) delete S.foods[id]; else S.foods[id] = v; }
+  else if (kind === 'o:') { if (v === undefined) delete S[id]; else S[id] = v; }
+  else if (kind === 'c:') { if (chatBusy && CUR === id) return false;
+    CHATS = CHATS.filter(c => c.id !== id); if (v) CHATS.push(v); CHATS.sort((a, b) => (b.u || 0) - (a.u || 0)); if (CUR && !curChat()) CUR = null; }
+  else if (k === 'p') { const old = lsGet(PLANKEY) || ''; lsSet(PLANKEY, t || ''); return (t || '') !== old; }
+  else if (k === 'cfg') { const o = v || {}, th = theme(), cd = aiCode();
+    for (const [n, f] of Object.entries(CFG)) lsSet(f(), o[n] || '');
+    if (theme() !== th) window.applyTheme && window.applyTheme(); if (aiCode() !== cd) ME = null; }
+  return false;
+}
+/* İlk girişte iki yerde de olan belge: gün için dolu olan, ayarlar için ikisinin birleşimi (bulut önde; karşılama
+   durumu buluttaki, yoksa yeni kişi sayılmaz), ötekiler bulut. */
+const firstPick = (k, loc, rem) => k.startsWith('d:') ? (loc.length > rem.length ? loc : rem)
+  : k === 'cfg' ? (([l, r]) => JSON.stringify({ ...l, ...r, nw: r.nw }))([JSON.parse(loc), JSON.parse(rem)]) : rem;
+let syncT = null, syncing = null, syncErr = '', quiet = false;
+function syncSoon(ms = 1500) { if (quiet || !auth()) return; clearTimeout(syncT); syncT = setTimeout(sync, ms); }
+async function syncCall(p, body, method = 'POST') {
+  const a = auth(), r = await fetch(PROXY_URL + p, { method, headers: { 'content-type': 'application/json', ...(a ? { authorization: 'Bearer ' + a.t } : {}) }, body: body && JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error((j.error && j.error.message) || 'Bağlanılamadı.'); e.status = r.status; throw e; }
+  return j;
+}
+function sync() {
+  clearTimeout(syncT);
+  if (!auth() || !PROXY_URL) return Promise.resolve();
+  if (syncing) { syncSoon(); return syncing; }
+  return (syncing = syncRun().then(() => { syncErr = ''; }, x => {
+    if (x.status === 401) { lsSet(AUTHKEY, ''); lsSet(SYNCKEY, ''); syncErr = 'Oturum kapandı. Yeniden giriş yap.'; }
+    else syncErr = navigator.onLine === false ? 'Çevrimdışı. Bağlantı gelince eşitlenecek.' : x.message;
+  }).finally(() => { syncing = null; if (sheet === 'hesap') acSheet(); }));
+}
+async function syncRun() {
+  let st = syncSt(), reload = false, changed = false;
+  const first = !st.h;
+  for (let round = 0; round < 20; round++) {
+    const cur = syncDocs(), h = st.h || {}, put = [];
+    if (!first || round > 0) {
+      for (const [k, v] of cur) if (h[k] !== hsh(v)) put.push({ k, v });
+      for (const k of Object.keys(h)) if (!cur.has(k)) put.push({ k, v: null });
+    }
+    /* Büyük ilk yüklemede parça parça (en çok 150 belge ya da ~2 MB). */
+    let size = 0; const part = put.filter(d => (size += (d.v || '').length) < 2e6).slice(0, 150);
+    const j = await syncCall('/v1/sync', { since: st.rev || 0, put: part });
+    const h2 = { ...h }, now = syncDocs(); quiet = true;
+    try {
+      for (const d of j.docs) {
+        const loc = now.get(d.k), base = cur.get(d.k);
+        if (loc !== base) continue;   /* istek sürerken burada değişti; bir sonraki turda gönderilir */
+        if (first && loc !== undefined && d.v != null) {
+          const pick = firstPick(d.k, loc, d.v); if (pick !== d.v) { h2[d.k] = hsh(d.v); if (pick !== loc) { reload = syncApply(d.k, pick) || reload; changed = true; } continue; }
+        } else if (loc !== undefined && h[d.k] !== hsh(loc)) continue;   /* yerelde değişmiş: yerel kazanır */
+        reload = syncApply(d.k, d.v) || reload; changed = true;
+        if (d.v == null) delete h2[d.k]; else h2[d.k] = hsh(d.v);
+      }
+      for (const d of part) if (d.v == null) delete h2[d.k]; else h2[d.k] = hsh(d.v);
+      if (changed) { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} chatsSave(); }
+    } finally { quiet = false; }
+    st = { rev: j.rev, h: h2, at: Date.now() }; syncPut(st);
+    if (j.email && auth() && auth().e !== j.email) lsSet(AUTHKEY, JSON.stringify({ ...auth(), e: j.email }));
+    if (part.length === put.length && round > 0) break;
+    if (part.length === put.length && !first) break;
+  }
+  if (reload) return reloadClean();
+  if (changed) render();
+}
+
+/* Hesap sayfası. AC: { step: 'mail'|'code', email, busy, err, dev, del } */
+let AC = null;
+const fmtAgo = t => { const m = Math.round((Date.now() - t) / 6e4); return m < 1 ? 'Az önce' : m < 60 ? `${m} dk önce` : new Date(t).toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
+function acSheet() {
+  sheet = 'hesap'; AC = AC || {}; const a = auth(), st = syncSt();
+  if (a) return showSheet(`<h2>Hesap</h2><p class="lead">Kayıtların, programın ve sohbetlerin bu hesapta saklanır. Uygulamayı silsen ya da telefon değiştirsen de giriş yapınca geri gelir.</p>
+    <div class="group"><div class="kv"><span>E-posta</span><span>${esc(a.e)}</span></div>
+      <div class="kv"><span>Son eşitleme</span><span>${syncing ? 'Eşitleniyor…' : st.at ? fmtAgo(st.at) : '—'}</span></div></div>
+    ${syncErr ? `<p class="err">${esc(syncErr)}</p>` : ''}
+    <div class="group"><button class="opt" data-act="acsync" ${syncing ? 'disabled' : ''}><span>Şimdi eşitle</span>${ic('cloud')}</button></div>
+    <button class="textbtn" data-act="acout">Çıkış yap</button>
+    <button class="textbtn" data-act="acdel">${AC.del ? 'Emin misin? Buluttaki bütün kayıtlar silinir, dokun' : 'Hesabı ve buluttaki kayıtları sil'}</button>
+    <p class="note" style="padding-top:12px;text-align:center">Çıkış yapınca kayıtlar bu telefonda kalır, yalnızca eşitleme durur.</p>`);
+  if (AC.busy) return showSheet(`<div class="busy"><div class="spin"></div>${AC.step === 'code' ? 'Giriş yapılıyor…' : 'Kod gönderiliyor…'}</div>`);
+  if (AC.step === 'code') return showSheet(`<h2>Kodu gir</h2><p class="lead"><b>${esc(AC.email)}</b> adresine 6 haneli bir kod gönderdik. Gelen kutunda yoksa istenmeyenlere bak.</p>
+    <div class="group"><div class="field"><input id="accode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" value="${esc(AC.dev || '')}"><button class="btn" data-act="acverify">Giriş yap</button></div></div>
+    ${AC.err ? `<p class="err">${esc(AC.err)}</p>` : ''}<button class="textbtn" data-act="acback">E-postayı değiştir</button>`);
+  showSheet(`<h2>Giriş yap</h2><p class="lead">Kayıtların, programın ve sohbetlerin bulutta saklanır; uygulamayı silsen ya da başka bir telefona (iPhone ya da Android) geçsen de giriş yapınca geri gelir. Şifre yok, e-postana kod gelir.</p>
+    <div class="group"><div class="field"><input id="acmail" type="email" inputmode="email" autocomplete="email" autocapitalize="none" placeholder="E-posta adresin" value="${esc(AC.email || '')}"><button class="btn" data-act="acstart">Kod gönder</button></div></div>
+    ${AC.err ? `<p class="err">${esc(AC.err)}</p>` : ''}
+    <p class="note" style="padding-top:4px;text-align:center">Kayıtların sunucuda saklanır. Hesabını ve buluttaki kayıtları istediğin zaman silebilirsin.</p>`);
+}
+async function acAct(act) {
+  const go = async (f) => { AC.busy = true; AC.err = ''; acSheet(); try { await f(); } catch (x) { AC.err = x.message; } AC.busy = false; if (sheet === 'hesap') acSheet(); };
+  if (act === 'acstart') { const e = document.getElementById('acmail').value.trim(); if (!e) return; AC.email = e;
+    return go(async () => { const j = await syncCall('/v1/auth/start', { email: e }); AC.step = 'code'; AC.dev = j.dev || ''; }); }
+  if (act === 'acverify') { const c = document.getElementById('accode').value.replace(/\D/g, ''); if (c.length !== 6) return;
+    return go(async () => { const j = await syncCall('/v1/auth/verify', { email: AC.email, code: c });
+      lsSet(AUTHKEY, JSON.stringify({ t: j.token, e: j.email })); lsSet(SYNCKEY, ''); AC = {}; syncErr = ''; await sync(); }); }
+  if (act === 'acback') { AC = { email: AC.email }; return acSheet(); }
+  if (act === 'acsync') { const p = sync(); acSheet(); return p; }
+  if (act === 'acout') { syncCall('/v1/auth/logout', {}).catch(() => {}); lsSet(AUTHKEY, ''); lsSet(SYNCKEY, ''); AC = {}; render(); return acSheet(); }
+  if (act === 'acdel') { if (!AC.del) { AC.del = true; return acSheet(); }
+    return go(async () => { await syncCall('/v1/account', null, 'DELETE'); lsSet(AUTHKEY, ''); lsSet(SYNCKEY, ''); AC = {}; render(); }); }
+}
 /* Yapılandırılmış çıktılı tek istek; sonucu nesne olarak döndürür. */
 async function aiJSON(body, refusal) {
   const r = await aiFetch(body), j = await r.json().catch(() => ({}));
@@ -1272,7 +1404,7 @@ function welcomeSheet() {
   try { if (!PLAN_CUSTOM && !localStorage.getItem(NEWKEY)) { localStorage.setItem(NEWKEY, 'new'); render(); } } catch (e) {}
   const o = (w, icn, n, m) => `<button class="nav-row" data-act="welcome" data-w="${w}"><span class="ic">${ic(icn)}</span><span class="b"><span class="n">${n}</span><span class="m">${m}</span></span>${ic('right')}</button>`;
   showSheet(`<h2>Hoş geldin</h2><p class="lead">Önce diyetisyeninin programını ekleyelim. Öğünlerin, saatlerin ve muadillerin buradan gelir.</p>
-    <div class="group">${o('link', 'link', 'Diyetisyenim bağlantı gönderdi', 'Bağlantıyı yapıştır, program hazır gelir')}${o('photo', 'cam', 'Kâğıttaki programımı aktar', 'Sayfaları çek ya da galeriden seç')}${o('demo', 'list', 'Örnek programla bak', 'Sonra Program sekmesinden değiştirebilirsin')}</div>`);
+    <div class="group">${o('hesap', 'cloud', 'Hesabım var', 'Giriş yap, kayıtların geri gelsin')}${o('link', 'link', 'Diyetisyenim bağlantı gönderdi', 'Bağlantıyı yapıştır, program hazır gelir')}${o('photo', 'cam', 'Kâğıttaki programımı aktar', 'Sayfaları çek ya da galeriden seç')}${o('demo', 'list', 'Örnek programla bak', 'Sonra Program sekmesinden değiştirebilirsin')}</div>`);
 }
 const pbSync = () => { const t = document.getElementById('pbtx'); if (t && PB) PB.text = t.value; };
 function buildSheet() {
@@ -1527,7 +1659,7 @@ function usageRows() {
    en yeni önde, en çok 60. Eski tek günlük sohbet (diyet-chat) ilk açılışta buraya taşınır. CUR: açık sohbet, null ise yeni. */
 const CHATSKEY = 'diyet-chats';
 let CHATS = [], CUR = null, chatBusy = false, chatErr = '', chatAbort = null, chatScroll = false, chatDel = null;
-const chatsSave = () => { try { localStorage.setItem(CHATSKEY, JSON.stringify(CHATS.slice(0, 60))); } catch (e) {} };
+const chatsSave = () => { try { localStorage.setItem(CHATSKEY, JSON.stringify(CHATS.slice(0, 60))); } catch (e) {} syncSoon(); };
 function chatsLoad() {
   try { CHATS = JSON.parse(localStorage.getItem(CHATSKEY) || '[]'); } catch (e) { CHATS = []; }
   try { const o = JSON.parse(localStorage.getItem(CHATKEY) || 'null');
@@ -1853,8 +1985,9 @@ document.addEventListener('click', e => {
       if (v) n[NT] = v; else delete n[NT]; closeSheet(); break; }
     case 'phgo': { const t = document.getElementById('phtx').value.trim(), p = PH; PH = null; analyze(p.meal, { image: p.full, text: t }); return; }
     case 'setup': return welcomeSheet();
-    case 'welcome': { const w = el.dataset.w; if (w === 'link') { PL = {}; return planSheet(); } if (w === 'photo') return buildSheet();
+    case 'welcome': { const w = el.dataset.w; if (w === 'hesap') { AC = {}; return acSheet(); } if (w === 'link') { PL = {}; return planSheet(); } if (w === 'photo') return buildSheet();
       if (w === 'demo') try { localStorage.setItem(NEWKEY, 'demo'); } catch (x) {} } closeSheet(); render(); return;
+    case 'acstart': case 'acverify': case 'acback': case 'acsync': case 'acout': case 'acdel': acAct(a); return;
     case 'build': return buildSheet();
     case 'pbadd': pbSync(); if (PB.pics.length < 6) document.getElementById('pages').click(); return;
     case 'pbx': pbSync(); PB.pics.splice(+el.dataset.i, 1); return buildSheet();
@@ -1864,7 +1997,7 @@ document.addEventListener('click', e => {
       try { localStorage.setItem(PLANKEY, JSON.stringify(p2)); } catch (x) { return; } reloadClean(); return; }
     case 'pld': PL.day = +el.dataset.i; return planSheet();
     case 'pl1': { const C = PL.incoming.cycle, w = +el.dataset.w; C.start = addDays(today, -((parse(today).getDay() - w + 7) % 7)); return planSheet(); }
-    case 'prog': if (el.dataset.p === 'gidalar') return foodsSheet(); if (el.dataset.p === 'takviye') return supsSheet(); if (el.dataset.p === 'baglanti') { PL = {}; return planSheet(); } progSheet(el.dataset.p); if (el.dataset.p === 'ai' && aiCode()) loadMe().then(() => { if (sheet === 'ai') progSheet('ai'); }); return;
+    case 'prog': if (el.dataset.p === 'hesap') { AC = {}; return acSheet(); } if (el.dataset.p === 'gidalar') return foodsSheet(); if (el.dataset.p === 'takviye') return supsSheet(); if (el.dataset.p === 'baglanti') { PL = {}; return planSheet(); } progSheet(el.dataset.p); if (el.dataset.p === 'ai' && aiCode()) loadMe().then(() => { if (sheet === 'ai') progSheet('ai'); }); return;
     case 'planpaste': { const v = document.getElementById('plink').value.trim(); if (!v) return;
       unpackPlan(v).then(p2 => { PL = { incoming: p2 }; planSheet(); }).catch(x => { PL = { err: x.message || 'Bağlantı okunamadı.' }; planSheet(); }); return; }
     case 'planload': try { localStorage.setItem(PLANKEY, JSON.stringify(PL.incoming)); } catch (x) { PL = { err: 'Program kaydedilemedi.' }; return planSheet(); } setupDone(); reloadClean(); return;
@@ -1978,6 +2111,8 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.id === 'q') { e.preventDefault(); const b = document.querySelector('[data-act="qadd"]'); b ? b.click() : e.target.blur(); }
+  if (e.key === 'Enter' && e.target.id === 'acmail') { e.preventDefault(); acAct('acstart'); }
+  if (e.key === 'Enter' && e.target.id === 'accode') { e.preventDefault(); acAct('acverify'); }
   if (e.key === 'Enter' && e.target.id === 'custom') document.querySelector('[data-act="s-custom"]').click();
   if (e.key === 'Enter' && !e.shiftKey && e.target.id === 'said2') { e.preventDefault(); if (!chatBusy) chatSend(e.target.value); }
 });
@@ -1993,7 +2128,9 @@ document.addEventListener('input', e => {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return; const t = key(new Date());
   if (t !== today) { if (sel === today) sel = t; today = t; } if (!document.body.classList.contains('sheet-open')) render();
+  sync();
 });
+window.addEventListener('online', () => sync());
 chatsLoad();
 /* Asistanın program değişikliğinden sonra sayfa yeniden yüklenince sohbete dönülür. */
 try { if (sessionStorage.getItem('diyet-tab') === 'chat') { sessionStorage.removeItem('diyet-tab'); if (CHATS.length) { tab = 'chat'; CUR = CHATS[0].id; chatScroll = true; } } } catch (e) {}
@@ -2012,6 +2149,7 @@ window.addEventListener('scroll', stuck, { passive: true });
     if (e.key === 'ArrowLeft') shiftDay(-1); if (e.key === 'ArrowRight') shiftDay(1); });
 })();
 render();
+sync();
 planFromHash();
 window.addEventListener('hashchange', planFromHash);
 /* İlk açılış: kayıt, yüklenmiş program ve gelen bağlantı yoksa nasıl başlanacağını sor. */

@@ -1,0 +1,169 @@
+<title>Diyet Gıda İkonları</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Yerleşim: tek sütun; her konsept büyük bir görsel kartı, altında kısa değerlendirme. Uygulamanın kendi tokenları. */
+:root {
+  --bg: #f2f2f4; --fg: #0b0b0c; --muted: #6f6f76; --faint: #b9b9c0;
+  --card: #ffffff; --line: rgb(0 0 0 / 7%); --ctl: #f0f0f3; --track: #e6e6eb;
+  --accent: #ff6a1a; --on-accent: #ffffff;
+  --shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 26px -18px rgb(0 0 0 / 18%);
+  --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0a0a0b; --fg: #f5f5f7; --muted: #8f8f97; --faint: #4e4e55;
+  --card: #161618; --line: rgb(255 255 255 / 8%); --ctl: rgb(255 255 255 / 7%); --track: rgb(255 255 255 / 10%);
+  --accent: #ff7a2f; --on-accent: #1c0e04; --shadow: none; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0a0a0b; --fg: #f5f5f7; --muted: #8f8f97; --faint: #4e4e55;
+  --card: #161618; --line: rgb(255 255 255 / 8%); --ctl: rgb(255 255 255 / 7%); --track: rgb(255 255 255 / 10%);
+  --accent: #ff7a2f; --on-accent: #1c0e04; --shadow: none; color-scheme: dark; }
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.5 var(--sys); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 40px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 48px; }
+h1 { font-size: 34px; line-height: 1.1; letter-spacing: -.022em; text-wrap: balance; }
+h2 { font-size: 22px; line-height: 1.2; letter-spacing: -.02em; text-wrap: balance; }
+h3 { font-size: 17px; line-height: 1.3; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+p, li { max-width: 68ch; }
+.lead { color: var(--muted); font-size: 17px; margin-top: 12px; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+section { display: flex; flex-direction: column; gap: 20px; }
+.sub { color: var(--muted); }
+.tag { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--ctl); color: var(--muted); white-space: nowrap; }
+.tag.pick { background: var(--fg); color: var(--bg); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.c { background: var(--card); border-radius: 24px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.c.big { grid-column: 1 / -1; }
+.c img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; }
+.c .tx { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; }
+.c .tx p { font-size: 14px; color: var(--muted); line-height: 1.45; }
+.c .tx p b { color: var(--fg); font-weight: 600; }
+.meta { font-size: 12px; color: var(--faint); }
+
+/* Uygulama içi görünüm: aynı öğün iki temada */
+.mock { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.th { border-radius: 28px; padding: 20px 16px; display: flex; flex-direction: column; gap: 12px; }
+.th.l { background: #f2f2f4; color: #0b0b0c; --m: #6f6f76; --cd: #ffffff; --tk: #e6e6eb; --pill: #f0f0f3; --tile: #ececee; }
+.th.d { background: #0a0a0b; color: #f5f5f7; --m: #8f8f97; --cd: #161618; --tk: rgb(255 255 255 / 10%); --pill: rgb(255 255 255 / 7%); --tile: #0b0b0c; }
+.th small.lb { font-size: 13px; color: var(--m); padding: 0 4px; }
+.th .hd { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px; }
+.th .hd b { font-size: 22px; letter-spacing: -.02em; }
+.th .hot { font-size: 13px; font-weight: 600; color: #ff6a1a; }
+.th.d .hot { color: #ff7a2f; }
+.th .card { background: var(--cd); border-radius: 22px; padding: 4px 14px; box-shadow: 0 1px 2px rgb(0 0 0 / 4%); }
+.th.d .card { box-shadow: inset 0 0 0 1px rgb(255 255 255 / 6%); }
+.r { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 0; }
+.r + .r { box-shadow: inset 0 1px 0 var(--tk); }
+.r img { width: 44px; height: 44px; border-radius: 12px; background: var(--tile); flex: none; }
+.r .b { flex: 1; min-width: 0; } .r .b span { display: block; font-size: 16px; } .r .b small { display: block; font-size: 13px; color: var(--m); }
+.amt { height: 28px; padding: 0 10px; border-radius: 999px; background: var(--pill); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; white-space: nowrap; }
+.chk { width: 26px; height: 26px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--m); flex: none; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tiles div { background: var(--cd); border-radius: 18px; padding: 8px 6px 10px; text-align: center; font-size: 13px; }
+.th.d .tiles div { box-shadow: inset 0 0 0 1px rgb(255 255 255 / 6%); }
+.tiles img { width: 72px; height: 72px; border-radius: 14px; display: block; margin: 0 auto 4px; }
+.tiles small { display: block; color: var(--m); font-size: 12px; }
+
+.box { background: var(--card); border-radius: 24px; padding: 20px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); display: flex; flex-direction: column; gap: 10px; }
+.box ol, .box ul { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--ctl); padding: 1px 5px; border-radius: 6px; }
+pre { overflow-x: auto; background: var(--ctl); border-radius: 16px; padding: 14px 16px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Diyet · gıda kütüphanesi görsel dili · 16 Kasım 2026</p>
+  <h1>Gıda ikonu konseptleri</h1>
+  <p class="lead">On bir deneme, hepsinde aynı on iki gıda: haşlanmış yumurta, beyaz peynir, tam buğday ekmeği, avokado, tavuk, bulgur pilavı, yoğurt, süt, elma, köfte, mercimek çorbası, ceviz. Hepsi diyet programındaki kalemlerden. Aynı listeyi kullanınca stiller yan yana adil karşılaştırılıyor.</p>
+</header>
+
+<section>
+  <div><p class="eyebrow">Uygulamada nasıl durur</p><h2>Önerilen stil, öğle öğününde, iki temada</h2>
+  <p class="sub" style="margin-top:8px">İkonlar A1 setinden kesildi. Koyu temada ayrı bir koyu zemin seti (A5) kullanıldı. Asıl üretimde zemin şeffaf olacak, tek dosya iki temada çalışacak.</p></div>
+  <div class="mock">
+    <div class="th l"><small class="lb">Açık tema</small><div class="hd"><b>Öğle</b><span class="hot">25 dk</span></div>
+      <div class="card">
+        <div class="r"><img src="web/l-tavuk.jpg" alt="Tavuk"><span class="b"><span>Izgara tavuk</span><small>2 muadil</small></span><span class="amt">150 g</span><span class="chk"></span></div>
+        <div class="r"><img src="web/l-bulgur.jpg" alt="Bulgur pilavı"><span class="b"><span>Bulgur pilavı</span><small>veya 2 dilim ekmek</small></span><span class="amt">4 yk</span><span class="chk"></span></div>
+        <div class="r"><img src="web/l-yogurt.jpg" alt="Yoğurt"><span class="b"><span>Yoğurt</span></span><span class="amt">1 kâse</span><span class="chk"></span></div>
+      </div>
+      <small class="lb">Muadil seçimi</small>
+      <div class="tiles"><div><img src="web/l-tavuk.jpg" alt="">Tavuk<small>150 g</small></div><div><img src="web/l-yumurta.jpg" alt="">Yumurta<small>3 adet</small></div><div><img src="web/l-sut.jpg" alt="">Süt<small>2 bardak</small></div></div>
+    </div>
+    <div class="th d"><small class="lb">Koyu tema</small><div class="hd"><b>Öğle</b><span class="hot">25 dk</span></div>
+      <div class="card">
+        <div class="r"><img src="web/d-tavuk.jpg" alt="Tavuk"><span class="b"><span>Izgara tavuk</span><small>2 muadil</small></span><span class="amt">150 g</span><span class="chk"></span></div>
+        <div class="r"><img src="web/d-bulgur.jpg" alt="Bulgur pilavı"><span class="b"><span>Bulgur pilavı</span><small>veya 2 dilim ekmek</small></span><span class="amt">4 yk</span><span class="chk"></span></div>
+        <div class="r"><img src="web/d-yogurt.jpg" alt="Yoğurt"><span class="b"><span>Yoğurt</span></span><span class="amt">1 kâse</span><span class="chk"></span></div>
+      </div>
+      <small class="lb">Muadil seçimi</small>
+      <div class="tiles"><div><img src="web/d-tavuk.jpg" alt="">Tavuk<small>150 g</small></div><div><img src="web/d-yumurta.jpg" alt="">Yumurta<small>3 adet</small></div><div><img src="web/d-sut.jpg" alt="">Süt<small>2 bardak</small></div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div><p class="eyebrow">A · Sevimli 3D</p><h2>Referansındaki yön</h2>
+  <p class="sub" style="margin-top:8px">Basit, tombul formlar, mat yumuşak malzeme, az doku. Uygulamanın sakin, tek renkli arayüzüyle en iyi anlaşan aile bu.</p></div>
+  <div class="grid">
+    <div class="c big"><img src="web/f7.jpg" alt="A1 seti: oyuncak gibi 3D gıda ikonları"><div class="tx"><h3>A1 · Yumuşak 3D emoji<span class="tag pick">Önerim</span></h3>
+      <p><b>Ne:</b> Apple emojisine yakın, mat ve tombul. Ayrıntı az; 44 px'te bile ne olduğu okunuyor. Kâseler ve bardak aynı aileden.</p>
+      <p><b>Zayıf yanı:</b> ceviz ve köfte kahverengi yuvarlak olarak birbirine yakın; üretimde ayırt edici ayrıntı (cevizin kabuk çizgisi, köftenin ızgara izi) istenmeli.</p><span class="meta">Gemini görsel modeli</span></div></div>
+    <div class="c"><img src="web/f8.jpg" alt="A2 seti"><div class="tx"><h3>A2 · Parlak 3D emoji</h3>
+      <p><b>Ne:</b> aynı yön, biraz daha gerçekçi doku (ekmek gözenekleri, tavukta ızgara izi). İştah açıcı.</p>
+      <p><b>Zayıf yanı:</b> küçük boyutta doku gürültüye dönüşüyor; A1'den daha az "ikon".</p><span class="meta">GPT görsel modeli</span></div></div>
+    <div class="c"><img src="web/f9.jpg" alt="A3 seti"><div class="tx"><h3>A3 · Hamur / kil</h3>
+      <p><b>Ne:</b> elle yoğrulmuş oyun hamuru hissi, pastel. En "tatlı" olanı.</p>
+      <p><b>Zayıf yanı:</b> bulgur ve mercimek gibi Türk yemeklerinde ayrıntı kayboluyor; ciddiyet algısı düşebilir (diyetisyen paneli de kullanacak).</p><span class="meta">Gemini görsel modeli</span></div></div>
+    <div class="c"><img src="web/f10.jpg" alt="A4 seti"><div class="tx"><h3>A4 · Buzlu cam</h3>
+      <p><b>Ne:</b> yarı saydam, yumuşak parıltılı. Kâse ve bardaklarda çok şık.</p>
+      <p><b>Zayıf yanı:</b> elma ve tavuk soluk, iştah açmıyor; koyu temada saydamlık kaybolur.</p><span class="meta">Gemini görsel modeli</span></div></div>
+    <div class="c"><img src="web/f11.jpg" alt="A5 seti, koyu zemin"><div class="tx"><h3>A5 · A1, koyu zeminde</h3>
+      <p><b>Ne:</b> koyu temanın sınavı. Kenar ışığı sayesinde formlar zeminden ayrılıyor.</p>
+      <p><b>Not:</b> asıl üretimde ayrı koyu set yapmayacağız; şeffaf zeminli tek set iki temada kullanılır. Bu deneme, stilin koyuda da çalıştığını gösteriyor.</p><span class="meta">Gemini görsel modeli</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div><p class="eyebrow">B · Düz çizim</p><h2>Diğer iki referansın yönü</h2></div>
+  <div class="grid">
+    <div class="c"><img src="web/f4.jpg" alt="B1 seti"><div class="tx"><h3>B1 · Kalın çizgili çizgi film</h3>
+      <p><b>Ne:</b> ikinci referansın dili: kalın koyu kontur, düz renk. Çok küçük boyutta en net okunan stil; dosyalar küçük.</p>
+      <p><b>Zayıf yanı:</b> koyu temada siyah kontur kaybolur, ayrı kontur rengi gerekir. Uygulamanın inceliğiyle çocuksu bir zıtlık yaratıyor.</p><span class="meta">GPT görsel modeli</span></div></div>
+    <div class="c"><img src="web/f5.jpg" alt="B2 seti"><div class="tx"><h3>B2 · Gölgeli düz vektör</h3>
+      <p><b>Ne:</b> üçüncü referansın dili: konturdan arınmış, katmanlı düz şekiller, hafif gölge.</p>
+      <p><b>Zayıf yanı:</b> stok ikon seti hissi; "tek seferde üretilmiş" görünme riski en yüksek olan bu.</p><span class="meta">GPT görsel modeli</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div><p class="eyebrow">C · Gerçekçi</p><h2>Karşılaştırma için</h2>
+  <p class="sub" style="margin-top:8px">İlk denemede GPT modeline 3D istendi ama sonuç gerçekçiliğe kaydı. Ayrıca bir de doğrudan fotoğraf denendi.</p></div>
+  <div class="grid">
+    <div class="c"><img src="web/f1.jpg" alt="C1 seti"><div class="tx"><h3>C1 · Yarı gerçekçi render</h3>
+      <p><b>Ne:</b> porsiyonu en doğru anlatan. Bulgur, mercimek çorbası, beyaz peynir tanınıyor.</p>
+      <p><b>Zayıf yanı:</b> ikon değil yemek fotoğrafı gibi; liste içinde ağır duruyor.</p><span class="meta">GPT görsel modeli</span></div></div>
+    <div class="c"><img src="web/f6.jpg" alt="C2 seti"><div class="tx"><h3>C2 · Üstten fotoğraf</h3>
+      <p><b>Ne:</b> ilk prototipte önerdiğim "aynı tabak, aynı açı" kuralı.</p>
+      <p><b>Zayıf yanı:</b> üstten bakışta bardak ve kâse tanınmıyor; ilk referanstaki sıcaklık yok.</p><span class="meta">GPT görsel modeli</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div><p class="eyebrow">Sonraki adım</p><h2>A1 seçilirse üretim nasıl olur</h2></div>
+  <div class="grid">
+    <div class="box"><h3>Stil kuralı (her istemin başına)</h3>
+<pre>Cute stylized 3D food icon, toy-like, chunky
+rounded proportions, smooth soft-touch matte
+material like Apple 3D emoji, minimal texture,
+clean saturated colors, soft key light top-left,
+3/4 front view, single item centered,
+transparent background, no text.</pre>
+      <p class="sub" style="font-size:14px">Tutarlılık için her üretimde A1'den 4-5 ikon referans görsel olarak verilir.</p></div>
+    <div class="box"><h3>Akış</h3><ol>
+      <li>Sen bir stili seç (ya da A1'i şu yönde değiştir de).</li>
+      <li>12 ikonun her biri tek tek, şeffaf zeminde ve 1024 px üretilir; bu pilot setin onayı.</li>
+      <li>Kalan yaklaşık 150 gıda kategori kategori üretilir, gözden geçirme panosunda onaylanır.</li>
+      <li><code>img/160</code> ve <code>img/320</code> WebP olarak repoya girer; kayıt <code>img</code> alanıyla bağlanır.</li></ol></div>
+  </div>
+</section>
+</div>

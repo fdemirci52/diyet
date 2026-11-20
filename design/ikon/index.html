@@ -1,0 +1,76 @@
+<title>Diyet Gıda Kütüphanesi</title>
+<meta charset="utf-8">
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Yerleşim: üstte durum ve tema anahtarı, altında kategori sayfalarına göre ikon ızgarası; işaretli olanlar en üstte. */
+:root {
+  --bg: #f2f2f4; --fg: #0b0b0c; --muted: #6f6f76; --faint: #b9b9c0;
+  --card: #ffffff; --line: rgb(0 0 0 / 7%); --ctl: #f0f0f3; --track: #e6e6eb; --danger: #e5252a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 26px -18px rgb(0 0 0 / 18%);
+  --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0a0a0b; --fg: #f5f5f7; --muted: #8f8f97; --faint: #4e4e55;
+  --card: #161618; --line: rgb(255 255 255 / 7%); --ctl: rgb(255 255 255 / 7%); --track: rgb(255 255 255 / 10%); --danger: #ff5a52;
+  --shadow: none; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0a0a0b; --fg: #f5f5f7; --muted: #8f8f97; --faint: #4e4e55;
+  --card: #161618; --line: rgb(255 255 255 / 7%); --ctl: rgb(255 255 255 / 7%); --track: rgb(255 255 255 / 10%); --danger: #ff5a52;
+  --shadow: none; color-scheme: dark; }
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.5 var(--sys); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 40px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 40px; }
+h1 { font-size: 34px; line-height: 1.1; letter-spacing: -.022em; text-wrap: balance; }
+h2 { font-size: 22px; line-height: 1.2; letter-spacing: -.02em; }
+p { max-width: 68ch; }
+.lead { color: var(--muted); font-size: 17px; margin-top: 12px; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 18px; }
+.prog { flex: 1; min-width: 200px; height: 8px; border-radius: 4px; background: var(--track); position: relative; overflow: hidden; }
+.prog i { position: absolute; inset: 0 auto 0 0; background: var(--fg); border-radius: 4px; }
+.cnt { font-size: 15px; color: var(--muted); }
+.cnt b { color: var(--fg); }
+.theme { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--ctl); }
+.theme button { font: 600 13px var(--sys); color: var(--muted); height: 32px; padding: 0 14px; border-radius: 999px; border: 0; background: none; cursor: pointer; }
+.theme button.on { background: var(--card); color: var(--fg); box-shadow: var(--shadow); }
+.theme button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+section { display: flex; flex-direction: column; gap: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 10px; }
+.c { background: var(--card); border-radius: 20px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); padding: 12px 8px 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; min-width: 0; }
+.c img { width: 76px; height: 76px; display: block; }
+.c b { font-size: 13px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.c.todo { background: none; box-shadow: inset 0 0 0 1.5px var(--track); }
+.c.todo span.ph { width: 76px; height: 76px; border-radius: 50%; background: var(--ctl); display: grid; place-items: center; color: var(--faint); font-size: 26px; font-weight: 600; }
+.c.todo b { color: var(--muted); font-weight: 500; }
+.c.flag { box-shadow: var(--shadow), inset 0 0 0 2px var(--danger); }
+.c small { font-size: 12px; color: var(--danger); line-height: 1.3; }
+.note { font-size: 14px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Diyet · gıda kütüphanesi · A1 stili</p>
+  <h1>Gıda ikonları</h1>
+  <p class="lead">Kütüphanedeki 158 gıda ve programda geçip kütüphanede olmayan 22 kalem; toplam 180. Her sayfa Gemini Pro'da pilot sayfası referans verilerek üretildi, sonra kesilip zemini kaldırıldı. Delik, benek ya da yanık leke yüzünden işaretlenen 11 ikon yeniden üretildi; kırmızı çerçeveli olan kalmadı.</p>
+  <div class="bar"><div class="prog"><i id="pg"></i></div><span class="cnt" id="cnt"></span>
+    <div class="theme" role="group" aria-label="Tema"><button data-t="" class="on">Sistem</button><button data-t="light">Açık</button><button data-t="dark">Koyu</button></div></div>
+</header>
+<div id="list" style="display:flex;flex-direction:column;gap:40px"></div>
+</div>
+
+<script src="veri.js"></script>
+<script>
+const T = { pilot: 'Pilot', s01: 'Kahvaltı · hamur işi', s02: 'Kahvaltı · yanında', s03: 'Süt ürünleri ve protein', s04: 'Kebap ve döner', s05: 'Pide, dürüm, sokak', s06: 'Ana yemek · et, tavuk, balık', s07: 'Ev yemekleri · zeytinyağlı', s08: 'Çorba, salata, tahıl', s09: 'Dünya mutfağı', s10: 'İçecek', s11: 'Tatlı', s12: 'Atıştırmalık', s13: 'Meyve', s14: 'Programdan' };
+const ok = ICONS.filter(x => x.ok).length;
+document.getElementById('pg').style.width = (ok / ICONS.length * 100) + '%';
+document.getElementById('cnt').innerHTML = `<b>${ok}</b> / ${ICONS.length} hazır`;
+const card = x => x.ok ? `<div class="c ${x.f ? 'flag' : ''}"><img src="set/${x.id}-320.webp" alt="" loading="lazy"><b>${x.n}</b>${x.f ? `<small>${x.f}</small>` : ''}</div>`
+  : `<div class="c todo"><span class="ph">${x.n[0]}</span><b>${x.n}</b></div>`;
+const groups = [...new Set(ICONS.map(x => x.s))];
+document.getElementById('list').innerHTML = groups.map(g => { const L = ICONS.filter(x => x.s === g), n = L.filter(x => x.ok).length;
+  return `<section><div><p class="eyebrow">${g === 'pilot' ? 'Pilot' : 'Sayfa ' + g.slice(1)} · ${n} / ${L.length}</p><h2>${T[g]}</h2></div><div class="grid">${L.map(card).join('')}</div></section>`; }).join('');
+document.querySelectorAll('.theme button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.theme button').forEach(x => x.classList.toggle('on', x === b));
+  b.dataset.t ? document.documentElement.setAttribute('data-theme', b.dataset.t) : document.documentElement.removeAttribute('data-theme');
+}));
+</script>

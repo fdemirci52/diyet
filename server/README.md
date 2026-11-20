@@ -56,3 +56,29 @@ Kodu iptal etmek:
 ```bash
 npx wrangler kv key delete --remote --binding DIYET "code:FATIH-7K2M"
 ```
+
+## Hesaplar ve bulut eşitlemesi
+
+Uygulamada Program → Hesap: e-postaya gelen 6 haneli kodla giriş, kayıtlar D1 veritabanında (`DB`) saklanır. Şema `migrations/` içinde.
+
+Bir kez kurulum:
+
+```bash
+npx wrangler d1 create diyet
+```
+
+Çıkan `database_id` değerini `wrangler.toml` içindeki `D1_ID` yerine yaz, sonra şemayı uygula:
+
+```bash
+npx wrangler d1 migrations apply DB --remote
+```
+
+Kod e-postası [Resend](https://resend.com) ile gider. Anahtarı gizli değer olarak gir (ekrana yazılmaz):
+
+```bash
+npx wrangler secret put RESEND_KEY
+```
+
+Alan adı doğrulanmadan Resend yalnızca kendi hesabının e-postasına gönderir (`onboarding@resend.dev`'den). Başkalarına açmadan önce alan adı doğrula ve `MAIL_FROM` değişkenini (`Diyet <giris@alanadi.com>`) `wrangler.toml`'a ekle.
+
+Yerel deneme: `.dev.vars` içine `DEV_CODES=1` (ve gerekirse `ORIGINS`) yaz; `RESEND_KEY` yokken kod e-posta yerine cevapta döner. Şemayı yerelde `--local` ile uygula, `npx wrangler dev --local` ile çalıştır, uygulamada `localStorage['diyet-dev-api'] = 'http://localhost:8787'` ver.

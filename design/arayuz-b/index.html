@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Diyet Arayüz B</title>
+<style>
+/* Arayüz B: "Dolan tabaklar". Bekleyen yemek gölge, yenen yemek renkli.
+   Tasarım kuralları CLAUDE.md'den: 4 pt ızgara; yazı 34/22/17/15/13/11; ağırlık 400/500/600;
+   turuncu yalnızca "şimdi", mavi yalnızca su; kart 24, panel 22, kontrol 16, hap 999. */
+:root {
+  --bg: #f2f2f4; --fg: #0b0b0c; --sec: #48484f; --muted: #6f6f76; --faint: #b4b4bb;
+  --card: #ffffff; --line: rgb(0 0 0 / 7%); --ctl: #ececf0; --plate: #f2f2f4; --track: #e4e4e9;
+  --accent: #ff6a1a; --blue: #2f7cf6; --bezel: #0b0b0c; --on-fg: #ffffff;
+  --shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 26px -18px rgb(0 0 0 / 18%);
+  --pend: brightness(0) opacity(.12);
+  --soft: grayscale(1) opacity(.42);
+  --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0a0a0b; --fg: #f5f5f7; --sec: #c2c2c8; --muted: #8f8f97; --faint: #4a4a51;
+  --card: #161618; --line: rgb(255 255 255 / 7%); --ctl: rgb(255 255 255 / 8%); --plate: #202023; --track: rgb(255 255 255 / 10%);
+  --accent: #ff7a2f; --blue: #5b9dff; --bezel: #2a2a2e; --on-fg: #0b0b0c;
+  --shadow: inset 0 0 0 1px rgb(255 255 255 / 7%);
+  --pend: brightness(0) invert(1) opacity(.14);
+  --soft: grayscale(1) brightness(1.7) opacity(.42);
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0a0a0b; --fg: #f5f5f7; --sec: #c2c2c8; --muted: #8f8f97; --faint: #4a4a51;
+  --card: #161618; --line: rgb(255 255 255 / 7%); --ctl: rgb(255 255 255 / 8%); --plate: #202023; --track: rgb(255 255 255 / 10%);
+  --accent: #ff7a2f; --blue: #5b9dff; --bezel: #2a2a2e; --on-fg: #0b0b0c;
+  --shadow: inset 0 0 0 1px rgb(255 255 255 / 7%);
+  --pend: brightness(0) invert(1) opacity(.14);
+  --soft: grayscale(1) brightness(1.7) opacity(.42);
+  color-scheme: dark; }
+body.soluk { --pend: var(--soft); }
+/* Açık öğünde bekleyen kalem soluk renkte: ne olduğu okunur. Gölge yalnızca henüz sırası gelmemiş öğünler için. */
+.open .ic.wait, .openb .ic.wait, .tiles .ic.wait { filter: var(--soft); }
+body.real .alt { width: 391px; } body.real .phone { width: 391px; height: 840px; } body.real .zm { zoom: 1; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.45 var(--sys); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 8px; }
+
+/* ---------- Belge ---------- */
+.wrap { max-width: 1040px; margin: 0 auto; padding: 40px 16px 96px; display: flex; flex-direction: column; gap: 64px; }
+.doc h1 { font-size: 34px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
+.doc h2 { font-size: 22px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25; }
+.doc h3 { font-size: 17px; font-weight: 600; }
+.doc p, .doc li { max-width: 68ch; color: var(--sec); }
+.lead { font-size: 17px; margin-top: 12px; }
+section { display: flex; flex-direction: column; gap: 16px; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--ctl); }
+.seg button { font-size: 13px; font-weight: 500; color: var(--muted); height: 32px; padding: 0 12px; border-radius: 999px; }
+.seg button.on { background: var(--card); color: var(--fg); box-shadow: var(--shadow); }
+.alts { display: flex; gap: 24px; overflow-x: auto; padding: 4px 2px 12px; scroll-snap-type: x proximity; }
+.alt { flex: none; width: 300px; display: flex; flex-direction: column; gap: 12px; scroll-snap-align: start; }
+.alt h3 { display: flex; gap: 8px; align-items: baseline; }
+.alt h3 small { font-size: 13px; font-weight: 500; color: var(--muted); }
+.alt p { font-size: 13px; line-height: 1.5; }
+.pick { font-size: 11px; font-weight: 600; color: var(--on-fg); background: var(--fg); border-radius: 999px; padding: 2px 8px; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px 32px; }
+.notes ol, .notes ul { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.tbl { border-collapse: collapse; font-size: 13px; }
+.tbl td, .tbl th { padding: 8px 12px 8px 0; text-align: left; vertical-align: top; color: var(--sec); }
+.tbl th { color: var(--muted); font-weight: 500; }
+.tbl tr + tr td { border-top: 1px solid var(--line); }
+
+/* ---------- İkon testi ---------- */
+.lab { background: var(--card); border-radius: 24px; box-shadow: var(--shadow); padding: 20px; display: grid; grid-template-columns: 80px repeat(4, max-content); column-gap: 32px; gap: 16px 8px; align-items: center; overflow-x: auto; min-width: 0; }
+.lab .hd { font-size: 13px; color: var(--muted); }
+.lab .cell { display: flex; gap: 8px; align-items: center; }
+.lab .verdict { font-size: 13px; color: var(--sec); grid-column: 2 / -1; }
+
+/* ---------- Telefon ---------- */
+.phone { width: 300px; height: 640px; border: 8px solid var(--bezel); border-radius: 44px; overflow: hidden; background: var(--bg); position: relative; }
+.zm { position: absolute; left: 0; top: 0; width: 375px; height: 824px; zoom: .7573; }
+.scr { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: 20px 16px 0; display: flex; flex-direction: column; scrollbar-width: none; }
+.scr::-webkit-scrollbar { display: none; }
+.scr > .grow { flex: 1; }
+
+/* Ekran içi tipografi: yalnızca 34 / 22 / 17 / 15 / 13 / 11 */
+.t34 { font-size: 34px; font-weight: 600; letter-spacing: -.022em; line-height: 1.1; }
+.t22 { font-size: 22px; font-weight: 600; letter-spacing: -.012em; line-height: 1.2; }
+.t17 { font-size: 17px; line-height: 1.3; }
+.t15 { font-size: 15px; line-height: 1.35; }
+.t13 { font-size: 13px; line-height: 1.35; }
+.t11 { font-size: 11px; line-height: 1.3; }
+.m { color: var(--muted); } .s { color: var(--sec); } .f { color: var(--faint); }
+.w5 { font-weight: 500; } .w6 { font-weight: 600; }
+.now { color: var(--accent); }
+
+.top { padding: 4px 4px 24px; }
+.top .sum { margin-top: 8px; display: flex; gap: 16px; }
+.top .sum b { font-weight: 500; color: var(--fg); }
+
+.card { background: var(--card); border-radius: 24px; box-shadow: var(--shadow); }
+
+/* Gıda ikonu ve harf diski */
+.ic { display: block; flex: none; object-fit: contain; transition: filter .2s; }
+.ic.wait, .ic.skip { filter: var(--pend); }
+.lt { display: grid; place-items: center; border-radius: 50%; background: var(--plate); color: var(--muted); font-weight: 600; box-shadow: inset 0 0 0 1px var(--line); }
+.lt.wait, .lt.skip { filter: none; opacity: .45; }
+.ate { animation: ate .42s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes land { 0% { transform: scale(1.14); } 100% { transform: scale(1); } }
+.plate.land { animation: land .36s cubic-bezier(.32, .72, 0, 1) both; }
+.ate ~ .tick { animation: tick .26s cubic-bezier(.32, .72, 0, 1) .18s both; }
+@keyframes tick { 0% { transform: scale(.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes ate { 0% { filter: var(--pend); transform: scale(.84); } 55% { filter: none; transform: scale(1.07); } 100% { filter: none; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .ate, .ate ~ .tick, .plate.land { animation: none; } }
+
+/* Tabak: öğünün kalemleri üst üste */
+.plate { display: block; position: relative; flex: none; border-radius: 50%; background: var(--plate); box-shadow: inset 0 0 0 1px var(--line); }
+.plate .ic, .plate .lt { position: absolute; }
+.plate.cur { box-shadow: inset 0 0 0 2px var(--accent); }
+
+/* Yorum A: tabaklı zaman çizelgesi */
+.tl { display: flex; flex-direction: column; gap: 4px; }
+.row { display: flex; align-items: center; gap: 12px; padding: 8px 4px; border-radius: 16px; text-align: left; width: 100%; }
+.row .b { flex: 1; min-width: 0; }
+.row .b > * { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .tm { font-size: 15px; color: var(--muted); }
+.ev { display: flex; align-items: center; gap: 12px; padding: 8px 4px; }
+.ev .gl { width: 48px; height: 48px; display: grid; place-items: center; color: var(--muted); flex: none; }
+.open { padding: 16px; margin: 8px 0; display: flex; flex-direction: column; gap: 16px; }
+.open .hd { display: flex; align-items: center; gap: 12px; }
+.open .hd .b { flex: 1; min-width: 0; }
+.items { display: flex; flex-direction: column; gap: 4px; }
+.it { display: flex; align-items: center; gap: 12px; min-height: 56px; }
+.it .tap { flex: none; position: relative; border-radius: 12px; }
+.it .tap::before, .amt::before, .tamt::before { content: ''; position: absolute; inset: -6px; }
+.amt, .tamt { position: relative; }
+.it .b { flex: 1; min-width: 0; text-align: left; padding: 4px 0; }
+.it .b .nm { display: block; }
+.it.skip .nm { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); }
+.amt { flex: none; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--ctl); font-size: 15px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+.amt.ok { background: none; color: var(--muted); padding: 0 4px; }
+.tick { position: absolute; right: -4px; bottom: -4px; width: 20px; height: 20px; border-radius: 50%; background: var(--fg); color: var(--on-fg); display: grid; place-items: center; box-shadow: 0 0 0 2px var(--card); }
+.acts { display: flex; gap: 8px; }
+.primary { flex: 1; height: 48px; border-radius: 16px; background: var(--fg); color: var(--on-fg); font-size: 17px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.primary:active { transform: scale(.98); }
+.sqr { width: 48px; height: 48px; border-radius: 16px; background: var(--ctl); display: grid; place-items: center; color: var(--fg); flex: none; }
+.donebar { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 15px; padding: 0 4px; min-height: 48px; }
+.done-sum { display: flex; gap: 8px; }
+
+/* Yorum B: kalem şeridi */
+.blk { padding: 12px 4px; display: flex; flex-direction: column; gap: 8px; text-align: left; width: 100%; border-radius: 16px; }
+.blk .hl { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.rib { display: flex; gap: 8px; align-items: center; }
+.rib .more { font-size: 13px; color: var(--muted); }
+.openb { padding: 16px 16px 16px; margin: 4px 0; display: flex; flex-direction: column; gap: 12px; }
+.itb { display: flex; align-items: center; gap: 16px; min-height: 72px; }
+
+/* Yorum C: sofra */
+.strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 0 -4px 20px; }
+.strip button { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0; border-radius: 16px; }
+.strip button.sel { background: var(--card); box-shadow: var(--shadow); }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tile { background: var(--plate); border-radius: 16px; padding: 12px 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; min-height: 156px; }
+.tamt { height: 28px; min-width: 40px; padding: 0 12px; border-radius: 999px; background: var(--ctl); display: inline-flex; align-items: center; justify-content: center; margin-top: auto; }
+.tamt svg { width: 16px; height: 16px; }
+.tile .nm { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tile .tick { right: 8px; top: 8px; bottom: auto; box-shadow: 0 0 0 2px var(--plate); }
+.tile.skip .nm { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); }
+.nextl { display: flex; align-items: center; gap: 12px; padding: 16px 4px 0; }
+
+/* Gün boyu */
+.daylong { margin-top: 24px; }
+.daylong h4 { font-size: 15px; font-weight: 500; color: var(--muted); padding: 0 4px 8px; }
+.dl { padding: 4px 16px; }
+.dlr { display: flex; align-items: center; gap: 12px; min-height: 60px; }
+.dlr .b { flex: 1; min-width: 0; }
+.glass { display: flex; gap: 4px; margin-top: 4px; }
+.glass i { width: 12px; height: 4px; border-radius: 2px; background: var(--track); }
+.glass i.on { background: var(--blue); }
+.plus { width: 40px; height: 40px; border-radius: 50%; background: var(--ctl); display: grid; place-items: center; flex: none; }
+.chk { width: 28px; height: 28px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--faint); display: grid; place-items: center; flex: none; }
+.chk.on { background: var(--fg); color: var(--on-fg); box-shadow: none; }
+
+/* Alt çubuk */
+.tabs { position: sticky; bottom: 0; margin: 24px -16px 0; padding: 8px 12px 24px; background: linear-gradient(to bottom, transparent, var(--bg) 24px); }
+.tabs nav { display: grid; grid-template-columns: repeat(5, minmax(0, 68px)); justify-content: space-between; background: var(--card); border-radius: 28px; box-shadow: var(--shadow), 0 8px 24px -12px rgb(0 0 0 / 20%); padding: 4px; }
+.tabs span { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 4px; border-radius: 22px; color: var(--muted); font-size: 11px; font-weight: 500; }
+.tabs span.on { color: var(--fg); background: var(--ctl); }
+
+/* Alt sayfa */
+.scrim { position: absolute; inset: 0; background: rgb(0 0 0 / 32%); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 48px; background: var(--card); border-radius: 22px 22px 0 0; overflow-y: auto; padding: 8px 16px 32px; scrollbar-width: none; display: flex; flex-direction: column; gap: 20px; }
+.sheet.short { top: auto; }
+.grab { width: 36px; height: 5px; border-radius: 3px; background: var(--faint); margin: 0 auto 4px; display: block; }
+.sh-hd { display: flex; align-items: center; gap: 16px; }
+.sec-t { font-size: 13px; color: var(--muted); padding: 0 0 8px; }
+.stepper { display: flex; align-items: center; gap: 12px; background: var(--plate); border-radius: 16px; padding: 8px; }
+.stepper .v { flex: 1; text-align: center; }
+.qs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background: var(--plate); border-radius: 16px; padding: 4px; }
+.qs button { height: 40px; border-radius: 12px; font-size: 15px; font-weight: 500; color: var(--sec); }
+.qs button.on { background: var(--card); color: var(--fg); box-shadow: var(--shadow); }
+.opt { display: flex; align-items: center; gap: 12px; min-height: 56px; width: 100%; text-align: left; border-radius: 16px; padding: 4px 8px 4px 4px; }
+.opt .b { flex: 1; min-width: 0; }
+.opt.on { background: var(--plate); }
+.fgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fcard { background: var(--plate); border-radius: 16px; padding: 12px 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; min-width: 0; }
+.fcard .ic, .fcard .lt { margin-bottom: 4px; }
+.fcard .nm { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fcard.on { box-shadow: inset 0 0 0 2px var(--fg); }
+.foot { display: flex; align-items: center; gap: 16px; position: sticky; bottom: -32px; background: var(--card); padding: 12px 0 32px; margin: 0 0 -32px; }
+.txt { font-size: 17px; color: var(--sec); padding: 0 8px; height: 48px; }
+.menu { display: flex; flex-direction: column; }
+.menu button { display: flex; align-items: center; gap: 16px; min-height: 56px; text-align: left; font-size: 17px; }
+.menu button .g { width: 40px; height: 40px; border-radius: 50%; background: var(--plate); display: grid; place-items: center; color: var(--sec); }
+
+/* Hafta ve İlerleme */
+.wk { padding: 12px 8px; }
+.wk table { width: 100%; border-collapse: separate; border-spacing: 0 4px; }
+.wk th { font-size: 11px; font-weight: 500; color: var(--muted); text-align: center; padding-bottom: 4px; }
+.wk td { text-align: center; vertical-align: middle; }
+.wk td:first-child { text-align: left; padding-left: 8px; }
+.wk td .plate { margin: 0 auto; }
+.wk tr.today td:first-child { color: var(--accent); }
+.quota { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.qrow { display: flex; align-items: center; gap: 12px; }
+.qrow .b { flex: 1; }
+.pips { display: flex; gap: 4px; }
+.pips .ic, .pips .lt { width: 28px; height: 28px; }
+.dayrow { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.dayrow .b { flex: 1; }
+.pct { font-size: 17px; font-weight: 500; min-width: 48px; text-align: right; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal i { aspect-ratio: 1; border-radius: 8px; background: var(--track); display: block; }
+.cal i.x { background: none; }
+.cal i.today { box-shadow: inset 0 0 0 2px var(--accent); }
+.platecal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px 4px; }
+.platecal div { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.kg { padding: 16px; display: flex; align-items: flex-end; justify-content: space-between; }
+</style>
+<script src="../../plan.js"></script>
+<script src="../../foods.js"></script>
+</head>
+<body>
+<div class="wrap doc">
+
+<header>
+  <h1>Arayüz B: Dolan tabaklar</h1>
+  <p class="lead">Gün, sırayla dolan tabaklardan oluşur; yenen yemek renklenir, bekleyen gölge olarak durur. İlerleme için halka ya da sayaç yok: ikonların kendisi gösterir.</p>
+  <div class="bar" style="margin-top:20px">
+    <div class="seg" id="theme"><button data-t="">Sistem</button><button data-t="light">Açık</button><button data-t="dark">Koyu</button></div>
+    <div class="seg" id="pendSeg"><button data-p="golge" class="on">Bekleyen: gölge</button><button data-p="soluk">Bekleyen: soluk</button></div>
+    <div class="seg" id="zSeg"><button data-z="" class="on">Küçük</button><button data-z="real">Gerçek boyut</button></div>
+  </div>
+</header>
+
+<section>
+  <h2>İkon boyut testi</h2>
+  <p>Programdaki dört kalem, kart zemininde, renkli (yendi) ve gölge (bekliyor) hâlde. Sağdaki son satır harfli disk: ikonu olmayan kalem.</p>
+  <div class="lab" id="lab"></div>
+</section>
+
+<section>
+  <h2>Bugün</h2>
+  <p>Üç yorum, aynı veriyle: Çarşamba 18 Kasım, varsayılan program (öğle ızgara köfte, akşam balık, 18:00 alt vücut antrenmanı). İkona dokun: yedim. Ada ya da miktara dokun: kalem sayfası (porsiyon, seçenekler, muadil, atladım).</p>
+  <div class="bar">
+    <div class="seg" id="scSeg"><button data-s="bos">Boş gün · 08:20</button><button data-s="orta" class="on">Gün ortası · 13:50</button><button data-s="bitti">Bitmiş gün · 22:40</button></div>
+    <div class="seg" id="kcSeg"><button data-k="1" class="on">Kalori görünür</button><button data-k="0">Kalori gizli</button></div>
+  </div>
+  <div class="alts" id="today"></div>
+</section>
+
+<section>
+  <h2>Kalem sayfası</h2>
+  <p>Kahvaltıdaki peynir: programın üç eşdeğer seçeneği, diyetisyenin iki muadili ve kütüphane. Her dokunuş hemen kaydedilir; sayfanın tek ana düğmesi "Yedim".</p>
+  <div class="alts" id="item"></div>
+</section>
+
+<section>
+  <h2>Hafta</h2>
+  <p>16–22 Kasım. Pazartesi ve salı kayıtlı, bugün gün ortası, kalan günler programın gölgesi.</p>
+  <div class="alts" id="week"></div>
+</section>
+
+<section>
+  <h2>İlerleme</h2>
+  <p>Program 13 Kasım'da başladı; takvimde yalnızca altı gün var. Boş takvim de bir durum.</p>
+  <div class="alts" id="prog"></div>
+</section>
+
+<section id="report">
+  <h2>Rapor</h2>
+  <div class="notes">
+    <div>
+      <h3>Yön</h3>
+      <ul>
+        <li><b>Ürün:</b> diyetisyenin verdiği programı gün içinde tabak tabak takip eden, kontrole götürülen kişisel defter.</li>
+        <li><b>Karakter:</b> iştah açıcı, sakin, kesin.</li>
+        <li><b>Dünya:</b> sofra ve tezgâh. Zemin nötr; renk yalnızca yemekte. Turuncu "şimdi", mavi su.</li>
+        <li><b>An:</b> "Yedim". Gölge hâlindeki yemek dokununca renklenir ve tabağına oturur.</li>
+        <li><b>İmza:</b> öğün tabağı: o öğünün yemekleri üst üste, yenen renkli, bekleyen gölge.</li>
+      </ul>
+      <p style="margin-top:12px"><b>Konsept:</b> Gün, sırayla dolan tabaklardan oluşur; yenen yemek renklenir, bekleyen gölge olarak durur.</p>
+    </div>
+    <div>
+      <h3>Unslop: ilk denetim → son durum</h3>
+      <table class="tbl">
+        <tr><th>Mevcut ekranda</th><th>Burada</th></tr>
+        <tr><td>Aynı ilerleme dört kez: uyum halkası, üç kadran, öğün sayaç satırı, ikon halkası</td><td>Tek mekanizma: ikonun rengi. Üstte bir sessiz satır (yenen / hedef)</td></tr>
+        <tr><td>Turuncu halka, kadran, ikon ve düğmede</td><td>Turuncu yalnızca şimdiki öğünün saati ve C şeridindeki halka</td></tr>
+        <tr><td>Üç eşit kadran kartı</td><td>Kaldırıldı</td></tr>
+        <tr><td>Zaman çizelgesinde gıda ikonu yok</td><td>Her öğün tabağı, her kalem ikonuyla</td></tr>
+        <tr><td>Kalem satırları arasında çizgi</td><td>Yalnızca boşluk</td></tr>
+        <tr><td>Öğünde beş eylem</td><td>Bir ana düğme + "⋯" (fotoğraf, not, atla)</td></tr>
+        <tr><td>Saat ve geri sayım hapı birlikte</td><td>Yalnızca saat</td></tr>
+        <tr><td>"Tamam" alt yazısı</td><td>Kapanan öğünde yenenlerin adı, muadil kendi adıyla</td></tr>
+        <tr><td>14 yazı boyutu, 13 yerde 700</td><td>34 / 22 / 17 / 15 / 13 / 11; 400, 500, 600</td></tr>
+      </table>
+      <h3 style="margin-top:16px">Son denetim</h3>
+      <ol>
+        <li><b>Ad değiştir:</b> başka bir ürünün adı yazılsa da ekran bir diyetisyen programını anlatmaya devam ediyor; tabaklar ve gölgeler bu ürüne ait.</li>
+        <li><b>Model izi:</b> halka, rozet, büyük harf etiket, gradyan yok. Kalan son iz, H2'deki satır çizgileri, silindi.</li>
+        <li><b>Rakibin kopyalayamayacağı:</b> gölgeden renge dolan öğün tabağı.</li>
+        <li><b>Bir şey daha sil:</b> A'nın açık kartındaki tabak, altındaki listeyi tekrar ediyordu. Silindi; kart kapanınca tabak satırda görünüyor, bir şey bozulmadı.</li>
+      </ol>
+    </div>
+    <div>
+      <h3>Polish puan geçmişi</h3>
+      <table class="tbl">
+        <tr><th>Tur</th><th>Puan</th><th>En zayıf şey → yapılan</th></tr>
+        <tr><td>1</td><td>6</td><td>"Yedim" yalnızca renk değiştiriyordu; Hepsini yedim eski kalemleri de canlandırıyordu → yalnızca yeni yenen kalemler 50 ms arayla renklenir, işaret 180 ms sonra gelir, kapanan öğün 900 ms sonra satırına iner ve tabak oturur</td></tr>
+        <tr><td>2</td><td>7</td><td>Boş gün "0 / 2.160" diye açılıyordu; tek kalemli öğünde "Hepsini yedim"; C'de Uyanınca iki kez → boş günde hedef satırı, tek kalemde "Tamam", Uyanınca şeridin üstünde tek satır</td></tr>
+        <tr><td>3</td><td>7</td><td>Değeri olmayan öğünde "0 kcal · 0 g protein" → satır çıkmıyor</td></tr>
+        <tr><td>4</td><td>7,5</td><td>A'nın açık kartında tabak ile liste aynı şeyi söylüyordu → kartta tabak yok</td></tr>
+        <tr><td>5</td><td>7,5</td><td>Kalori gizli, ikonsuz kalem, azaltılmış hareket ve koyu tema yeniden gezildi; puanı değiştiren bir şey yok</td></tr>
+        <tr><td>6</td><td>7,5</td><td>En zayıf şey: C'de yenen kartın zemini değişmiyor. Düzeltmek puanı değiştirmez; dur</td></tr>
+      </table>
+      <p style="margin-top:8px">8'e çıkmak için: "Yedim" anının telefonda gerçek dokunuşla (ve titreşimle) denenmesi, gerçek kayıtlarla iki haftalık İlerleme.</p>
+    </div>
+    <div>
+      <h3>Önerim</h3>
+      <ul>
+        <li><b>Bugün: A (Tabak).</b> Bütün gün tek ekranda okunuyor, kapalı öğün tek satır, üç durumda (boş, gün ortası, bitti) da dengeli. Bitmiş gün, dolu tabaklardan bir sütun: ekranın en iyi anı. B ikonları 28 px'te çıkartma gibi diziyor; C güzel ama günün kalanını şeridin arkasına saklıyor.</li>
+        <li><b>Bekleyen iki kademe:</b> sırası gelmemiş öğün gölge, açık öğünde bekleyen kalem soluk renk (ne olduğu okunsun), yenen tam renk.</li>
+        <li><b>Kalem sayfası: K1.</b> Seçenekler satır satır okunur; kütüphane ızgarası en altta, 64 px kart.</li>
+        <li><b>Hafta: H1.</b> Hangi öğünün aksadığı desen olarak görünür, kota ikonla sayılır. <b>İlerleme: P1</b> gri takvim (sakin); P2'deki akşam tabakları ileride İlerleme'nin ikinci görünümü olabilir.</li>
+        <li><b>İkon boyutu:</b> 40 px satır, 56–64 px kart; 28'in altı yalnızca tabak içinde.</li>
+        <li><b>Uygulamaya aktarırken:</b> render() her dakika çalıştığı için canlandırma çizimde değil, yalnızca dokunuşla değişen kalemlerin kümesinde (burada <code>fresh</code>) tetiklenmeli; yoksa her dakika titrer.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+</div>
+
+<script>
+/* ---------- Veri: plan.js ve foods.js olduğu gibi ---------- */
+const P = PLAN_DEFAULT, IT = P.items, MN = Object.fromEntries(P.mains.map(m => [m.id, m]));
+const fold = s => String(s).toLocaleLowerCase('tr').replace(/[çğıöşüâîû]/g, c => 'cgiosuaiu'['çğıöşüâîû'.indexOf(c)]).replace(/[^a-z0-9]+/g, ' ').trim();
+const HAS = new Set(ICONS);
+const cap = s => s ? s[0].toLocaleUpperCase('tr') + s.slice(1) : s;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const num = n => Math.round(n).toLocaleString('tr-TR');
+
+/* Plan kalemi → ikon. Seçenekli kalemde seçenek başına. */
+const ICO_ITEM = { limon: 'limonlu-su', peynir: ['beyaz-peynir', 'lor', 'cokelek'], yumurta: 'haslanmis-yumurta', sebze: 'sogus',
+  yag: ['avokado', 'ceviz'], ekmek: 'tam-bugday-ekmegi', cay: 'acik-cay', yogurt: ['yogurt', 'ayran'], salata: 'yesil-salata',
+  galeta: ['galeta', 'galeta', 'galeta', 'leblebi'], meyve: 'elma', bar: 'protein-bar', psut: ['protein-sut', 'quark'], kabak: 'kabak-cekirdegi' };
+const ICO_MAIN = { bakla: 'etli-kuru-fasulye', kofte: 'izgara-kofte', tavuk: 'izgara-tavuk-gogsu', balik: 'levrek-izgara', ton: 'ton-baligi' };
+/* Serbest ad → ikon (muadiller). null: bilerek ikonsuz. Uzun ifade önce. */
+const KW = [['kabak çekirdeği', 'kabak-cekirdegi'], ['ton balı', 'ton-baligi'], ['protein süt', 'protein-sut'], ['protein bar', 'protein-bar'], ['pirinç patlağı', 'pirinc-patlagi'],
+  ['esmer pirinç', 'esmer-pirinc'], ['omlet', 'omlet'], ['menemen', 'menemen'], ['kaşar', 'kasar-peyniri'], ['lor', 'lor'], ['çökelek', 'cokelek'], ['yumurta', 'haslanmis-yumurta'],
+  ['avokado', 'avokado'], ['ceviz', 'ceviz'], ['badem', 'badem'], ['fındık', 'findik'], ['zeytinyağ', 'zeytinyagi'], ['sıvıyağ', 'zeytinyagi'], ['zeytin', 'zeytin'], ['yulaf', 'yulaf-ezmesi'],
+  ['bulgur', 'bulgur-pilavi'], ['makarna', 'tam-bugday-makarna'], ['patates', 'haslanmis-patates'], ['lavaş', 'lavas'], ['ekmeğ', 'tam-bugday-ekmegi'], ['ayran', 'ayran'],
+  ['cacık', 'cacik'], ['kefir', 'kefir'], ['skyr', 'skyr'], ['whey', 'protein-shake'], ['quark', 'quark'], ['yoğurt', 'yogurt'], ['galeta', 'galeta'], ['leblebi', 'leblebi'],
+  ['çilek', 'cilek'], ['kayısı', 'kayisi'], ['kivi', 'kivi'], ['kavun', 'kavun'], ['üzüm', 'uzum'], ['elma', 'elma'], ['köfte', 'izgara-kofte'], ['tavuk', 'izgara-tavuk-gogsu'],
+  ['bonfile', 'biftek'], ['balık', 'levrek-izgara'], ['hindi', null], ['mercimek', null], ['börülce', null], ['sebze', null], ['söğüş', 'sogus'], ['salata', 'yesil-salata']];
+const icoFor = s => { const f = String(s).toLocaleLowerCase('tr'); for (const [k, v] of KW) if (f.includes(k)) return v; return null; };
+const icoFood = f => { const i = f.i || fold(f.n).replace(/ /g, '-'); return HAS.has(i) ? i : null; };
+
+/* Miktar: "2 dilim beyaz peynir (60 g)" → { amt: '2 dilim', label: 'Beyaz peynir (60 g)' } */
+const UNITS = ['avuç içi', 'çay bardağı', 'yk', 'çk', 'dilim', 'bardak', 'fincan', 'kutu', 'porsiyon', 'g', 'tam', 'ölçü'];
+function parseAmt(t) {
+  const m = t.match(/^([\d½¼¾]+(?:-\d+)?)\s+(.*)$/); if (!m) return { n: null, amt: '', label: cap(t) };
+  let rest = m[2], unit = 'adet';
+  for (const u of UNITS) if (rest.startsWith(u + ' ')) { unit = u; rest = rest.slice(u.length + 1); break; }
+  return { n: m[1], unit, amt: m[1] + ' ' + unit, label: cap(rest) };
+}
+const scaleN = (n, q) => n.split('-').map(x => { const v = parseFloat(x.replace('½', '.5')) * q; return String(Math.round(v * 4) / 4).replace('.5', '½').replace('0½', '½').replace('.25', '¼').replace('.75', '¾'); }).join('-');
+const QS = [.25, .5, .75, 1, 1.5, 2, 3];
+const qLab = q => ({ .25: '¼', .5: '½', .75: '¾', 1: '1', 1.5: '1½', 2: '2', 3: '3' }[q]);
+
+/* ---------- Gün ---------- */
+const TODAY = new Date(2026, 10, 18);
+const dIdx = d => (d.getDay() + 6) % 7;
+const MON = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+const addD = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const dkey = d => d.toISOString ? `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}` : d;
+
+function mealsFor(date) {
+  const di = dIdx(date);
+  return P.meals.map(m => {
+    let ids = [...m.items], main = null;
+    if (m.main) { main = MN[P.rota[m.id][di]]; if (main.noSalad) ids = ids.filter(i => i !== 'salata'); }
+    const items = ids.map(id => ({ id, ...IT[id] }));
+    if (main) items.unshift({ ...main, id: 'main', mid: main.id });
+    return { id: m.id, title: m.title, time: m.time, items };
+  });
+}
+const TRAIN = d => P.training.days[d.getDay()];
+
+/* Kalem görünümü: state + plan → ne çizilecek */
+function iv(meal, it, st) {
+  const key = meal.id + '.' + it.id, s = st[key] || {};
+  const o = s.o || 0;
+  let text = it.opts ? it.opts[o] : it.name;
+  let ico = it.mid ? ICO_MAIN[it.mid] : Array.isArray(ICO_ITEM[it.id]) ? ICO_ITEM[it.id][o] : ICO_ITEM[it.id];
+  let meta = it.meta || (it.opts && !s.s ? 'veya ' + it.opts.filter((_, i) => i !== o)[0].toLocaleLowerCase('tr') : '');
+  if (s.s === 'swap') { text = s.sub; ico = s.ico === undefined ? icoFor(s.sub) : s.ico; meta = 'Muadil · programda ' + parseAmt(it.opts ? it.opts[0] : it.name).label.toLocaleLowerCase('tr'); }
+  if (s.s === 'skip') meta = 'Atlandı';
+  const a = parseAmt(text);
+  return { key, it, s: s.s || 'wait', q: s.q || 1, ico, label: a.label, amt: a.n ? scaleN(a.n, s.q || 1) + ' ' + a.unit : '', meta, opt: !!it.optional, chip: it.chip || a.label };
+}
+const req = m => m.items.filter(i => !i.optional);
+function mstate(m, st) {
+  const r = req(m), rec = r.filter(i => st[m.id + '.' + i.id]);
+  return rec.length === 0 ? 'wait' : rec.length === r.length ? 'closed' : 'part';
+}
+function totals(ms, st) {
+  let k = 0, p = 0, K = 0, Pp = 0;
+  ms.forEach(m => m.items.forEach(i => { if (!i.optional) { K += i.k; Pp += i.p; } const s = st[m.id + '.' + i.id]; if (s && s.s !== 'skip') { k += i.k * (s.q || 1); p += i.p * (s.q || 1); } }));
+  return { k, p, K, P: Pp };
+}
+
+/* ---------- Senaryolar ---------- */
+function fill(ms, st, ids) { ms.forEach(m => { if (ids.includes(m.id)) req(m).forEach(i => st[m.id + '.' + i.id] = { s: 'done' }); }); }
+function scenario(name) {
+  const ms = mealsFor(TODAY), st = {};
+  const d = { st, water: 0, coffee: 0, walk: false, now: '08:20' };
+  if (name === 'orta') {
+    fill(ms, st, ['sabah', 'kahvalti']);
+    st['kahvalti.yumurta'] = { s: 'swap', sub: '2 yumurtalı yağsız omlet' };
+    st['kahvalti.cay'] = { s: 'done' };
+    Object.assign(d, { water: 4, coffee: 1, now: '13:50' });
+  }
+  if (name === 'bitti') {
+    fill(ms, st, ms.map(m => m.id));
+    st['kahvalti.yumurta'] = { s: 'swap', sub: '2 yumurtalı yağsız omlet' };
+    st['ikindi.galeta'] = { s: 'done', o: 3 };
+    st['aksam.ekmek'] = { s: 'skip' };
+    st['aksam.salata'] = { s: 'swap', sub: 'Haşlama / ızgara sebze (1 tatlı kaşığı yağ)' };
+    Object.assign(d, { water: 9, coffee: 2, walk: true, now: '22:40' });
+  }
+  return d;
+}
+/* Geçmiş günler (Hafta, İlerleme): plan + birkaç gerçekçi sapma */
+function pastDay(date) {
+  const ms = mealsFor(date), st = {}, k = date.getDate();
+  if (date >= TODAY) return st;
+  fill(ms, st, ms.map(m => m.id));
+  if (k === 13) st['aksam.ekmek'] = { s: 'skip' };
+  if (k === 14) { st['ikindi.galeta'] = { s: 'skip' }; st['ikindi.meyve'] = { s: 'skip' }; }
+  if (k === 15) req(ms.find(m => m.id === 'gece')).forEach(i => delete st['gece.' + i.id]);
+  if (k === 17) { st['ikindi.galeta'] = { s: 'skip' }; ['aksam', 'gece'].forEach(id => req(ms.find(m => m.id === id)).forEach(i => delete st[id + '.' + i.id])); }
+  return st;
+}
+function score(ms, st) {
+  let n = 0, ok = 0, rec = 0, all = 0;
+  ms.forEach(m => { if (!m.time) return; all++; if (mstate(m, st) === 'wait') return; rec++; req(m).forEach(i => { const s = st[m.id + '.' + i.id]; n++; if (s && s.s !== 'skip') ok++; }); });
+  return { pct: n ? Math.round(ok / n * 100) : null, fill: rec / all };
+}
+
+/* ---------- Çizim parçaları ---------- */
+const LTS = { 20: 11, 22: 11, 24: 11, 28: 13, 32: 13, 40: 17, 48: 17, 56: 22, 64: 22 };
+function icon(ico, px, cls = '', label = '?', k = '') {
+  const kk = k ? ` data-k="${k}"` : '';
+  if (!ico) return `<span class="ic lt ${cls}"${kk} style="width:${px}px;height:${px}px;font-size:${LTS[px] || 13}px">${esc(cap(label.trim())[0])}</span>`;
+  return `<img class="ic ${cls}"${kk} src="../../img/f/${ico}-160.webp" srcset="../../img/f/${ico}-160.webp 160w, ../../img/f/${ico}-320.webp 320w" sizes="${px}px" width="${px}" height="${px}" alt="">`;
+}
+const SV = {
+  check: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.3l2.3 2.2 4.7-5"/></svg>',
+  checkL: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 10.5l3.5 3.3 7.5-8"/></svg>',
+  plus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>',
+  minus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8h10"/></svg>',
+  dots: '<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><circle cx="4.5" cy="10" r="1.6"/><circle cx="10" cy="10" r="1.6"/><circle cx="15.5" cy="10" r="1.6"/></svg>',
+  dumb: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/></svg>',
+  walk: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4.5" r="1.8"/><path d="M10 21l2.5-6 2.5 2.5V21M8 12l2.5-4.5 3.5 1 2 3.5 2.5 1M12.5 15l-1-5"/></svg>',
+  cam: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"><path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg>',
+  skip: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/></svg>',
+  note: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19h14M14.5 5.5l3 3L9 17H6v-3z"/></svg>',
+};
+const TABI = {
+  'Bugün': '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.3l2.4 2.3 4.6-5"/></svg>',
+  'Hafta': '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M6 19v-6M12 19V6M18 19v-9"/></svg>',
+  'Asistan': '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"><path d="M4.5 11.5a7.5 6.5 0 1 1 4 5.8L5 18.5l.9-3.2a6.2 6.2 0 0 1-1.4-3.8z"/></svg>',
+  'İlerleme': '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="4" y="4" width="4" height="4" rx="1"/><rect x="10" y="4" width="4" height="4" rx="1"/><rect x="16" y="4" width="4" height="4" rx="1"/><rect x="4" y="10" width="4" height="4" rx="1"/><rect x="10" y="10" width="4" height="4" rx="1"/><rect x="16" y="10" width="4" height="4" rx="1"/><rect x="4" y="16" width="4" height="4" rx="1"/><rect x="10" y="16" width="4" height="4" rx="1"/></svg>',
+  'Program': '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M9 7h11M9 12h11M9 17h11M4.5 7h.01M4.5 12h.01M4.5 17h.01"/></svg>',
+};
+const tabs = on => `<div class="tabs"><nav>${Object.keys(TABI).map(t => `<span class="${t === on ? 'on' : ''}">${TABI[t]}${t}</span>`).join('')}</nav></div>`;
+
+/* Tabak: kalemler üst üste; en çok dört ikon, sıra planın sırası. */
+const PLATE_POS = {
+  1: [[.5, .5, .62]],
+  2: [[.36, .4, .5], [.64, .6, .5]],
+  3: [[.5, .32, .44], [.3, .64, .44], [.7, .64, .44]],
+  4: [[.32, .32, .42], [.68, .32, .42], [.32, .68, .42], [.68, .68, .42]],
+};
+function plate(m, st, px, cur, fresh) {
+  const vs = req(m).map(i => iv(m, i, st)).slice(0, 4), pos = PLATE_POS[vs.length] || PLATE_POS[1];
+  return `<span class="plate${cur ? ' cur' : ''}${LAND === m.id ? ' land' : ''}" style="width:${px}px;height:${px}px">${vs.map((v, i) => {
+    const [x, y, s] = pos[i], w = Math.round(px * s / 2) * 2;
+    return icon(v.ico, w, (v.s === 'done' || v.s === 'swap' ? '' : v.s) + (isF(fresh, v.key) ? ' ate' : ''), v.label).replace(/(class="ic[^"]*")/, `$1 style="left:${Math.round(x * px - w / 2)}px;top:${Math.round(y * px - w / 2)}px;width:${w}px;height:${w}px${v.ico ? '' : ';font-size:11px'}"`);
+  }).join('')}</span>`;
+}
+const isF = (f, k) => !!f && f.has(k);
+let LAND = null;   /* satıra yeni oturan tabak: öğün kimliği */
+const fmtDate = d => `${d.getDate()} ${MON[d.getMonth()]} ${DAYS[dIdx(d)]}`;
+const kcOn = () => PH.kc;
+
+function summary(ms, st) {
+  const t = totals(ms, st);
+  if (!t.p) return `<div class="sum t15 m"><span>Hedef ${kcOn() ? num(t.K) + ' kcal · ' : ''}${num(t.P)} g protein</span></div>`;
+  return `<div class="sum t15 m">${kcOn() ? `<span><b>${num(t.k)}</b> / ${num(t.K)} kcal</span>` : ''}<span><b>${num(t.p)}</b> / ${num(t.P)} g protein</span></div>`;
+}
+function header(ms, st, title = 'Bugün') {
+  return `<div class="top"><div class="t15 m">${fmtDate(TODAY)}</div><div class="t34">${title}</div>${summary(ms, st)}</div>`;
+}
+/* "Şimdi" olan öğün: kayıt olarak kapanmamış ilk öğün */
+function current(ms, st) { return ms.find(m => mstate(m, st) !== 'closed'); }
+function chips(m, st) { return req(m).map(i => iv(m, i, st)).map(v => v.s === 'skip' ? null : v.s === 'swap' ? v.label.split(' (')[0] : v.chip).filter(Boolean).join(' · '); }
+function mealSub(m, st) {
+  /* Kapalı öğünde yenenlerin adı (muadil kendi adıyla), atlanan varsa sonda */
+  const sk = req(m).filter(i => (st[m.id + '.' + i.id] || {}).s === 'skip').length;
+  return (sk ? `${sk} atlandı · ` : '') + chips(m, st);
+}
+
+/* Gün boyu: su, kahve, yürüyüş */
+function dayLong(d) {
+  const w = P.daily.water;
+  return `<div class="daylong"><h4>Gün boyu</h4><div class="card dl">
+    <div class="dlr">${icon('su', 40)}<div class="b"><div class="t17">Su</div><div class="glass">${Array.from({ length: w.goal }, (_, i) => `<i class="${i < d.water ? 'on' : ''}"></i>`).join('')}</div></div><span class="t15 m">${d.water} / ${w.goal}</span><button class="plus" data-act="water" aria-label="Bir bardak su">${SV.plus}</button></div>
+    <div class="dlr">${icon('kahve', 40, d.coffee ? '' : 'wait')}<div class="b"><div class="t17">Kahve</div><div class="t13 m">${P.daily.coffee.note}</div></div><span class="t15 m">${d.coffee} / ${P.daily.coffee.max}</span><button class="plus" data-act="coffee" aria-label="Bir fincan kahve">${SV.plus}</button></div>
+    <div class="dlr"><span style="width:40px;display:grid;place-items:center;color:var(--muted)">${SV.walk}</span><div class="b"><div class="t17">45 dk yürüyüş</div><div class="t13 m">Bu hafta ${d.walk ? 1 : 0} / ${P.daily.walk.perWeek}</div></div><button class="chk${d.walk ? ' on' : ''}" data-act="walk" aria-label="Yürüdüm">${d.walk ? SV.check : ''}</button></div>
+  </div></div>`;
+}
+function trainRow(ms, d) {
+  const t = TRAIN(TODAY); if (!t) return '';
+  const past = d.now > '19:00';
+  return `<div class="ev"><span class="gl">${SV.dumb}</span><div class="b" style="flex:1"><div class="t17${past ? ' m' : ''}">Antrenman</div><div class="t13 m">${t.name} · ${t.ex.length} hareket</div></div><span class="t15 m">${P.training.time}</span></div>`;
+}
+function itemRow(m, v, fresh, big) {
+  const st = v.s, done = st === 'done' || st === 'swap', px = big ? 56 : 40;
+  return `<div class="it ${st}"${big ? ' style="min-height:72px;gap:16px"' : ''}>
+    <button class="tap" data-act="ate" data-key="${v.key}" aria-label="${esc(v.label)}: ${done ? 'yenmedi yap' : 'yedim'}">${icon(v.ico, px, (done ? '' : st) + (isF(fresh, v.key) ? ' ate' : ''), v.label)}${done ? `<span class="tick">${SV.check}</span>` : ''}</button>
+    <button class="b" data-act="item" data-key="${v.key}"><span class="nm t17">${esc(v.label)}</span>${v.meta ? `<span class="t13 m">${esc(v.meta)}</span>` : v.opt ? '<span class="t13 m">İsteğe bağlı</span>' : ''}</button>
+    ${v.amt ? `<button class="amt" data-act="item" data-key="${v.key}">${esc(v.amt)}</button>` : ''}
+  </div>`;
+}
+function openFoot(m, st) {
+  const ms = mstate(m, st);
+  if (ms === 'closed') return `<div class="donebar"><span>Öğün kaydedildi</span><button class="sqr" data-act="more" data-meal="${m.id}" aria-label="Diğer">${SV.dots}</button></div>`;
+  return `<div class="acts"><button class="primary" data-act="all" data-meal="${m.id}">${req(m).length > 1 ? 'Hepsini yedim' : 'Tamam'}</button><button class="sqr" data-act="more" data-meal="${m.id}" aria-label="Fotoğraf, not, atla">${SV.dots}</button></div>`;
+}
+/* Öğünün planlanan değeri; değeri olmayan öğünde (ılık su) satır hiç çıkmaz */
+const mealKP = m => { const k = req(m).reduce((a, i) => a + i.k, 0), p = req(m).reduce((a, i) => a + i.p, 0);
+  return k || p ? `<div class="t13 m">${kcOn() ? num(k) + ' kcal · ' : ''}${num(p)} g protein</div>` : ''; };
+const timeLab = (m, cur) => cur ? `<span class="t15 now w5">${m.time || 'Şimdi'}</span>` : `<span class="tm">${m.time || ''}</span>`;
+
+/* ---------- Yorum A: tabaklı zaman çizelgesi ---------- */
+function viewA(ph) {
+  const d = ph.d, ms = mealsFor(TODAY), cur = current(ms, d.st), open = ph.open === undefined ? cur && cur.id : ph.open;
+  let h = header(ms, d.st) + '<div class="tl">';
+  ms.forEach(m => {
+    const isCur = cur && m.id === cur.id;
+    if (m.id === open) {
+      const vs = m.items.map(i => iv(m, i, d.st));
+      h += `<div class="card open"><button class="hd" data-act="open" data-meal=""><div class="b" style="text-align:left"><div class="t22">${m.title}</div>${mealKP(m)}</div>${timeLab(m, isCur)}</button>
+        <div class="items">${vs.map(v => itemRow(m, v, ph.fresh)).join('')}</div>${openFoot(m, d.st)}</div>`;
+    } else {
+      const ms_ = mstate(m, d.st);
+      h += `<button class="row" data-act="open" data-meal="${m.id}">${plate(m, d.st, 48, false, ph.fresh)}<span class="b"><span class="t17${ms_ === 'closed' ? ' s' : ''}">${m.title}</span><span class="t13 m">${esc(mealSub(m, d.st))}</span></span>${timeLab(m, isCur)}</button>`;
+    }
+    if (m.id === P.training.after) h += trainRow(ms, d);
+  });
+  return h + '</div>' + dayLong(d);
+}
+
+/* ---------- Yorum B: kalem şeridi ---------- */
+function viewB(ph) {
+  const d = ph.d, ms = mealsFor(TODAY), cur = current(ms, d.st), open = ph.open === undefined ? cur && cur.id : ph.open;
+  let h = header(ms, d.st) + '<div class="tl">';
+  ms.forEach(m => {
+    const isCur = cur && m.id === cur.id, vs = m.items.map(i => iv(m, i, d.st));
+    if (m.id === open) {
+      h += `<div class="card openb"><button class="hl" data-act="open" data-meal="" style="display:flex;justify-content:space-between;align-items:baseline;width:100%"><span class="t22">${m.title}</span>${timeLab(m, isCur)}</button>
+        <div class="items">${vs.map(v => itemRow(m, v, ph.fresh, true)).join('')}</div>${openFoot(m, d.st)}</div>`;
+    } else {
+      const r = vs.filter(v => !v.opt);
+      h += `<button class="blk" data-act="open" data-meal="${m.id}"><span class="hl"><span class="t17${mstate(m, d.st) === 'closed' ? ' s' : ''}">${m.title}</span>${timeLab(m, isCur)}</span>
+        <span class="rib">${r.map(v => icon(v.ico, 28, (v.s === 'done' || v.s === 'swap' ? '' : v.s) + (isF(ph.fresh, v.key) ? ' ate' : ''), v.label)).join('')}</span></button>`;
+    }
+    if (m.id === P.training.after) h += trainRow(ms, d);
+  });
+  return h + '</div>' + dayLong(d);
+}
+
+/* ---------- Yorum C: sofra ---------- */
+function viewC(ph) {
+  const d = ph.d, ms = mealsFor(TODAY), cur = current(ms, d.st);
+  const timed = ms.filter(m => m.time);
+  const sel = ph.open || (cur && cur.time ? cur.id : cur ? timed[0].id : 'gece');
+  let h = header(ms, d.st);
+  /* Sabah suyu ve antrenman: şeridin dışındaki olaylar, tek satır */
+  const sab = ms.find(x => x.id === 'sabah'), sv = iv(sab, sab.items[0], d.st), sabDone = sv.s !== 'wait';
+  h += `<div class="nextl" style="padding:0 4px 16px">${icon(sv.ico, 40, (sabDone ? '' : 'wait') + (isF(ph.fresh, sv.key) ? ' ate' : ''), sv.label, '')}<div style="flex:1"><div class="t17">Uyanınca${!sabDone ? ' <span class="t15 now w5">· şimdi</span>' : ''}</div><div class="t13 m">${sv.amt} ${sv.label.toLocaleLowerCase('tr')}</div></div><button class="chk${sabDone ? ' on' : ''}" data-act="ate" data-key="${sv.key}" aria-label="İçtim">${sabDone ? SV.check : ''}</button></div>`;
+  /* Gün şeridi: sabah (saatsiz) şeride girmez; kapanmadıysa şimdi olarak kartta açılır. */
+  h += `<div class="strip">${timed.map(m => {
+    const isCur = cur && m.id === cur.id;
+    return `<button class="${m.id === sel ? 'sel' : ''}" data-act="sel" data-meal="${m.id}">${plate(m, d.st, 52, isCur, ph.fresh)}<span class="t11 ${isCur ? 'now w6' : 'm'}">${m.time}</span></button>`;
+  }).join('')}</div>`;
+  const m = ms.find(x => x.id === sel), isCur = cur && m.id === cur.id, vs = m.items.map(i => iv(m, i, d.st));
+  h += `<div class="card open"><div class="hd"><div class="b"><div class="t22">${m.title}</div>${mealKP(m)}</div>${timeLab(m, isCur)}</div>
+    <div class="tiles">${vs.map(v => { const dn = v.s === 'done' || v.s === 'swap';
+      return `<button class="tile ${v.s}" data-act="ate" data-key="${v.key}">${icon(v.ico, 64, (dn ? '' : v.s) + (isF(ph.fresh, v.key) ? ' ate' : ''), v.label)}${dn ? `<span class="tick">${SV.check}</span>` : ''}<span class="nm t15">${esc(v.s === 'swap' ? v.label.split(' (')[0] : v.chip)}</span><span class="tamt t13" data-act="item" data-key="${v.key}">${v.amt ? esc(v.amt) : SV.dots}</span></button>`; }).join('')}</div>
+    ${openFoot(m, d.st)}</div>`;
+  const t = TRAIN(TODAY);
+  if (t) h += `<div class="nextl"><span style="width:40px;display:grid;place-items:center;color:var(--muted)">${SV.dumb}</span><div style="flex:1"><div class="t17">Antrenman · ${t.name}</div><div class="t13 m">${P.training.time} · ${t.ex.length} hareket</div></div></div>`;
+  return h + dayLong(d);
+}
+
+/* ---------- Kalem sayfası ---------- */
+function libFor(v) {
+  const w = fold(v.it.chip || v.label).split(' ')[0];
+  return FOODS.filter(f => fold(f.n + ' ' + (f.a || []).join(' ')).split(' ').some(x => x.startsWith(w))).slice(0, 6);
+}
+function sheetItem(ph, style) {
+  const [mid, iid] = ph.sheet.key.split('.'), m = mealsFor(TODAY).find(x => x.id === mid), it = m.items.find(i => i.id === iid);
+  const v = iv(m, it, ph.d.st), s = ph.d.st[v.key] || {};
+  const opts = (it.opts || [it.name]).map((t, i) => ({ t, ico: it.mid ? ICO_MAIN[it.mid] : Array.isArray(ICO_ITEM[it.id]) ? ICO_ITEM[it.id][i] : ICO_ITEM[it.id], o: i }));
+  const subs = (it.subs || []).map(t => ({ t, ico: icoFor(t) }));
+  const lib = libFor(v);
+  const q = s.q || 1, cur = s.s === 'swap' ? s.sub : opts[s.o || 0].t;
+  const sec = (t, x) => `<div><div class="sec-t">${t}</div>${x}</div>`;
+  const kcp = (k, p) => (kcOn() ? num(k) + ' kcal · ' : '') + num(p) + ' g';
+  const rowO = (x, on, act) => { const a = parseAmt(x.t); return `<button class="opt${on ? ' on' : ''}" ${act}>${icon(x.ico, 40, '', a.label)}<span class="b"><span class="t17" style="display:block">${esc(a.label)}</span><span class="t13 m">${esc(a.amt || ' ')}</span></span>${on ? `<span style="color:var(--fg)">${SV.checkL}</span>` : ''}</button>`; };
+  const cardO = (x, on, act, sub) => { const a = parseAmt(x.t); return `<button class="fcard${on ? ' on' : ''}" ${act}>${icon(x.ico, 64, '', a.label)}<span class="nm t13 w5">${esc(a.label.split(' (')[0])}</span><span class="t11 m">${esc(sub || a.amt || ' ')}</span></button>`; };
+  let h = `<span class="grab"></span><div class="sh-hd">${icon(v.ico, 64, '', v.label)}<div style="flex:1;min-width:0"><div class="t22">${esc(v.label)}</div><div class="t13 m">${m.title} · ${kcp(it.k * q, it.p * q)}</div></div></div>`;
+  if (style === 'list') {
+    const a = parseAmt(cur);
+    h += sec('Porsiyon', `<div class="stepper"><button class="plus" data-act="q" data-d="-1" aria-label="Azalt">${SV.minus}</button><div class="v"><div class="t17 w5">${a.n ? scaleN(a.n, q) + ' ' + a.unit : qLab(q) + ' porsiyon'}</div><div class="t13 m">${qLab(q)} porsiyon</div></div><button class="plus" data-act="q" data-d="1" aria-label="Artır">${SV.plus}</button></div>`);
+    h += sec('Programda', opts.map(x => rowO(x, s.s !== 'swap' && (s.o || 0) === x.o, `data-act="opt" data-o="${x.o}"`)).join(''));
+    if (subs.length) h += sec('Diyetisyenin muadilleri', subs.map(x => rowO(x, s.s === 'swap' && s.sub === x.t, `data-act="sub" data-t="${esc(x.t)}"`)).join(''));
+    if (lib.length) h += sec('Kütüphaneden', `<div class="fgrid">${lib.map(f => cardO({ t: f.n, ico: icoFood(f) }, s.sub === f.n, `data-act="sub" data-t="${esc(f.n)}"`, f.u)).join('')}</div>`);
+  } else {
+    h += sec('Porsiyon', `<div class="qs">${QS.map(x => `<button class="${x === q ? 'on' : ''}" data-act="qq" data-q="${x}">${qLab(x)}</button>`).join('')}</div>`);
+    h += sec('Programda', `<div class="fgrid">${opts.map(x => cardO(x, s.s !== 'swap' && (s.o || 0) === x.o, `data-act="opt" data-o="${x.o}"`)).join('')}</div>`);
+    if (subs.length) h += sec('Diyetisyenin muadilleri', `<div class="fgrid">${subs.map(x => cardO(x, s.s === 'swap' && s.sub === x.t, `data-act="sub" data-t="${esc(x.t)}"`)).join('')}</div>`);
+    if (lib.length) h += sec('Kütüphaneden', `<div class="fgrid">${lib.map(f => cardO({ t: f.n, ico: icoFood(f) }, s.sub === f.n, `data-act="sub" data-t="${esc(f.n)}"`, kcOn() ? `${f.u}` : f.u)).join('')}</div>`);
+  }
+  h += `<div class="foot"><button class="txt" data-act="skip">Atladım</button><button class="primary" data-act="sheetAte">${SV.checkL}Yedim</button></div>`;
+  return h;
+}
+function sheetMore(ph) {
+  return `<span class="grab"></span><div class="menu">
+    <button data-act="close"><span class="g">${SV.cam}</span>Fotoğrafla kaydet</button>
+    <button data-act="close"><span class="g">${SV.note}</span>Not ekle</button>
+    <button data-act="skipMeal"><span class="g">${SV.skip}</span>Bu öğünü atladım</button></div>`;
+}
+
+/* ---------- Telefonlar ---------- */
+const PH = { sc: 'orta', kc: true, list: [] };
+/* "Yedim" anı: 0 ms ikon renklenir ve büyür · 180 ms işaret çıkar · 50 ms arayla sıradaki kalem (Hepsini yedim)
+   · 900 ms öğün kapandıysa kart kapanır, tabak satırına oturur */
+const TIMING = { tick: 180, stagger: 50, collapse: 900 };
+function mkPhone(host, title, tag, desc, fn, opts = {}) {
+  const el = document.createElement('div'); el.className = 'alt';
+  el.innerHTML = `<h3>${title} <small>${tag}</small></h3><div class="phone"><div class="zm"><div class="scr"></div></div></div><p>${desc}</p>`;
+  host.appendChild(el);
+  const ph = { el, fn, scr: el.querySelector('.scr'), zm: el.querySelector('.zm'), sheet: null, style: opts.style || 'list', fixed: opts.fixed, tab: opts.tab || 'Bugün' };
+  ph.reset = () => { ph.d = scenario(opts.sc || PH.sc); ph.open = undefined; ph.sheet = opts.sheet ? { ...opts.sheet } : null; ph.fresh = null; };
+  ph.reset();
+  el.querySelector('.phone').addEventListener('click', e => act(ph, e));
+  PH.list.push(ph);
+  return ph;
+}
+function draw(ph) {
+  const top = ph.scr.scrollTop;
+  ph.scr.innerHTML = ph.fn(ph) + '<div class="grow"></div>' + tabs(ph.tab);
+  ph.scr.scrollTop = top;
+  ph.zm.querySelectorAll('.scrim, .sheet').forEach(x => x.remove());
+  if (ph.sheet) {
+    ph.zm.insertAdjacentHTML('beforeend', `<div class="scrim" data-act="close"></div><div class="sheet${ph.sheet.more ? ' short' : ''}">${ph.sheet.more ? sheetMore(ph) : sheetItem(ph, ph.style)}</div>`);
+  }
+  /* "Hepsini yedim": kalemler sırayla renklenir, 50 ms arayla */
+  ph.zm.querySelectorAll('.items .ate, .tiles .ate').forEach((x, i) => { x.style.animationDelay = i * TIMING.stagger + 'ms'; const t = x.nextElementSibling; if (t && t.classList.contains('tick')) t.style.animationDelay = i * TIMING.stagger + TIMING.tick + 'ms'; });
+  ph.fresh = null;
+}
+function act(ph, e) {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  e.stopPropagation();
+  const a = b.dataset.act, d = ph.d, st = d.st, ms = mealsFor(TODAY);
+  const sk = ph.sheet && ph.sheet.key;
+  /* Öğün bu dokunuşla kapanıyorsa: kart bir an açık kalır, sonra tabak dolu olarak satırına oturur */
+  const mid = (b.dataset.key || sk || b.dataset.meal || '').split('.')[0], mm = ms.find(x => x.id === mid);
+  const wasClosed = mm ? mstate(mm, st) === 'closed' : true;
+  switch (a) {
+    case 'ate': { const k = b.dataset.key; if (st[k] && st[k].s !== 'skip') delete st[k]; else { st[k] = { s: 'done' }; ph.fresh = new Set([k]); } break; }
+    case 'item': ph.sheet = { key: b.dataset.key }; break;
+    case 'open': ph.open = b.dataset.meal || null; break;
+    case 'sel': ph.open = b.dataset.meal; break;
+    case 'all': { const m = ms.find(x => x.id === b.dataset.meal); ph.fresh = new Set(); req(m).forEach(i => { const k = m.id + '.' + i.id; if (!st[k]) { st[k] = { s: 'done' }; ph.fresh.add(k); } }); break; }
+    case 'more': ph.sheet = { more: 1, meal: b.dataset.meal }; break;
+    case 'skipMeal': { const m = ms.find(x => x.id === ph.sheet.meal); req(m).forEach(i => { const k = m.id + '.' + i.id; if (!st[k]) st[k] = { s: 'skip' }; }); ph.sheet = null; break; }
+    case 'close': if (!ph.fixed) ph.sheet = null; break;
+    case 'water': d.water = Math.min(P.daily.water.goal, d.water + 1); break;
+    case 'coffee': d.coffee = Math.min(P.daily.coffee.max, d.coffee + 1); break;
+    case 'walk': d.walk = !d.walk; break;
+    case 'q': { const s = st[sk] || (st[sk] = { s: 'done' }); const i = QS.indexOf(s.q || 1); s.q = QS[Math.max(0, Math.min(QS.length - 1, i + +b.dataset.d))]; break; }
+    case 'qq': { const s = st[sk] || (st[sk] = { s: 'done' }); s.q = +b.dataset.q; break; }
+    case 'opt': { const q = (st[sk] || {}).q; st[sk] = { s: 'done', o: +b.dataset.o, q }; ph.fresh = new Set([sk]); if (!ph.fixed) ph.sheet = null; break; }
+    case 'sub': { const q = (st[sk] || {}).q, t = b.dataset.t, f = FOODS.find(x => x.n === t); st[sk] = { s: 'swap', sub: t, ico: f ? icoFood(f) : undefined, q }; ph.fresh = new Set([sk]); if (!ph.fixed) ph.sheet = null; break; }
+    case 'skip': st[sk] = { s: 'skip' }; if (!ph.fixed) ph.sheet = null; break;
+    case 'sheetAte': if (!st[sk] || st[sk].s === 'skip') st[sk] = { s: 'done' }; ph.fresh = new Set([sk]); if (!ph.fixed) ph.sheet = null; break;
+  }
+  if (mm && !wasClosed && mstate(mm, st) === 'closed' && !ph.fixed && ['ate', 'all', 'opt', 'sub', 'sheetAte', 'skip', 'skipMeal'].includes(a)) {
+    const keep = ph.open; ph.open = mid; draw(ph);
+    clearTimeout(ph.t); ph.t = setTimeout(() => { ph.open = keep === mid ? undefined : keep; if (ph.fn === viewC) ph.open = undefined; LAND = mid; draw(ph); LAND = null; }, TIMING.collapse);
+    return;
+  }
+  draw(ph);
+}
+
+/* ---------- Hafta ve İlerleme ---------- */
+const WEEK0 = addD(TODAY, -dIdx(TODAY));
+function dayState(dt) { return dt.getDate() === TODAY.getDate() && dt.getMonth() === TODAY.getMonth() ? scenario(PH.sc).st : pastDay(dt); }
+function weekA() {
+  const timed = mealsFor(TODAY).filter(m => m.time);
+  let h = `<div class="top"><div class="t15 m">16–22 Kasım</div><div class="t34">Hafta</div></div><div class="card wk"><table><tr><th></th>${timed.map(m => `<th>${m.time}</th>`).join('')}</tr>`;
+  for (let i = 0; i < 7; i++) {
+    const dt = addD(WEEK0, i), ms = mealsFor(dt).filter(m => m.time), st = dayState(dt), isT = i === dIdx(TODAY);
+    h += `<tr class="${isT ? 'today' : ''}"><td class="t13 w5">${['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'][i]}</td>${ms.map(m => `<td>${plate(m, st, 36, false)}</td>`).join('')}</tr>`;
+  }
+  h += '</table></div>';
+  /* Ana yemek kotası: grubu ve haftalık hakkı plandan */
+  const used = {}, plan = {};
+  for (let i = 0; i < 7; i++) { const dt = addD(WEEK0, i), st = dayState(dt); ['ogle', 'aksam'].forEach(mid => { const g = MN[P.rota[mid][i]].g; plan[g] = (plan[g] || []).concat(P.rota[mid][i]); const s = st[mid + '.main']; if (s && s.s !== 'skip') used[g] = (used[g] || 0) + 1; }); }
+  h += `<div style="height:24px"></div><div class="card quota"><div class="t15 m">Ana yemek kotası</div>${Object.entries(P.groups).map(([g, x]) => {
+    const ids = plan[g] || [], u = used[g] || 0;
+    return `<div class="qrow"><span class="pips">${ids.map((id, j) => icon(ICO_MAIN[id], 28, j < u ? '' : 'wait', MN[id].name)).join('')}</span><span class="b t15">${x.name}</span><span class="t15 m">${u} / ${ids.length}</span></div>`;
+  }).join('')}</div>`;
+  return h;
+}
+function weekB() {
+  let h = `<div class="top"><div class="t15 m">16–22 Kasım</div><div class="t34">Hafta</div><div class="sum t15 m"><span>Ortalama uyum <b>${(() => { const xs = [0, 1, 2].map(i => { const dt = addD(WEEK0, i); return score(mealsFor(dt), dayState(dt)).pct; }).filter(x => x != null); return xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) + '%' : '—'; })()}</b> · 3 gün</span></div></div><div class="card">`;
+  for (let i = 0; i < 7; i++) {
+    const dt = addD(WEEK0, i), ms = mealsFor(dt), st = dayState(dt), sc = score(ms, st), isT = i === dIdx(TODAY);
+    const og = ms.find(m => m.id === 'ogle'), ak = ms.find(m => m.id === 'aksam');
+    const mi = (m) => { const v = iv(m, m.items[0], st); return icon(v.ico, 40, v.s === 'wait' ? 'wait' : v.s === 'skip' ? 'skip' : '', v.label); };
+    h += `<div class="dayrow"><div class="b"><div class="t17${isT ? ' now' : ''}">${DAYS[i]}</div><div class="t13 m">${parseAmt(og.items[0].name).label} · ${parseAmt(ak.items[0].name).label}${TRAIN(dt) ? ' · ' + TRAIN(dt).name : ''}</div></div>${mi(og)}${mi(ak)}<span class="pct${sc.pct == null ? ' f' : ''}">${sc.pct == null ? '—' : sc.pct + '%'}</span></div>`;
+  }
+  return h + '</div><div style="height:16px"></div><button class="primary" style="flex:none;width:100%">Diyetisyenine rapor</button>';
+}
+function progA() {
+  /* Kasım takvimi: gri basamaklar, yalnızca bugün turuncu çerçeve */
+  const first = new Date(2026, 10, 1), off = dIdx(first);
+  let cells = ''; for (let i = 0; i < off; i++) cells += '<i class="x"></i>';
+  for (let k = 1; k <= 30; k++) {
+    const dt = new Date(2026, 10, k), sc = dt <= TODAY && k >= 13 ? score(mealsFor(dt), dayState(dt)) : null;
+    const a = sc && sc.pct != null ? (sc.pct * sc.fill) / 100 : 0;
+    cells += `<i class="${k === 18 ? 'today' : ''}" style="${a ? `background:color-mix(in srgb, var(--fg) ${Math.round(10 + a * 45)}%, var(--track))` : ''}"></i>`;
+  }
+  const b = P.body;
+  return `<div class="top"><div class="t15 m">13 Kasım'dan beri</div><div class="t34">İlerleme</div></div>
+    <div class="card" style="padding:16px"><div class="t15 m" style="padding-bottom:12px">Kasım</div><div class="cal">${['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map(x => `<span class="t11 m" style="text-align:center">${x}</span>`).join('')}${cells}</div></div>
+    <div style="height:16px"></div>
+    <div class="card kg"><div><div class="t15 m">Kilo · 13 Kasım</div><div class="t34">${b.rows[0][1].replace(' kg', '')}<span class="t17 m"> kg</span></div></div><div class="t15 m" style="text-align:right">Hedef ${P.goal.kg} kg<br>Bel 86 cm</div></div>`;
+}
+function progB() {
+  /* Tabak takvimi: her gün akşam yemeğinin ikonu; kayıtsız gün boş tabak */
+  let cells = ''; const start = addD(TODAY, -27 - dIdx(addD(TODAY, -27)));
+  for (let i = 0; i < 35; i++) {
+    const dt = addD(start, i), isT = +dt === +TODAY, fut = dt > TODAY, pre = dt < new Date(2026, 10, 13);
+    const ms = mealsFor(dt), st = dayState(dt), sc = score(ms, st);
+    const ak = ms.find(m => m.id === 'aksam');
+    const inner = pre ? '<span style="width:40px;height:40px;display:block"></span>' : fut ? `<span class="plate" style="width:40px;height:40px;opacity:.4"></span>` : plate(ak, st, 40, isT);
+    cells += `<div>${inner}<span class="t11 ${isT ? 'now w6' : pre ? 'f' : 'm'}">${dt.getDate()}</span></div>`;
+  }
+  return `<div class="top"><div class="t15 m">Son 4 hafta</div><div class="t34">İlerleme</div><div class="sum t15 m"><span>Akşam tabakları; kayıt 13 Kasım'da başladı</span></div></div>
+    <div class="card" style="padding:16px 12px"><div class="platecal">${['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map(x => `<div class="t11 m">${x}</div>`).join('')}${cells}</div></div>`;
+}
+
+/* ---------- İkon testi ---------- */
+function lab() {
+  const ics = ['haslanmis-yumurta', 'beyaz-peynir', 'tam-bugday-ekmegi', 'limonlu-su'];
+  const sizes = [20, 28, 40, 64];
+  let h = '<span></span>' + sizes.map(s => `<span class="hd">${s} px</span>`).join('');
+  h += '<span class="hd">Renkli</span>' + sizes.map(s => `<span class="cell">${ics.map(i => icon(i, s)).join('')}</span>`).join('');
+  h += '<span class="hd">Bekliyor</span>' + sizes.map(s => `<span class="cell">${ics.map(i => icon(i, s, 'wait')).join('')}</span>`).join('');
+  h += '<span class="hd">İkonsuz</span>' + sizes.map(s => `<span class="cell">${icon(null, s, '', 'Haşlama sebze')}${icon(null, s, 'wait', 'Mercimek')}</span>`).join('');
+  h += '<span class="hd">Tabak</span>' + [32, 40, 48, 56].map(s => { const m = mealsFor(TODAY)[1]; return `<span class="cell">${plate(m, scenario('orta').st, s)}${plate(m, {}, s)}<span class="t11 m">${s}</span></span>`; }).join('');
+  h += `<span></span><p class="verdict"><b>Karar.</b> 20 px'te ikonun ayrıntısı kaybolur, yumurta ile peynir birer renkli nokta olur ve emoji gibi okunur; gölgesi de biçimini yitirir. Bu yüzden 20 px tek başına hiç kullanılmıyor, yalnızca tabağın içinde küme olarak (tabak bütün olarak okunur, kalem tek tek değil). 28 px şeritte tanınır ama metnin yanında çıkartma gibi durur. 40 px satırın doğal boyu, 56–64 px seçim kartı ve sayfa başlığı. Harfli disk her boyutta ikonla aynı ağırlıkta; gölge hâlinde yalnızca saydamlaşır.</p>`;
+  document.getElementById('lab').innerHTML = h;
+}
+
+/* ---------- Kurulum ---------- */
+const host = id => document.getElementById(id);
+mkPhone(host('today'), 'A · Tabak', 'zaman çizelgesi', '<b>Öğünün tabağı satırın başında.</b> Kapalı öğün tek satır; açık öğünde her kalem 40 px ikonla. İkona dokun: renklenir. Öğün tamamlanınca kart kapanır, tabak dolu olarak satırına oturur.', viewA);
+mkPhone(host('today'), 'B · Şerit', 'kalem kalem', '<b>Her öğün bir ikon şeridi (28 px).</b> Günün tamamı bir bakışta okunur; açık öğünde ikonlar 56 px, satır daha uzun.', viewB);
+mkPhone(host('today'), 'C · Sofra', 'şeritten seç', '<b>Üstte günün beş tabağı, altta seçili öğün sofrası.</b> Kalemler 64 px kart; karta dokun: yedim, miktara dokun: kalem sayfası.', viewC);
+mkPhone(host('item'), 'K1 · Liste', '', '<b>Porsiyon adımı ve satır satır seçenekler.</b> Kütüphane en altta ızgara. Okuması en kolay olanı.', viewA, { sheet: { key: 'kahvalti.peynir' }, fixed: true, style: 'list' });
+mkPhone(host('item'), 'K2 · Izgara', '', '<b>Her seçenek 64 px kart; porsiyon tek dokunuşla.</b> Görsel seçim; uzun adlar iki satırda kesilir.', viewA, { sheet: { key: 'kahvalti.peynir' }, fixed: true, style: 'grid' });
+mkPhone(host('week'), 'H1 · Tabak ızgarası', '', '<b>Günler satır, öğünler sütun.</b> Hangi öğünün aksadığı desen olarak görünür; altta ana yemek kotası ikonlarla.', weekA, { tab: 'Hafta' });
+mkPhone(host('week'), 'H2 · Gün listesi', '', '<b>Her gün öğle ve akşam yemeğiyle.</b> Uyum yüzdesi sayı olarak, halka yok. Rapor düğmesi altta.', weekB, { tab: 'Hafta' });
+mkPhone(host('prog'), 'P1 · Gri takvim', '', '<b>Gün ne kadar uyumluysa o kadar koyu.</b> Renk yok; turuncu yalnızca bugünün çerçevesi. Kilo kartı diyetisyen ölçümünden.', progA, { tab: 'İlerleme' });
+mkPhone(host('prog'), 'P2 · Tabak takvimi', '', '<b>Her gün akşam tabağı.</b> Program öncesi ve sonrası boş tabak; yemek hafızası gibi okunur.', progB, { tab: 'İlerleme' });
+function drawAll() { PH.list.forEach(draw); lab(); }
+
+host('scSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; PH.sc = b.dataset.s; [...b.parentNode.children].forEach(x => x.classList.toggle('on', x === b)); PH.list.forEach(p => p.reset()); drawAll(); });
+host('kcSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; PH.kc = b.dataset.k === '1'; [...b.parentNode.children].forEach(x => x.classList.toggle('on', x === b)); drawAll(); });
+host('zSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; document.body.classList.toggle('real', !!b.dataset.z); [...b.parentNode.children].forEach(x => x.classList.toggle('on', x === b)); });
+host('pendSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; document.body.classList.toggle('soluk', b.dataset.p === 'soluk'); [...b.parentNode.children].forEach(x => x.classList.toggle('on', x === b)); });
+const applyTheme = t => { if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; [...host('theme').children].forEach(x => x.classList.toggle('on', x.dataset.t === (t || ''))); try { localStorage.setItem('arayuz-b-theme', t); } catch (e) {} };
+host('theme').addEventListener('click', e => { const b = e.target.closest('button'); if (b) applyTheme(b.dataset.t); });
+try { applyTheme(localStorage.getItem('arayuz-b-theme') || ''); } catch (e) { applyTheme(''); }
+drawAll();
+</script>
+</body>
+</html>

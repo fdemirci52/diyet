@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Diyet · Arayüz C: Sofra</title>
+<style>
+/* Ölçü 4'ün katları. Köşe: kart 24, panel 22, kontrol 16, hap 999. Yazı: 34 · 22 · 17 · 15 · 13 · 11. Ağırlık: 400 · 500 · 600.
+   Turuncu yalnızca "şimdi", mavi yalnızca su. Renk değişkenleri uygulamanın index.html'indekilerle aynı; --plate ve --ring bu çalışmanın eki. */
+.t-light {
+  --bg: #f2f2f4; --page: #f2f2f4; --fg: #0b0b0c; --muted: #6a6a71; --faint: #b9b9c0;
+  --card: #ffffff; --line: transparent; --shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 26px -18px rgb(0 0 0 / 18%);
+  --ctl: #f0f0f3; --track: #e6e6eb; --accent: #ff6a1a; --on-accent: #1c0e04; --blue: #3b82f6;
+  --glass: rgb(255 255 255 / 78%); --glass-line: rgb(0 0 0 / 7%); --sheet: #ffffff; --scrim: rgb(0 0 0 / 32%);
+  --plate: #f0f0f3; --well: #f8f8fa; --ghost: #f4f4f6; --ring: #dadae0; --bezel: #0b0b0c; color-scheme: light;
+}
+.t-dark {
+  --bg: #0a0a0b; --page: radial-gradient(120% 46% at 50% -6%, #1e1e23 0%, #0a0a0b 64%); --fg: #f5f5f7; --muted: #8f8f97; --faint: #4e4e55;
+  --card: #161618; --line: rgb(255 255 255 / 6%); --shadow: none;
+  --ctl: rgb(255 255 255 / 7%); --track: rgb(255 255 255 / 10%); --accent: #ff7a2f; --on-accent: #1c0e04; --blue: #5b9dff;
+  --glass: rgb(30 30 33 / 78%); --glass-line: rgb(255 255 255 / 9%); --sheet: #18181b; --scrim: rgb(0 0 0 / 56%);
+  --plate: rgb(255 255 255 / 7%); --well: rgb(255 255 255 / 3%); --ghost: rgb(255 255 255 / 4%); --ring: rgb(255 255 255 / 16%); --bezel: #2a2a2e; color-scheme: dark;
+}
+:root { --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif; --ease: cubic-bezier(.22, 1, .36, 1); }
+* { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
+html { background: var(--bg); }
+body { background: var(--bg); color: var(--fg); font: 17px/1.45 var(--sys); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+svg.g { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; display: block; }
+
+/* ---------- Belge ---------- */
+.wrap { max-width: 1320px; margin: 0 auto; padding: 48px 32px 96px; }
+.doc > header h1 { font-size: 34px; font-weight: 600; letter-spacing: -.01em; line-height: 1.1; }
+.doc > section > h2 { font-size: 22px; font-weight: 600; line-height: 1.25; }
+.doc h3 { font-size: 17px; font-weight: 600; }
+.doc > header p, .doc > section > p, .notes li { max-width: 68ch; }
+.lead { color: var(--muted); margin-top: 12px; }
+.doc > section { margin-top: 72px; }
+.doc > section > p { color: var(--muted); margin-top: 8px; }
+.bar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 12px 0; margin-top: 24px; background: var(--bg); }
+.seg { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--ctl); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.seg button { height: 36px; padding: 0 16px; border-radius: 999px; font-size: 15px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.seg button.on { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / 8%), inset 0 0 0 1px var(--line); }
+.alts { display: flex; gap: 40px; overflow-x: auto; padding: 16px 12px 24px; margin: 16px -12px 0; scroll-snap-type: x proximity; }
+.alt { flex: none; width: 375px; display: flex; flex-direction: column; gap: 24px; scroll-snap-align: center; }
+.alt .txt h3 { display: flex; align-items: center; gap: 8px; }
+.alt .txt p { font-size: 15px; color: var(--muted); margin-top: 4px; }
+.tag { font-size: 13px; font-weight: 500; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--fg); color: var(--bg); display: inline-flex; align-items: center; }
+.pair { display: flex; flex-direction: column; gap: 32px; }
+.opp { display: none; }
+.both .opp { display: block; }
+.panel { min-width: 0; font-size: 17px; line-height: 1.3; border-radius: 24px; background: var(--page); color: var(--fg); padding: 24px; box-shadow: inset 0 0 0 1px var(--ring); margin-top: 16px; }
+.panels { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.both .panels { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 32px 48px; margin-top: 24px; }
+.notes h3 { margin-bottom: 8px; }
+.notes p, .notes li { font-size: 15px; color: var(--muted); }
+.notes ul, .notes ol { padding-left: 20px; display: grid; gap: 4px; }
+.notes b { color: var(--fg); font-weight: 600; }
+
+/* ---------- Telefon ---------- */
+.phone { width: 375px; height: 812px; border-radius: 48px; box-shadow: 0 0 0 10px var(--bezel); background: var(--page); color: var(--fg); position: relative; overflow: hidden; flex: none; font-size: 17px; line-height: 1.3; isolation: isolate; -webkit-user-select: none; user-select: none; }
+.scr { height: 100%; overflow-y: auto; padding: 60px 16px 132px; scrollbar-width: none; overscroll-behavior: contain; }
+.scr::-webkit-scrollbar, .sheet::-webkit-scrollbar, .hrow::-webkit-scrollbar { display: none; }
+.hd { padding: 0 4px 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+.hd small { display: block; font-size: 15px; color: var(--muted); }
+.hd h4 { font-size: 34px; font-weight: 600; letter-spacing: -.01em; line-height: 1.1; margin-top: 2px; }
+.sec { font-size: 15px; font-weight: 600; padding: 28px 4px 8px; }
+.card { background: var(--card); border-radius: 24px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); padding: 16px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 8px; vertical-align: 2px; }
+
+/* Gün özeti: A sayılar ve ince çizgi · B kadran · C tek cümle */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 8px; padding: 0 4px 16px; }
+.s b { display: block; font-size: 22px; font-weight: 600; line-height: 28px; }
+.s span { display: block; font-size: 13px; line-height: 16px; color: var(--muted); white-space: nowrap; }
+.dials { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-bottom: 20px; }
+.dials.two { grid-template-columns: repeat(2, 1fr); }
+.dial { background: var(--card); border-radius: 24px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); padding: 12px 8px; display: grid; justify-items: center; gap: 4px; }
+.dial .rg { position: relative; width: 64px; height: 64px; display: grid; place-items: center; }
+.dial svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.dial circle { fill: none; stroke-width: 6; stroke: var(--track); }
+.dial circle.v { stroke: var(--fg); stroke-linecap: round; }
+.dial.w circle.v { stroke: var(--blue); }
+.dial b { font-size: 17px; font-weight: 600; }
+.dial span { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.sline { font-size: 15px; color: var(--muted); padding: 0 4px 20px; margin-top: -12px; }
+.sline b { color: var(--fg); font-weight: 600; }
+
+/* Zaman çizelgesi: saat solda, kapalı öğün düz yazı */
+.day { display: flex; flex-direction: column; }
+.row { display: grid; grid-template-columns: 48px 1fr 24px; column-gap: 8px; align-items: start; width: 100%; padding: 8px 4px; border-radius: 16px; }
+.row .tm { font-size: 15px; line-height: 24px; color: var(--muted); }
+.row .t { display: block; font-size: 17px; font-weight: 500; line-height: 24px; }
+.row .r { display: block; font-size: 15px; line-height: 20px; color: var(--muted); }
+.row .r s { text-decoration-thickness: 1px; }
+.row.done .t { color: var(--muted); }
+.row .st { color: var(--muted); height: 24px; }
+.row.isnow .tm { color: var(--fg); font-weight: 600; }
+.chk { width: 24px; height: 24px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--faint); display: grid; place-items: center; position: relative; }
+.chk::after { content: ""; position: absolute; inset: -10px; }
+.chk.on { color: var(--muted); box-shadow: none; }
+.chk svg.g { width: 24px; height: 24px; }
+
+/* Açık öğün */
+.meal { margin: 8px 0; }
+.ch { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; width: 100%; padding: 4px 4px 12px; }
+.ch .t { font-size: 22px; font-weight: 600; line-height: 28px; }
+.ch .tm { font-size: 17px; font-weight: 600; line-height: 28px; }
+.ch .rel, .ch .kc { font-size: 15px; line-height: 20px; color: var(--muted); }
+.ch .kc, .ch .tm { text-align: right; }
+.cnote { font-size: 13px; line-height: 16px; color: var(--muted); padding: 0 4px 16px; margin-top: -4px; }
+.acts { display: grid; grid-template-columns: 1fr 52px; gap: 8px; }
+.primary { height: 52px; border-radius: 16px; background: var(--fg); color: var(--bg); font-size: 17px; font-weight: 600; text-align: center; transition: transform .12s var(--ease); }
+.meal.now .primary { background: var(--accent); color: var(--on-accent); }
+.primary.quiet { background: var(--ctl); color: var(--fg); }
+.more { height: 52px; border-radius: 16px; background: var(--ctl); display: grid; place-items: center; transition: transform .12s var(--ease); }
+.primary:active, .more:active { transform: scale(.97); }
+
+/* Tabak: yiyecek üstündeyken dolu, yenince boş halka */
+.plate { width: 80px; height: 80px; border-radius: 50%; display: grid; place-items: center; position: relative; flex: none; transition: transform .12s var(--ease); }
+.plate::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--well); box-shadow: inset 0 0 0 var(--rim, 8px) var(--plate); }
+.plate > * { grid-area: 1 / 1; position: relative; }
+/* Yenmiş ya da atlanmış: tabak geri çekilir. Kutu aynı kalır (yerleşim kaymaz, dokunma alanı küçülmez), disk küçülür ve kenarını bırakır. */
+.eaten > .plate::before, .skip > .plate::before, .eaten > .lim > .plate::before, .skip > .lim > .plate::before { transform: scale(var(--back, .7)); background: var(--ghost); box-shadow: none; }
+.just.eaten > .plate::before, .just.skip > .plate::before, .just.eaten > .lim > .plate::before, .just.skip > .lim > .plate::before { animation: recede .3s var(--ease) both; animation-delay: calc(var(--d, 0) * 50ms); }
+@keyframes recede { from { transform: none; background: var(--well); box-shadow: inset 0 0 0 var(--rim, 8px) var(--plate); } }
+.plate:active, .lim:active .plate { transform: scale(.96); }
+.plate img { display: block; }
+.plate .mark { color: var(--muted); }
+.noico { color: var(--muted); }
+.amt { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--ctl); font-size: 13px; font-weight: 500; white-space: nowrap; position: relative; }
+.eaten .amt, .skip .amt { color: var(--muted); }
+.cap { font-size: 13px; line-height: 16px; color: var(--muted); }
+
+/* A · Sofra */
+.table { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 8px; padding: 4px 0 16px; }
+.table.c2 { grid-template-columns: repeat(2, 1fr); }
+.tile { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+.lab { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; min-width: 0; max-width: 100%; border-radius: 12px; }
+.lab .n { font-size: 15px; font-weight: 500; line-height: 20px; text-wrap: balance; }
+.eaten .lab .n, .eaten .lim .n { color: var(--muted); }
+.skip .lab .n, .skip .lim .n { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+/* Ana yemekli öğün: ana yemek solda büyük tabakta, yanındakiler sağda tek sütun. */
+.table.split { grid-template-columns: 136px minmax(0, 1fr); gap: 0 16px; align-items: center; }
+.hero .plate { width: 128px; height: 128px; --rim: 12px; }
+.hero .lab .n { font-size: 17px; font-weight: 600; line-height: 24px; }
+.sides { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.tile.side { flex-direction: row; gap: 12px; }
+.side .plate { width: 64px; height: 64px; --rim: 6px; }
+.side .lab { align-items: flex-start; text-align: left; }
+.side .lab .n { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hero .noico svg.g { width: 40px; height: 40px; stroke-width: 1.25; }
+.hero .plate .mark svg.g { width: 32px; height: 32px; stroke-width: 1.5; }
+.note { font-size: 13px; line-height: 16px; color: var(--muted); }
+
+/* B · Liste */
+.list { display: flex; flex-direction: column; gap: 4px; padding-bottom: 16px; }
+.li { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; min-height: 56px; }
+.lim { display: grid; grid-template-columns: 48px 1fr; column-gap: 12px; align-items: center; padding: 4px 0; min-width: 0; }
+.lim .plate { width: 48px; height: 48px; --rim: 4px; --back: .8; transition: transform .12s var(--ease); }
+.lim .n { display: block; font-size: 17px; line-height: 24px; }
+.li .amt { height: 32px; padding: 0 12px; }
+.li .amt::after, .ci .amt::after { content: ""; position: absolute; inset: -6px 0; }
+
+/* C · Tabak */
+.dish { width: 208px; height: 208px; border-radius: 50%; margin: 0 auto 16px; background: var(--well); box-shadow: inset 0 0 0 12px var(--plate); position: relative; }
+.pc { position: absolute; display: grid; place-items: center; border-radius: 50%; transition: transform .12s var(--ease); }
+.pc:active { transform: scale(.94); }
+.pc > * { grid-area: 1 / 1; }
+.ci { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; min-height: 44px; }
+.cim { display: grid; grid-template-columns: 24px 1fr; column-gap: 12px; align-items: center; min-height: 44px; min-width: 0; }
+.cim .n { font-size: 17px; line-height: 24px; }
+.eaten .cim .n { color: var(--muted); }
+.skip .cim .n { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.ci .amt { height: 32px; padding: 0 12px; }
+
+/* "Yedim" anı: yalnızca dokunulan kalemde, yalnızca dokunuşun ardından.
+   0 ms yiyecek küçülüp silinir (180) · 120 ms onay çizilir (260) · "Hepsini yedim"de kalemler 50 ms arayla
+   · 900 ms sonra öğün tek satıra katlanır (280), alttaki satırlar aynı eğriyle yukarı gelir. */
+.just .food.gone { animation: eat .18s cubic-bezier(.4, 0, 1, 1) both; animation-delay: calc(var(--d, 0) * 50ms); }
+.just .mark path { stroke-dasharray: 1; animation: draw .26s var(--ease) both; animation-delay: calc(120ms + var(--d, 0) * 50ms); }
+.just .food.back { animation: back .22s var(--ease) both; }
+@keyframes eat { to { transform: scale(.4); opacity: 0; } }
+@keyframes draw { 0% { stroke-dashoffset: 1; opacity: 0; } 1% { stroke-dashoffset: 1; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 1; } }
+@keyframes back { from { transform: scale(.8); opacity: 0; } }
+.day { position: relative; }
+.ghost { position: absolute; margin: 0; z-index: 1; pointer-events: none; }
+
+/* Gün boyu */
+.gb { display: flex; flex-direction: column; gap: 4px; padding: 8px 16px; }
+.gr { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; min-height: 56px; }
+.gr .n { display: block; font-size: 17px; line-height: 24px; }
+.step { display: inline-flex; align-items: center; height: 44px; border-radius: 999px; background: var(--ctl); }
+.step button { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; }
+.step button svg.g { width: 20px; height: 20px; }
+.step b { min-width: 24px; text-align: center; font-weight: 600; }
+.gr .go { color: var(--faint); }
+
+/* Alt çubuk */
+.dock { position: absolute; left: 12px; right: 12px; bottom: 12px; height: 64px; border-radius: 32px; background: var(--glass); -webkit-backdrop-filter: blur(20px) saturate(1.4); backdrop-filter: blur(20px) saturate(1.4); box-shadow: inset 0 0 0 1px var(--glass-line), 0 16px 40px -14px rgb(0 0 0 / 30%); display: grid; grid-template-columns: repeat(5, minmax(0, 68px)); justify-content: center; align-items: center; padding: 0 4px; z-index: 3; }
+.dock button { height: 56px; border-radius: 28px; display: grid; justify-items: center; align-content: center; gap: 2px; font-size: 11px; font-weight: 500; color: var(--muted); }
+.dock button.on { color: var(--fg); background: var(--ctl); }
+.fadeb { position: absolute; left: 0; right: 0; bottom: 0; height: 116px; background: linear-gradient(to top, var(--bg) 30%, transparent); pointer-events: none; z-index: 2; }
+
+/* Alt sayfa */
+.scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 5; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 48px; background: var(--sheet); border-radius: 22px 22px 0 0; z-index: 6; overflow-y: auto; padding: 0 16px 112px; scrollbar-width: none; box-shadow: inset 0 0 0 1px var(--line); }
+.sheet.menu { top: auto; padding-bottom: 32px; }
+.sheet.in { animation: up .3s cubic-bezier(.32, .72, 0, 1) both; }
+.scrim.in { animation: fade .24s ease-out both; }
+@keyframes up { from { transform: translateY(100%); } }
+@keyframes fade { from { opacity: 0; } }
+.grab { display: block; width: 100%; height: 28px; position: sticky; top: 0; background: var(--sheet); z-index: 2; }
+.grab::before { content: ""; position: absolute; left: 50%; top: 8px; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--faint); }
+.mrow { display: block; width: 100%; height: 52px; font-size: 17px; padding: 0 4px; border-radius: 16px; }
+.sh-hero { display: grid; justify-items: center; gap: 4px; padding: 4px 0 24px; text-align: center; }
+.sh-hero .plate { width: 112px; height: 112px; margin-bottom: 8px; --rim: 12px; }
+.sh-hero h5, .sh-head h5 { font-size: 22px; font-weight: 600; line-height: 28px; text-wrap: balance; }
+.sh-hero .note { font-size: 15px; line-height: 20px; }
+.qstep { display: inline-flex; align-items: center; height: 44px; border-radius: 999px; background: var(--ctl); margin-top: 12px; }
+.qstep button { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; }
+.qstep b { min-width: 96px; padding: 0 4px; text-align: center; font-weight: 600; }
+.sh-val { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.sh-head { display: grid; grid-template-columns: 64px 1fr; column-gap: 16px; align-items: center; padding: 4px 4px 20px; }
+.sh-head .plate { width: 64px; height: 64px; --rim: 6px; }
+.sh-head .note { font-size: 15px; line-height: 20px; }
+.sh-q { display: grid; grid-template-columns: 1fr auto; align-items: center; padding: 0 4px 8px; }
+.sh-q .n { font-size: 17px; }
+.sh-q .qstep { margin: 0; }
+.sh-l { font-size: 15px; font-weight: 600; padding: 20px 4px 12px; }
+.hrow { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 4px 16px; scrollbar-width: none; }
+.opt { flex: none; width: 96px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 4px 4px 8px; border-radius: 16px; }
+.opt .plate { width: 64px; height: 64px; --rim: 6px; }
+.opt .n { font-size: 13px; font-weight: 500; line-height: 16px; min-height: 32px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.opt.on .plate, .fc.on .plate { box-shadow: 0 0 0 2px var(--sheet), 0 0 0 3.5px var(--fg); }
+.orow { display: grid; grid-template-columns: 48px 1fr 24px; column-gap: 12px; align-items: center; width: 100%; min-height: 60px; padding: 0 4px; }
+.orow .plate { width: 48px; height: 48px; --rim: 4px; }
+.orow .n { display: block; font-size: 17px; line-height: 24px; }
+.orow.on .chk { color: var(--fg); box-shadow: none; }
+.find { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border-radius: 16px; background: var(--ctl); color: var(--muted); font-size: 17px; margin-bottom: 16px; }
+.find svg.g { width: 20px; height: 20px; }
+.fgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 8px; }
+.fc { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; padding: 8px 4px 12px; border-radius: 16px; min-width: 0; }
+.fc .plate { margin-bottom: 6px; }
+.fc .n { font-size: 15px; font-weight: 500; line-height: 20px; text-wrap: balance; }
+.fc .u, .fc .kv { font-size: 13px; line-height: 16px; color: var(--muted); }
+.fgrid.cards .fc { background: var(--ctl); padding: 12px 4px; }
+.fgrid.cards .fc.on { box-shadow: inset 0 0 0 1.5px var(--fg); }
+.fgrid.cards .fc.on .plate { box-shadow: none; }
+.fgrid.cards .fc .plate { width: 64px; height: 64px; }
+.fgrid.cards .fc .plate::before { display: none; }
+.sh-foot { position: absolute; left: 0; right: 0; bottom: 0; z-index: 7; padding: 12px 16px 24px; background: linear-gradient(to top, var(--sheet) 76%, transparent); display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.sh-foot .txtb { height: 52px; padding: 0 16px; font-size: 17px; color: var(--muted); border-radius: 16px; }
+.sh-foot.in { animation: up .3s cubic-bezier(.32, .72, 0, 1) both; }
+
+/* Hafta */
+.wk7 { display: grid; grid-template-columns: repeat(7, 1fr); justify-items: center; row-gap: 8px; }
+.wk7 .dn { font-size: 13px; color: var(--muted); height: 24px; display: grid; place-items: center; position: relative; width: 100%; border-radius: 12px; }
+.wk7 .dn.td { color: var(--fg); font-weight: 600; }
+.wk7 .dn.td::after { content: ""; position: absolute; bottom: -2px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--accent); }
+.wk7 button { width: 100%; height: 44px; display: grid; place-items: center; }
+.wk7 .plate { width: 40px; height: 40px; --rim: 4px; --back: .8; }
+.wk7 .plate .mark svg.g, .wk7 .noico svg.g { width: 16px; height: 16px; }
+.wk7 .rl { grid-column: 1 / -1; justify-self: start; font-size: 13px; color: var(--muted); padding: 8px 4px 0; }
+.wk7 button.sel .plate { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--fg); }
+.wksel { font-size: 15px; color: var(--muted); padding: 16px 4px 4px; }
+.wksel b { color: var(--fg); font-weight: 600; }
+.ct { font-size: 17px; font-weight: 600; padding: 4px 4px 12px; }
+.ledger { display: flex; flex-direction: column; }
+.lr { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; min-height: 52px; padding: 0 4px; }
+.lr .n { display: block; font-size: 17px; line-height: 24px; }
+.lr b { font-size: 17px; font-weight: 600; }
+.nav2 { display: flex; gap: 8px; }
+.nav2 button { width: 40px; height: 40px; border-radius: 50%; background: var(--card); box-shadow: var(--shadow), inset 0 0 0 1px var(--line); display: grid; place-items: center; }
+.nav2 svg.g { width: 20px; height: 20px; }
+.big { font-size: 34px; font-weight: 600; letter-spacing: -.01em; line-height: 40px; padding: 0 4px; }
+.bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; padding: 16px 4px 0; }
+.bars .bt { height: 72px; border-radius: 8px; background: var(--track); display: flex; align-items: flex-end; overflow: hidden; }
+.bars .bt i { display: block; width: 100%; border-radius: 8px; background: var(--fg); }
+.bars .dn { font-size: 13px; color: var(--muted); text-align: center; padding-top: 8px; position: relative; }
+.bars .dn.td { color: var(--fg); font-weight: 600; }
+.bars .dn.td::after { content: ""; position: absolute; bottom: -6px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--accent); }
+.n4 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 16px; padding: 24px 8px 8px; }
+.n4 b { display: block; font-size: 22px; font-weight: 600; line-height: 28px; }
+.n4 span { font-size: 13px; color: var(--muted); }
+.mt { display: grid; grid-template-columns: 48px 1fr 1fr; column-gap: 8px; row-gap: 12px; padding: 4px; font-size: 15px; }
+.mt .h { font-size: 13px; color: var(--muted); }
+.mt .d { color: var(--muted); }
+.mt .td { color: var(--fg); font-weight: 600; }
+.mt .pa { color: var(--muted); }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+
+/* İlerleme */
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 16px 0 4px; }
+.cal .dn { font-size: 11px; color: var(--muted); text-align: center; padding-bottom: 4px; }
+.cal .c { aspect-ratio: 1; border-radius: 12px; display: grid; place-items: center; font-size: 13px; color: var(--muted); position: relative; }
+.cal .c.f { background: var(--fg); color: var(--bg); font-weight: 500; }
+.cal .c.p { background: var(--track); color: var(--fg); }
+.cal .c.e { box-shadow: inset 0 0 0 1px var(--track); color: var(--faint); }
+.cal .c.td::after { content: ""; position: absolute; bottom: 6px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--accent); }
+.heat { display: grid; grid-template-rows: repeat(7, 1fr); grid-auto-flow: column; grid-auto-columns: 1fr; gap: 1.5px; padding: 16px 0 8px; }
+.heat i { aspect-ratio: 1; border-radius: 1.5px; background: var(--track); }
+.heat i.f { background: var(--fg); }
+.heat i.td { background: var(--accent); }
+.mon { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 0 2px; }
+.kg { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding-top: 16px; }
+.kg .in { height: 52px; border-radius: 16px; background: var(--ctl); padding: 0 16px; display: flex; align-items: center; color: var(--muted); }
+.kg .primary { padding: 0 20px; }
+.stub { color: var(--muted); padding: 0 4px; font-size: 15px; }
+
+/* Durumlar ve boyut sınaması */
+.specg { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px 8px; }
+.specg .sl { font-size: 13px; color: var(--muted); text-align: center; padding-bottom: 8px; }
+.specl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 32px; margin-top: 32px; }
+.spec-card { background: var(--card); border-radius: 24px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); padding: 20px 16px; }
+.sz { display: grid; grid-template-columns: 48px repeat(8, minmax(72px, 1fr)); align-items: center; justify-items: center; row-gap: 16px; overflow-x: auto; scrollbar-width: none; }
+.sz .l { font-size: 13px; color: var(--muted); justify-self: start; }
+.szu { display: grid; gap: 4px; margin-top: 24px; }
+.strip { display: flex; gap: 4px; padding-top: 4px; }
+.verdict { font-size: 15px; color: var(--muted); margin-top: 16px; max-width: 68ch; }
+.verdict b { color: var(--fg); font-weight: 600; }
+
+@media (max-width: 600px) {
+  .wrap { padding: 24px 16px 64px; }
+  .doc > section { margin-top: 56px; }
+  .bar { position: static; }
+  .seg button { padding: 0 12px; }
+  .alts { margin: 16px -16px 0; padding: 0 0 16px; gap: 0; scroll-snap-type: x mandatory; }
+  .alt { width: 100vw; }
+  .alt .txt { padding: 0 16px; }
+  .phone { width: 100vw; height: 780px; border-radius: 0; box-shadow: none; }
+  .scr { padding-top: 32px; }
+  .both .panels { grid-template-columns: minmax(0, 1fr); }
+  .panel { padding: 16px; margin-inline: -8px; }
+  .specg { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .specl { grid-template-columns: 1fr; }
+}
+@media (hover: hover) { .seg button:hover { color: var(--fg); } .mrow:hover, .orow:hover { background: var(--ctl); } }
+@media (prefers-reduced-motion: reduce) { .sheet.in, .scrim.in, .sh-foot.in { animation: none; } * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap doc">
+  <header>
+    <h1>Sofra</h1>
+    <p class="lead">Bugün bir sofradır: şimdi yenecek olan masada durur, yedikçe masa boşalır. Aşağıdaki telefonlar gerçek boyutta (375 px) ve tıklanabilir; üçü de aynı günü paylaşır, birinde yediğin diğerlerinde de yenmiş görünür.</p>
+    <div class="bar" id="bar"></div>
+  </header>
+
+  <section id="bugun">
+    <h2>Bugün</h2>
+    <p>Tabağa dokun: yedim. Etikete dokun: porsiyon, seçenek, atla. Alt çubuktaki Hafta ve İlerleme de çalışır.</p>
+    <div class="alts">
+      <div class="alt"><div class="pair"><div class="phone" data-screen="phone" data-tab="today" data-v="A"></div></div>
+        <div class="txt"><h3>A · Sofra <span class="tag">Öneri</span></h3><p>Kalemler tabaklarda durur; yenen tabak boşalıp geri çekilir, yeri değişmez. Ana yemek solda büyük tabakta, yanındakiler sağda tek sütunda. Diyetisyenin yan notları etiketin arkasında.</p></div></div>
+      <div class="alt"><div class="pair"><div class="phone" data-screen="phone" data-tab="today" data-v="B"></div></div>
+        <div class="txt"><h3>B · Liste</h3><p>Bugünkü ekrana en yakın olan. 40 px ikon onay kutusunun yerinde; ad ve diyetisyenin notu tam okunur. Gün özeti kadran olarak kalır.</p></div></div>
+      <div class="alt"><div class="pair"><div class="phone" data-screen="phone" data-tab="today" data-v="C"></div></div>
+        <div class="txt"><h3>C · Tabak</h3><p>İkonlar tek tabakta kompozisyon, liste düz yazı. En güzel ilk kare, en uzun kart: kahvaltıda ana düğme ekranın altına düşer.</p></div></div>
+    </div>
+  </section>
+
+  <section id="durum">
+    <h2>Kalem durumları</h2>
+    <p>Aynı altı durum, A’nın tabağında ve B’nin satırında.</p>
+    <div class="panels" data-panels="spec"></div>
+  </section>
+
+  <section id="boyut">
+    <h2>İkon boyutu</h2>
+    <p>Aynı sekiz ikon dört boyutta; altında her boyutun gerçek kullanımı.</p>
+    <div class="panels" data-panels="sizes"></div>
+    <p class="verdict"><b>20 ve 28 px: emoji.</b> Yazının içinde ya da satır başında, harf boyuna yakınken klavyeden girilmiş gibi okunuyor; peynir ve yoğurt beyaz zeminde kayboluyor. <b>40 px: yalnızca tabağın üstünde.</b> Çıplak hâlde çıkartma gibi duruyor, tabak ona bir yer veriyor; köfte ve söğüş gibi ayrıntılı ikonlar bu boyda hâlâ seçiliyor. <b>64 px ve üstü: nesne.</b> Gölge ve hacim okunuyor, ikon bir resim olarak kendi başına taşıyor. Karar: ikon 40 px’in altında ve tabaksız kullanılmaz; kapalı öğünler yazı kalır. Hafta’daki 32 px bu kuralın sınırında, yalnızca tabakla ve yalnızca ana yemek için.</p>
+  </section>
+
+  <section id="kalem">
+    <h2>Kalem sayfası</h2>
+    <p>Etikete dokununca açılır. Porsiyon adımı, programın seçenekleri ve kütüphane çalışır.</p>
+    <div class="alts">
+      <div class="alt"><div class="pair"><div class="phone" data-screen="phone" data-tab="today" data-v="A" data-pin="1"></div></div>
+        <div class="txt"><h3>1 · Sofra <span class="tag">Öneri</span></h3><p>Miktar hapı büyüyüp porsiyon adımına dönüşür. Muadiller yatay tabak sırası; kütüphane aynı tabak diliyle, kart zemini olmadan.</p></div></div>
+      <div class="alt"><div class="pair"><div class="phone" data-screen="phone" data-tab="today" data-v="B" data-pin="2"></div></div>
+        <div class="txt"><h3>2 · Liste</h3><p>Muadiller tam adlarıyla satır satır; uzun adlar kesilmez. Kütüphane bugünkü kart ızgarasına yakın.</p></div></div>
+    </div>
+  </section>
+
+  <section id="hafta">
+    <h2>Hafta</h2>
+    <p>Örnek kayıt: Pazartesi ve Salı girilmiş, bugün Çarşamba.</p>
+    <div class="alts">
+      <div class="alt"><div class="pair"><div class="phone" data-screen="phone" data-tab="week" data-v="A"></div></div>
+        <div class="txt"><h3>1 · Haftanın sofrası <span class="tag">Öneri</span></h3><p>Ana yemekler yedi sütunda tabak olarak; geçen günlerin tabağı boş. Sayılar kartsız, tek çizelgede. Güne dokun, altında adı yazar.</p></div></div>
+      <div class="alt"><div class="pair"><div class="phone" data-screen="phone" data-tab="week" data-v="B"></div></div>
+        <div class="txt"><h3>2 · Çizelge</h3><p>Bugünkü yapı sadeleşmiş hâliyle: uyum çubukları nötr, dört sayı kartsız, ana yemekler yazı tablosu. İkon yok.</p></div></div>
+    </div>
+  </section>
+
+  <section id="ilerleme">
+    <h2>İlerleme</h2>
+    <p>Program 13 Kasım’da başladı; kayıt altı günlük. İkon bu ekranda yok: burada yiyecek değil, zaman okunuyor.</p>
+    <div class="alts">
+      <div class="alt"><div class="pair"><div class="phone" data-screen="phone" data-tab="prog" data-v="A"></div></div>
+        <div class="txt"><h3>1 · Başlangıçtan bugüne <span class="tag">Öneri</span></h3><p>Takvim programın başladığı haftadan başlar ve hafta hafta büyür; boş bir yıl göstermez. Kilo ve diyetisyenin ölçümü aynı yerde.</p></div></div>
+      <div class="alt"><div class="pair"><div class="phone" data-screen="phone" data-tab="prog" data-v="B"></div></div>
+        <div class="txt"><h3>2 · Yıl takvimi</h3><p>Bugünkü on iki aylık ısı haritası, turuncusuz. Altı günlük kayıtta 365 kutunun 359'u boş kalıyor.</p></div></div>
+    </div>
+  </section>
+
+  <section id="notlar">
+    <h2>Notlar</h2>
+    <div class="notes" id="notes">
+      <div><h3>Yön</h3><ul>
+        <li><b>Ürün:</b> diyetisyenin yazdığı programı gün içinde “şimdi ne yiyeceğim” sorusuna çevirir, yediğini tek dokunuşla kaydeder ve diyetisyene döker.</li>
+        <li><b>Karakter:</b> sakin, ölçülü, iştah açıcı.</li>
+        <li><b>Dünya:</b> buzdolabına asılı diyetisyen kâğıdı ve kurulu sofra. Zemin nötr, yazı düz; renk yalnızca yiyecekten gelir.</li>
+        <li><b>An:</b> şimdiki öğün kurulu bir sofradır. Kalemler tabaklarında durur; yediğinin tabağı boşalır.</li>
+        <li><b>İmza:</b> diyetisyenin ölçüsü her şeyin etiketi: “2 dilim”, “½ adet”, “60 g” her ekranda aynı hapta.</li>
+      </ul></div>
+      <div><h3>Konsept</h3><p>Bugün bir sofradır: şimdi yenecek olan masada durur, yedikçe masa boşalır.</p>
+        <p style="margin-top:8px">Boş günde ilk öğünün sofrası kurulu. Gün ortasında tabakların bir kısmı boş. Bitmiş günde masa kalkmış; ekran günün yazılı dökümüdür. Konsept şunları yasakladı: her satıra küçük ikon, öğün kartında halka ve sayaç, kadranların ekranın kahramanı olması, öğünde beş eylem.</p></div>
+      <div><h3>Önerilen yorum</h3><p><b>Bugün A, kalem sayfası 1, Hafta 1, İlerleme 1.</b> A’da yiyecek hem resim hem düğme; ilerleme masanın kendisinden okunuyor ve kahvaltının altı kalemi tek ekrana sığıyor. Bedeli: diyetisyenin yan notları (“tuzsuz”, “eksik yeme”) bir dokunuş geride. Bu notlar senin için her gün okunması gereken şeylerse B doğru seçim; B aynı tabağı ve aynı “Yedim” anını kullanıyor. C en güzel ilk kare ama aynı bilgiyi iki kez gösteriyor ve en uzun kart.</p></div>
+      <div><h3>Unslop: son denetim</h3><ol>
+        <li><b>Ad değiştirme sınaması:</b> geçti. Ekran bir kalori sayacına benzemiyor: arama yok, makro halkası yok; diyetisyenin listesi, onun ölçüleriyle, tabaklarda.</li>
+        <li><b>“Model yaptı” şüphesi:</b> kalan tek aday tabak altındaki haplar. İmza oldukları ve kalem sayfasını açtıkları için kaldı. İkonların kendisi 28 px’in altında emoji gibi okunuyor; bu yüzden hiçbir yerde tabaksız ve küçük kullanılmadı.</li>
+        <li><b>Rakibin yapıştıramayacağı seçim:</b> yenen kalemin tabağının boşalması ve öğünün, yenenlerin adından oluşan tek satıra katlanması.</li>
+        <li><b>Bir şey daha sil:</b> gün özetinin altındaki ilerleme çizgileri silindi, bir şey bozulmadı. Kart başlığındaki öğün toplamı silinince öğünün proteinini görmenin yolu kalmadı; geri kondu ve durdum.</li>
+        <li><b>Geçişlere göre değişen:</b> boşluk 4’ün katlarına ve tek satır yüksekliğine indi; turuncu yalnızca şimdiki öğünün noktası ve düğmesi; çizgi ikonlar zaman çizelgesinden çıktı; alt satırlardaki ayraç zincirleri virgüllü tek ifadeye döndü; yazı altı boyuta ve 400, 500, 600 ağırlığa indi; öğünde bir ana düğme ve bir “diğer” kaldı; ayırıcı çizgi yok.</li>
+      </ol></div>
+      <div><h3>Polish: puan geçmişi</h3><ol>
+        <li><b>5.</b> İlk çizim. En zayıf: yenmiş ana yemek, ekranın en büyük nesnesi olarak boş gri bir daire.</li>
+        <li><b>6,5.</b> Tabağa kenar ve çukur eklendi, boş tabak nesne oldu. Açık temada ikincil yazı 4,4:1’den 4,8:1’e, turuncu düğmenin yazısı 2,9:1’den 6,6:1’e çıktı. “Atlandı” ve “isteğe bağlı” artık satır yüksekliğini değiştirmiyor. En zayıf: “Yedim” anı iki ayrı öğenin çapraz geçişi, öğün anında kapanıyor.</li>
+        <li><b>7,5.</b> Yiyecek küçülüp silinir, onay aynı yerde çizilir; “Hepsini yedim” 50 ms arayla boşaltır; kart tek satıra katlanır, alt satırlar aynı eğriyle gelir; alt sayfa aşağı kayarak kapanır. Kare kare bakıldı. En zayıf: kapanışta “Gün boyu” kartı yerinde kalıp satırlarla çakışıyor, iki başlık üst üste görünüyordu.</li>
+        <li><b>8.</b> Çakışma ve üst üste binme giderildi; Hafta’daki tabakların dokunma alanı 44 px’e çıktı. En zayıf: kahvaltıda ana düğme alt çubuğun 5 ila 9 px üstünde bitiyor; pay yok.</li>
+        <li><b>8.</b> Ekranlarda değişiklik yok; yalnızca bu belgenin mobil genişlikteki yatay taşması giderildi. Kalan en zayıf şey aynı; düzeltmek ikonu 64 px’in altına indirmeyi gerektiriyor, yapılmadı.</li>
+        <li><b>8.</b> İki temada, üç senaryoda, ikonsuz kalem ve gizli kaloriyle yeniden bakıldı. Değişiklik yok; durdum.</li>
+        <li><b>8.</b> Geri bildirimden sonra: gün ortasında yenmiş ana yemek ekranın en baskın nesnesiydi ve ana yemekle yanındakiler iki ayrı hizada duruyordu. Yenmiş tabak artık kenarını bırakıp küçülüyor, yeri ve dokunma alanı aynı kalıyor. Ana yemek solda 128 px tabakta, yanındakiler sağda 64 px tabaklarla tek sütunda; kart 40 px kısaldı ve ana düğme gün ortasında da ekranda.</li>
+      </ol></div>
+      <div><h3>Uygulamaya taşırken</h3><ul>
+        <li><b>Eksik ikon:</b> kurubaklagil. Haftada dört kez çıkan ana yemek; üretilecek ilk ikon bu. Hindi köfte, yeşil mercimek ve salata muadilleri de ikonsuz.</li>
+        <li><b>Eşleme:</b> plan kalemine isteğe bağlı bir ikon kimliği (<b>i</b>) eklenirse yumurta, avokado, meyve, çay ve limonlu su ikonunu bulur; tam buğday ekmeği doğru ikona gider. Ad eşlemesi bunu çözmüyor.</li>
+        <li><b>Renk:</b> açık temada <b>--muted</b> #6f6f76 yerine #6a6a71 ve turuncu düğmede koyu yazı kullanıldı. İkisi de kontrast için; koyu temadaki değerlerle aynı mantık.</li>
+        <li><b>Davranış farkı:</b> kalem sayfasında seçim “Yedim”e basınca kaydedilir. Uygulamada her dokunuş hemen kaydediliyor; hangisinin kalacağı senin kararın.</li>
+        <li><b>Örnek kayıt:</b> Hafta ve İlerleme’deki sayılar uygulamanın motorundan, bu çalışma için girilmiş altı günlük kayıtla alındı. Plan ve kütüphane verisi plan.js ve foods.js’ten aynen.</li>
+        <li><b>Titreşim:</b> “Yedim”de 8 ms titreşim var; iOS’ta ana ekran uygulamasında çalışmaz.</li>
+      </ul></div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ---------- Plan verisi: plan.js'ten (PLAN_DEFAULT) aynen; yalnızca ad ve miktar ayrılmış, ikon kimliği eklenmiştir ---------- */
+const o = (a, n, i) => ({ a, n, i }), sb = (a, n, i) => ({ a, n, i, sub: 1 });
+const IT = {
+  limon: { n: 'Ilık limonlu su', a: '2 bardak', note: 'İçine 2-3 damla limon', i: 'limonlu-su', k: 0, p: 0 },
+  peynir: { n: 'Beyaz peynir', s: 'Peynir', a: '2 dilim', note: '60 g', i: 'beyaz-peynir', k: 160, p: 10,
+    alts: [o('4 yk', 'Tuzsuz lor', 'lor'), o('4 yk', 'Çökelek', 'cokelek'), sb('60 g', 'Az tuzlu kaşar', 'kasar-peyniri'), sb('', '1 yumurta + 1 dilim peynir', null)] },
+  yumurta: { n: 'Haşlanmış yumurta', s: 'Yumurta', a: '2 adet', note: 'Tuzsuz', i: 'haslanmis-yumurta', k: 150, p: 13,
+    alts: [sb('2 yumurtalı', 'Yağsız omlet', 'omlet'), sb('2 yumurtalı', 'Yağsız menemen', 'menemen')] },
+  sebze: { n: 'Domates, salatalık, yeşillik', s: 'Söğüş', a: '', note: 'Tuzsuz, yağsız', i: 'sogus', k: 30, p: 1 },
+  yag: { n: 'Avokado', a: '½ adet', note: 'ya da 2-3 tam ceviz', i: 'avokado', k: 110, p: 2,
+    alts: [o('2-3 tam', 'Ceviz', 'ceviz'), sb('6-8 adet', 'Çiğ badem ya da fındık', 'badem'), sb('1 tatlı kaşığı', 'Zeytinyağı', 'zeytinyagi'), sb('5-6 adet', 'Zeytin', 'zeytin')] },
+  ekmek: { n: 'Tam buğday ekmeği', s: 'Ekmek', a: '2 dilim', note: '50 g, eksik yeme', i: 'tam-bugday-ekmegi', k: 125, p: 5,
+    alts: [sb('4 yk', 'Yulaf ezmesi (40 g)', 'yulaf-ezmesi'), sb('6 yk', 'Bulgur pilavı', 'bulgur-pilavi'), sb('6 yk', 'Tam buğday makarna ya da esmer pirinç', 'tam-bugday-makarna'), sb('1 orta boy', 'Haşlanmış patates (~180 g)', 'haslanmis-patates'), sb('1 küçük', 'Tam buğday lavaş (50 g)', 'lavas')] },
+  cay: { n: 'Açık şekersiz çay', s: 'Açık çay', a: '1 fincan', note: 'İsteğe bağlı', i: 'acik-cay', k: 0, p: 0, optional: true },
+  yogurt: { n: 'Yoğurt', a: '3-4 yk', note: '1 çk keten tohumuyla', i: 'yogurt', k: 45, p: 3,
+    alts: [o('1 bardak', 'Ayran', 'ayran'), sb('1 küçük kase', 'Yağsız cacık', 'cacik'), sb('1 çay bardağı', 'Kefir', 'kefir')] },
+  salata: { n: 'Bol salata', s: 'Salata', a: '', note: '1 tatlı kaşığı sıvıyağ', i: 'yesil-salata', k: 70, p: 1,
+    alts: [sb('', 'Haşlama ya da ızgara sebze', null), sb('', 'Yağsız söğüş + 5 zeytin', 'sogus')] },
+  galeta: { n: 'Karabuğdaylı-yulaflı galeta', s: 'Galeta', a: '5 adet', note: '', i: 'galeta', k: 100, p: 3,
+    alts: [o('5-6 adet', 'Minik kepekli galeta', 'galeta'), o('2 adet', 'Kalın uzun kepekli galeta', 'galeta'), o('½ çay bardağı', 'Leblebi', 'leblebi'), sb('1 dilim', 'Tam buğday ekmeği (25 g)', 'tam-bugday-ekmegi'), sb('2 yk', 'Yulaf ezmesi', 'yulaf-ezmesi'), sb('2 adet', 'Pirinç patlağı', 'pirinc-patlagi')] },
+  meyve: { n: 'Meyve', a: '1 porsiyon', note: '1 küçük elma, 1 portakal, 2 mandalina ya da 1 küçük muz', i: 'elma', k: 70, p: 1,
+    alts: [o('1 adet', 'Portakal', 'portakal'), o('2 adet', 'Mandalina', 'mandalina'), o('1 küçük', 'Muz', 'muz'), sb('10-12 adet', 'Çilek', 'cilek'), sb('3 adet', 'Kayısı', 'kayisi'), sb('1 ince dilim', 'Kavun ya da karpuz', 'kavun'), sb('15 adet', 'Üzüm', 'uzum')] },
+  psut: { n: 'Protein süt', a: '1 bardak', note: '', i: 'protein-sut', k: 160, p: 22,
+    alts: [o('1 kutu', 'Sek quark protein', 'quark'), sb('200 g', 'Yüksek proteinli yoğurt (skyr)', 'skyr'), sb('1 ölçü', 'Whey + su', 'protein-shake')] },
+  kabak: { n: 'Çiğ kabak çekirdeği', s: 'Kabak çekirdeği', a: '1 avuç içi', note: '', i: 'kabak-cekirdegi', k: 115, p: 6,
+    alts: [sb('6-8 adet', 'Çiğ badem ya da fındık', 'badem'), sb('2 tam', 'Ceviz', 'ceviz')] },
+  /* Ana yemekler */
+  bakla: { n: 'Kurubaklagil yemeği', s: 'Kurubaklagil', a: '8 yk', note: 'Susuz; kurufasulye, nohut, barbunya', i: null, k: 250, p: 15,
+    alts: [sb('8 yk', 'Yeşil mercimek yemeği', null), sb('8 yk', 'Börülce ya da bakla', null)] },
+  kofte: { n: 'Izgara köfte', s: 'Köfte', a: '5 adet', note: 'Izgara ya da tost makinesinde', i: 'izgara-kofte', k: 330, p: 27,
+    alts: [sb('150 g', 'Yağsız ızgara et', 'biftek'), sb('150 g', 'Hindi ya da tavuk köfte', null)] },
+  tavuk: { n: 'Tavuk', a: '150 g', note: 'Izgara, haşlama ya da fırın', i: 'izgara-tavuk-gogsu', k: 250, p: 35,
+    alts: [sb('150 g', 'Hindi göğsü', null), sb('5 adet', 'Izgara köfte', 'izgara-kofte')] },
+  balik: { n: 'Balık', a: '250 g', note: 'Izgara, buğulama ya da fırın', i: 'levrek-izgara', k: 330, p: 40,
+    alts: [sb('150 g', 'Tavuk', 'izgara-tavuk-gogsu'), sb('160 g', 'Ton balığı', 'ton-baligi')] },
+  ton: { n: 'Ton balıklı salata', s: 'Ton balıklı', a: '160 g', note: 'Salatası içinde', i: 'ton-baligi', k: 260, p: 35, noSalad: true,
+    alts: [sb('150 g', 'Tavuklu salata', null), sb('', '3 haşlanmış yumurtalı salata', null)] },
+};
+const MEALS = [
+  { id: 'sabah', t: 'Uyanınca', items: ['limon'] },
+  { id: 'kahvalti', t: 'Kahvaltı', time: '11:00', items: ['peynir', 'yumurta', 'sebze', 'yag', 'ekmek', 'cay'] },
+  { id: 'ogle', t: 'Öğle', time: '14:00', main: true, items: ['yogurt', 'ekmek', 'salata'] },
+  { id: 'ikindi', t: 'İkindi', time: '16:00', items: ['galeta', 'meyve'] },
+  { id: 'aksam', t: 'Akşam', time: '20:00', main: true, items: ['yogurt', 'ekmek', 'salata'] },
+  { id: 'gece', t: 'Gece', time: '21:00', items: ['psut', 'kabak'] },
+];
+const ROTA = { ogle: ['bakla', 'tavuk', 'kofte', 'bakla', 'balik', 'kofte', 'ton'], aksam: ['kofte', 'bakla', 'balik', 'ton', 'kofte', 'tavuk', 'bakla'] };
+const TRAIN = { 2: { name: 'Alt', n: 7, time: '18:00', after: 'ikindi', notes: { ikindi: 'Antrenmandan önce: galeta ve meyveyi seç, karbonhidrat işe yarar.', aksam: 'Antrenmandan sonra: bu öğünü ve ekmeğini atlama.' } } };
+const WATER_GOAL = 10, WATER_ML = 250, COFFEE_MAX = 2;
+/* foods.js'ten (FOODS) aynen: ekmek yerine geçebilecek kütüphane kayıtları. */
+const LIB = [
+  { n: 'Tam buğday ekmeği', u: '1 dilim (25 g)', k: 62, p: 2.5, i: 'tam-bugday-ekmegi' }, { n: 'Beyaz ekmek', u: '1 dilim (30 g)', k: 80, p: 2.5, i: 'beyaz-ekmek' },
+  { n: 'Lavaş', u: '1 adet', k: 250, p: 8, i: 'lavas' }, { n: 'Bazlama', u: '1 adet', k: 300, p: 9, i: 'bazlama' },
+  { n: 'Simit', u: '1 adet', k: 300, p: 9, i: 'simit' }, { n: 'Bulgur pilavı', u: '1 porsiyon', k: 250, p: 7, i: 'bulgur-pilavi' },
+  { n: 'Pirinç pilavı', u: '1 porsiyon', k: 300, p: 5, i: 'pirinc-pilavi' }, { n: 'Makarna, sade', u: '1 porsiyon', k: 320, p: 11, i: 'makarna-sade' },
+  { n: 'Yulaf lapası', u: '1 kase, sütlü', k: 280, p: 12, i: 'yulaf-lapasi' },
+];
+const DOW = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'], DAYNAME = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+
+/* ---------- Yardımcılar ---------- */
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const num = n => Math.round(n).toLocaleString('tr-TR'), num1 = n => (Math.round(n * 100) / 100).toLocaleString('tr-TR');
+const lower = s => s.toLocaleLowerCase('tr'), cap = s => s.charAt(0).toLocaleUpperCase('tr') + s.slice(1);
+const mins = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const svg = d => `<svg class="g" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const G = {
+  check: svg('<path pathLength="1" d="M5 12.5l4.5 4.5L19 7.5"/>'), minus: svg('<path pathLength="1" d="M7 12h10"/>'), plus: svg('<path d="M12 6v12M6 12h12"/>'),
+  more: svg('<path d="M6 12h.01M12 12h.01M18 12h.01" stroke-width="2.5"/>'), right: svg('<path d="M9 6l6 6-6 6"/>'), left: svg('<path d="M15 6l-6 6 6 6"/>'),
+  fork: svg('<path d="M8 3v6a2 2 0 0 0 4 0V3M10 3v18M16 21V3c-1.6 1.6-2.5 4-2.5 7.5H16"/>'), find: svg('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'),
+  today: svg('<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>'), week: svg('<path d="M6 19v-6M12 19V5M18 19v-9"/>'),
+  chat: svg('<path d="M20 11.5a8 8 0 0 1-11.7 7.1L4 20l1.2-4.1A8 8 0 1 1 20 11.5z"/>'),
+  prog: svg('<path d="M5 5h3v3H5zM10.5 5h3v3h-3zM16 5h3v3h-3zM5 10.5h3v3H5zM10.5 10.5h3v3h-3zM16 10.5h3v3h-3zM5 16h3v3H5zM10.5 16h3v3h-3zM16 16h3v3h-3z" stroke-width="1.5"/>'),
+  plan: svg('<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>'),
+};
+const ico = (i, px) => `<img src="../../img/f/${i}-160.webp" srcset="../../img/f/${i}-160.webp 160w, ../../img/f/${i}-320.webp 320w" sizes="${px}px" width="${px}" height="${px}" alt="" draggable="false">`;
+const food = (i, px) => i ? ico(i, px) : `<span class="noico">${G.fork}</span>`;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- Durum ---------- */
+const st = { scen: 'mid', thu: false, kc: true, theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light', both: false, open: undefined, just: new Map(), wksel: null, tmr: 0 };
+let D, CLOCK;
+const P = {}, SH = {};   /* telefon başına: sekme ve açık alt sayfa */
+const dow = () => st.thu ? 3 : 2;
+const mainOf = m => m.main ? ROTA[m.id][dow()] : null;
+const itemsOf = m => { const mid = mainOf(m); let its = m.items; if (mid && IT[mid].noSalad) its = its.filter(x => x !== 'salata'); return mid ? [mid, ...its] : its; };
+const R = (m, id) => D.items[m + '.' + id];
+const fin = m => itemsOf(m).every(id => IT[id].optional || R(m.id, id));
+const some = m => itemsOf(m).some(id => R(m.id, id));
+const nowMeal = () => MEALS.find(m => m.time && !fin(m) && mins(m.time) - CLOCK <= 60) || null;
+const openId = () => st.open === undefined ? (nowMeal() || {}).id || null : st.open;
+function preset() {
+  const og = ROTA.ogle[dow()], ak = ROTA.aksam[dow()], d = { s: 'done' };
+  if (st.scen === 'empty') { CLOCK = mins('10:40'); D = { items: {}, water: 0, coffee: 0, walk: false }; }
+  else if (st.scen === 'mid') { CLOCK = mins('14:10'); D = { items: { 'sabah.limon': d, 'kahvalti.peynir': d, 'kahvalti.yumurta': d, 'kahvalti.sebze': d, 'kahvalti.yag': { s: 'done', alt: 0 }, 'kahvalti.ekmek': { s: 'done', alt: 0 }, [st.thu ? 'ogle.ekmek' : 'ogle.' + og]: d, 'ogle.yogurt': d }, water: 4, coffee: 1, walk: false }; }
+  else { CLOCK = mins('21:40'); D = { items: {}, water: 9, coffee: 2, walk: false };
+    MEALS.forEach(m => itemsOf(m).forEach(id => { if (!IT[id].optional) D.items[m.id + '.' + id] = { s: 'done' }; }));
+    D.items['kahvalti.yag'] = { s: 'done', alt: 0 }; D.items['kahvalti.ekmek'] = { s: 'done', alt: 0 }; D.items['aksam.yogurt'] = { s: 'done', alt: 0 }; D.items['aksam.ekmek'] = { s: 'skip' }; }
+  st.open = undefined; st.just = new Map(); Object.keys(SH).forEach(k => { if (!SH[k].pin) delete SH[k]; });
+}
+
+/* Kalemin o anki görünümü: seçenek ya da muadil seçildiyse onun adı, miktarı, ikonu. */
+const FR = { 0.25: '¼', 0.5: '½', 0.75: '¾' };
+const qLab = q => { q = Math.round(q * 4) / 4; const w = Math.floor(q), f = FR[q - w] || ''; return (w || '') + f || '0'; };
+function amtOf(a, q) { q = q || 1; if (!a) return q === 1 ? '1 porsiyon' : qLab(q) + ' porsiyon';
+  const m = a.match(/^(\d+)\s(.+)$/); if (m) { const v = m[1] * q; return (m[2] === 'g' ? num(v) : qLab(v)) + ' ' + m[2]; }
+  if (a === '½ adet') return qLab(.5 * q) + ' adet';
+  return q === 1 ? a : a + ' × ' + qLab(q); }
+const stepOf = a => { const m = a && a.match(/^(\d+)\s(.+)$/); return m && m[2] !== 'g' ? 1 / m[1] : a === '½ adet' ? 1 : .25; };
+function view(id, r) { const it = IT[id], q = r && r.q || 1;
+  if (r && r.lib != null) { const f = LIB[r.lib]; return { n: f.n, s: f.n, a: q === 1 ? f.u : qLab(q) + ' × ' + f.u, i: f.i, cap: lower(it.s || it.n) + ' yerine', note: '', k: f.k * q, p: f.p * q }; }
+  const al = r && r.alt != null ? it.alts[r.alt] : null;
+  return { n: al ? al.n : it.n, s: al ? al.n.replace(/\s*\(.*\)$/, '') : (it.s || it.n), a: amtOf(al ? al.a : it.a, q), i: al ? al.i : it.i, cap: al && al.sub ? lower(it.s || it.n) + ' yerine' : '', note: al ? '' : it.note, k: it.k * q, p: it.p * q }; }
+function totals() { let k = 0, p = 0, K = 0, Pp = 0;
+  MEALS.forEach(m => itemsOf(m).forEach(id => { const it = IT[id]; if (!it.optional) { K += it.k; Pp += it.p; } const r = R(m.id, id); if (r && r.s === 'done') { const v = view(id, r); k += v.k; p += v.p; } }));
+  return { k, p, K, P: Pp }; }
+const dur = d => d < 60 ? d + ' dk' : Math.floor(d / 60) + ' sa' + (d % 60 ? ' ' + d % 60 + ' dk' : '');
+const rel = m => { const d = mins(m.time) - CLOCK; return d > 0 ? dur(d) + ' sonra' : 'Şimdi'; };
+
+/* ---------- Bugün ---------- */
+function recLine(m) { const its = itemsOf(m), f = fin(m), sm = some(m);
+  let parts = its.map(id => { const r = R(m.id, id); if (!r && IT[id].optional) return null; return { t: lower(view(id, r).s), skip: r && r.s === 'skip', pend: !r }; }).filter(Boolean);
+  let pre = ''; if (!f && sm) { parts = parts.filter(x => x.pend); pre = 'Kalan: '; }
+  const out = parts.map((x, i) => { const t = i === 0 && !pre ? cap(x.t) : x.t; return x.skip ? `<s>${t}</s>` : t; }).join(', ');
+  return pre + out; }
+function head(title, small, right) { return `<div class="hd"><div><small>${small}</small><h4>${title}</h4></div>${right || ''}</div>`; }
+function stats(v) { const t = totals(), w = D.water * WATER_ML / 1000, wg = WATER_GOAL * WATER_ML / 1000, pc = (a, b) => Math.min(100, Math.round(a / b * 100));
+  const rows = [st.kc && ['', num(t.k), '/ ' + num(t.K) + ' kcal', pc(t.k, t.K), 'Kalori'], ['', num(t.p) + ' g', '/ ' + num(t.P) + ' g protein', pc(t.p, t.P), 'Protein'], ['w', num1(w) + ' L', '/ ' + num1(wg) + ' L su', pc(w, wg), 'Su']].filter(Boolean);
+  if (v === 'A') return `<div class="stats">${rows.map(r => `<div class="s ${r[0]}"><b>${r[1]}</b><span>${r[2]}</span></div>`).join('')}</div>`;
+  if (v === 'B') { const c = 2 * Math.PI * 29; return `<div class="dials ${rows.length === 2 ? 'two' : ''}">${rows.map(r => `<div class="dial ${r[0]}"><div class="rg"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="29"/>${r[3] ? `<circle class="v" cx="32" cy="32" r="29" stroke-dasharray="${c * r[3] / 100} ${c}"/>` : ''}</svg><b>${r[1].replace(' L', '').replace(' g', '')}</b></div><span>${r[2]}</span></div>`).join('')}</div>`; }
+  return `<p class="sline">${rows.map(r => `<b>${r[1].replace(' g', '').replace(' L', '')}</b> ${r[2]}`).join(', ')}</p>`; }
+function row(m, now) { const f = fin(m);
+  if (!m.time) { const it = IT[m.items[0]]; return `<div class="row ${f ? 'done' : ''}" data-k="m-${m.id}"><span class="tm"></span><span><span class="t">${m.t}</span><span class="r">${it.a} ${lower(it.n)}</span></span><button class="chk ${f ? 'on' : ''}" data-act="toggle" data-m="${m.id}" data-i="${m.items[0]}" aria-pressed="${f}" aria-label="${it.n}, içtim">${f ? G.check : ''}</button></div>`; }
+  return `<button class="row ${f ? 'done' : ''} ${now === m ? 'isnow' : ''}" data-act="open" data-m="${m.id}" data-k="m-${m.id}" aria-expanded="false"><span class="tm">${m.time}</span><span><span class="t">${now === m ? '<i class="dot"></i>' : ''}${m.t}</span><span class="r">${recLine(m)}</span></span><span class="st">${f ? G.check : ''}</span></button>`; }
+function plateIn(v, r, just, px) {
+  if (!r) return (just ? '' : '') + `<span class="food ${just ? 'back' : ''}">${food(v.i, px)}</span>`;
+  return (just ? `<span class="food gone">${food(v.i, px)}</span>` : '') + `<span class="mark">${r.s === 'skip' ? G.minus : G.check}</span>`; }
+const stCls = (r, key) => (r ? (r.s === 'skip' ? 'skip' : 'eaten') : '') + (st.just.has(key) ? ` just" style="--d:${st.just.get(key)}` : '');
+function tile(mid, id, cls, r) { const key = mid + '.' + id; r = r === undefined ? R(mid, id) : r; const v = view(id, r), big = cls === 'hero', it = IT[id], px = big ? 104 : cls === 'side' ? 52 : 64;
+  return `<div class="tile ${cls || ''} ${stCls(r, key)}" data-k="i-${key}">
+    <button class="plate" data-act="toggle" data-m="${mid}" data-i="${id}" aria-pressed="${!!r}" aria-label="${v.n}${r ? ', geri al' : ', yedim'}">${plateIn(v, r, st.just.has(key), px)}</button>
+    <button class="lab" data-act="item" data-m="${mid}" data-i="${id}" aria-label="${v.n}, porsiyon ve seçenekler"><span class="n">${big ? v.n : v.s}</span>${v.cap ? `<span class="cap">${v.cap}</span>` : ''}<span class="amt">${r && r.s === 'skip' ? 'Atlandı' : v.a}</span>${big && v.note ? `<span class="note">${v.note}</span>` : ''}${it.optional ? '<span class="cap">İsteğe bağlı</span>' : ''}</button></div>`; }
+function li(mid, id, r) { const key = mid + '.' + id; r = r === undefined ? R(mid, id) : r; const v = view(id, r), it = IT[id];
+  const sub = v.cap ? cap(v.cap) : v.note, skip = r && r.s === 'skip';
+  return `<div class="li ${stCls(r, key)}" data-k="i-${key}">
+    <button class="lim" data-act="toggle" data-m="${mid}" data-i="${id}" aria-pressed="${!!r}" aria-label="${v.n}${r ? ', geri al' : ', yedim'}"><span class="plate">${plateIn(v, r, st.just.has(key), 40)}</span><span><span class="n">${v.n}</span>${sub ? `<span class="note">${sub}</span>` : ''}</span></button>
+    <button class="amt" data-act="item" data-m="${mid}" data-i="${id}" aria-label="${v.n}, porsiyon ve seçenekler">${skip ? 'Atlandı' : v.a}</button></div>`; }
+function slots(n, hasMain) { const ring = (c, r, s, a0) => Array.from({ length: c }, (_, i) => { const a = (a0 + i * 360 / c) * Math.PI / 180; return { x: Math.cos(a) * r, y: Math.sin(a) * r, s }; });
+  if (hasMain) return [{ x: -34, y: 2, s: 96 }, ...(n === 4 ? [{ x: 48, y: -50, s: 56 }, { x: 66, y: 8, s: 56 }, { x: 40, y: 62, s: 56 }] : [{ x: 54, y: -32, s: 60 }, { x: 54, y: 36, s: 60 }])];
+  if (n === 6) return [...ring(5, 60, 56, -90), { x: 0, y: 0, s: 56 }];
+  if (n === 5) return ring(5, 56, 60, -90);
+  if (n === 2) return [{ x: -40, y: 0, s: 72 }, { x: 40, y: 0, s: 72 }];
+  return ring(n, n === 1 ? 0 : 48, n === 1 ? 96 : 64, -90); }
+function dish(m) { const its = itemsOf(m), sl = slots(its.length, !!mainOf(m));
+  return `<div class="dish">${its.map((id, i) => { const key = m.id + '.' + id, r = R(m.id, id), v = view(id, r), p = sl[i], j = st.just.has(key);
+    if (r && !j) return '';
+    return `<button class="pc ${j ? 'just' : ''}" style="left:${104 + p.x - p.s / 2}px;top:${104 + p.y - p.s / 2}px;width:${p.s}px;height:${p.s}px" data-act="toggle" data-m="${m.id}" data-i="${id}" aria-label="${v.n}, yedim"><span class="food ${r ? 'gone' : j ? 'back' : ''}">${food(v.i, p.s)}</span></button>`; }).join('')}</div>`; }
+function ci(mid, id) { const key = mid + '.' + id, r = R(mid, id), v = view(id, r);
+  return `<div class="ci ${stCls(r, key)}" data-k="i-${key}"><button class="cim" data-act="toggle" data-m="${mid}" data-i="${id}" aria-pressed="${!!r}"><span class="chk ${r ? 'on' : ''}">${r ? `<span class="mark">${r.s === 'skip' ? G.minus : G.check}</span>` : ''}</span><span class="n">${v.n}</span></button><button class="amt" data-act="item" data-m="${mid}" data-i="${id}">${r && r.s === 'skip' ? 'Atlandı' : v.a}</button></div>`; }
+function card(v, m, now) { const its = itemsOf(m), mid = mainOf(m), f = fin(m), sm = some(m), isNow = now === m;
+  let k = 0, p = 0; its.forEach(id => { if (!IT[id].optional) { k += IT[id].k; p += IT[id].p; } });
+  const tr = TRAIN[dow()], note = tr && tr.notes[m.id];
+  let body;
+  if (v === 'A') { const sides = its.filter(x => x !== mid);
+    body = mid ? `<div class="table split">${tile(m.id, mid, 'hero')}<div class="sides">${sides.map(id => tile(m.id, id, 'side')).join('')}</div></div>`
+      : `<div class="table ${sides.length === 2 || sides.length === 4 ? 'c2' : ''}">${sides.map(id => tile(m.id, id)).join('')}</div>`; }
+  else if (v === 'B') body = `<div class="list">${its.map(id => li(m.id, id)).join('')}</div>`;
+  else body = dish(m) + `<div class="list">${its.map(id => ci(m.id, id)).join('')}</div>`;
+  return `<section class="card meal ${isNow ? 'now' : ''}" data-k="m-${m.id}">
+    <button class="ch" data-act="close" aria-expanded="true"><span class="t">${m.t}</span><span class="tm">${isNow ? '<i class="dot"></i>' : ''}${m.time}</span><span class="rel">${f ? 'Yendi' : rel(m)}</span><span class="kc">${st.kc ? num(k) + ' kcal, ' : ''}${num(p)} g protein</span></button>
+    ${note ? `<p class="cnote">${note}</p>` : ''}${body}
+    <div class="acts">${f ? '<button class="primary quiet" data-act="close">Kapat</button>' : `<button class="primary" data-act="all" data-m="${m.id}">${sm ? 'Kalanını yedim' : 'Hepsini yedim'}</button>`}<button class="more" data-act="menu" data-m="${m.id}" aria-label="Diğer">${G.more}</button></div></section>`; }
+function allday() { const stp = (n, a) => `<span class="step"><button data-act="${a}-" aria-label="Azalt">${G.minus}</button><b>${n}</b><button data-act="${a}+" aria-label="Artır">${G.plus}</button></span>`;
+  return `<h5 class="sec" data-k="g-h">Gün boyu</h5><section class="card gb" data-k="g-c">
+    <div class="gr"><span><span class="n">Su</span><span class="note">Bardak, hedef ${WATER_GOAL}</span></span>${stp(D.water, 'w')}</div>
+    <div class="gr"><span><span class="n">Kahve</span><span class="note">En fazla ${COFFEE_MAX} fincan, sade</span></span>${stp(D.coffee, 'c')}</div>
+    <div class="gr"><span><span class="n">45 dk yürüyüş</span><span class="note">Bu hafta ${D.walk ? 1 : 0} / 3</span></span><button class="chk ${D.walk ? 'on' : ''}" data-act="walk" aria-pressed="${D.walk}" aria-label="Yürüyüş">${D.walk ? G.check : ''}</button></div>
+    <div class="gr"><span><span class="n">Takviyeler</span></span><span class="go">${G.right}</span></div></section>`; }
+function today(v) { const now = nowMeal(), op = openId(), tr = TRAIN[dow()];
+  let h = head('Bugün', st.thu ? '19 Kasım Perşembe' : '18 Kasım Çarşamba') + stats(v) + '<div class="day">';
+  MEALS.forEach(m => { h += m.id === op && m.time ? card(v, m, now) : row(m, now);
+    if (tr && tr.after === m.id) h += `<div class="row" data-k="m-train"><span class="tm">${tr.time}</span><span><span class="t">Antrenman</span><span class="r">${tr.name}, ${tr.n} hareket</span></span><span class="st"></span></div>`; });
+  return h + '</div>' + allday(); }
+
+/* ---------- Alt sayfalar ---------- */
+function sheetHTML(pid, v) { const s = SH[pid]; if (!s) return ''; const inn = s.fresh ? 'in' : ''; s.fresh = false;
+  const scrim = `<button class="scrim ${inn}" data-act="sh-close" aria-label="Kapat"></button>`;
+  if (s.type === 'menu') return scrim + `<div class="sheet menu ${inn}" data-sc="sheet"><button class="grab" data-act="sh-close" aria-label="Kapat"></button>
+    <button class="mrow" data-act="sh-close">Fotoğrafla kaydet</button><button class="mrow" data-act="sh-close">Plan dışı bir şey ekle</button><button class="mrow" data-act="sh-close">Not ekle</button><button class="mrow" data-act="skipmeal">Bu öğünü atladım</button></div>`;
+  const it = IT[s.id], r = s.lib != null ? { s: 'done', lib: s.lib, q: s.q } : { s: 'done', alt: s.alt, q: s.q }, cur = view(s.id, r), base = view(s.id, null);
+  const val = `${st.kc ? num(cur.k) + ' kcal, ' : ''}${num1(cur.p)} g protein`;
+  const q = `<span class="qstep"><button data-act="sh-q" data-d="-1" aria-label="Azalt">${G.minus}</button><b>${cur.a}</b><button data-act="sh-q" data-d="1" aria-label="Artır">${G.plus}</button></span>`;
+  const alts = [{ a: it.a, n: it.n, i: it.i, idx: null }, ...(it.alts || []).map((x, i) => ({ ...x, idx: i }))];
+  const isOn = x => s.lib == null && s.alt === x.idx;
+  const fc = (f, i) => `<button class="fc ${s.lib === i ? 'on' : ''}" data-act="sh-lib" data-l="${i}"><span class="plate">${food(f.i, 64)}</span><span class="n">${f.n}</span><span class="u">${f.u}</span><span class="kv">${st.kc ? num(f.k) + ' kcal, ' : ''}${num1(f.p)} g</span></button>`;
+  const lib = (cls) => `<div class="sh-l">Kütüphaneden</div><div class="find">${G.find}<span>Ara</span></div><div class="fgrid ${cls}">${LIB.map(fc).join('')}</div>`;
+  const foot = `<div class="sh-foot ${inn}"><button class="primary" data-act="sh-eat">Yedim</button><button class="txtb" data-act="sh-skip">Atladım</button></div>`;
+  let body;
+  if (v === 'B') body = `<div class="sh-head"><span class="plate">${food(cur.i, 48)}</span><div><h5>${cur.n}</h5>${cur.note ? `<p class="note">${cur.note}</p>` : cur.cap ? `<p class="note">${cap(cur.cap)}</p>` : ''}</div></div>
+    <div class="sh-q"><span><span class="n">Porsiyon</span><span class="note" style="display:block">${val}</span></span>${q}</div>
+    ${alts.length > 1 ? `<div class="sh-l">Programdaki seçenekler</div>${alts.map(x => `<button class="orow ${isOn(x) ? 'on' : ''}" data-act="sh-alt" data-a="${x.idx}"><span class="plate">${food(x.i, 40)}</span><span><span class="n">${x.n}</span><span class="note">${amtOf(x.a, 1)}${x.sub ? ', muadil' : ''}</span></span><span class="chk">${isOn(x) ? G.check : ''}</span></button>`).join('')}` : ''}
+    ${lib('cards')}`;
+  else body = `<div class="sh-hero"><span class="plate">${food(cur.i, 88)}</span><h5>${cur.n}</h5>${cur.note ? `<p class="note">${cur.note}</p>` : cur.cap ? `<p class="note">${cap(cur.cap)}</p>` : ''}${q}<p class="sh-val">${val}</p></div>
+    ${alts.length > 1 ? `<div class="sh-l" style="padding-top:0">Programdaki seçenekler</div><div class="hrow" data-sc="hrow">${alts.map(x => `<button class="opt ${isOn(x) ? 'on' : ''}" data-act="sh-alt" data-a="${x.idx}"><span class="plate">${food(x.i, 48)}</span><span class="n">${x.n.replace(/\s*\(.*\)$/, '')}</span><span class="amt">${amtOf(x.a, 1)}</span></button>`).join('')}</div>` : ''}
+    ${lib('')}`;
+  return scrim + `<div class="sheet ${inn}" data-sc="sheet"><button class="grab" data-act="sh-close" aria-label="Kapat"></button>${body}</div>` + foot; }
+
+/* ---------- Hafta ---------- */
+function weekData() { const td = dow(); return DOW.map((d, i) => { const pl = { ogle: ROTA.ogle[i], aksam: ROTA.aksam[i] };
+  const eaten = mid => i < td ? true : i > td ? false : !!R(mid, ROTA[mid][td]); return { d, i, td: i === td, past: i < td, ogle: pl.ogle, aksam: pl.aksam, eo: eaten('ogle'), ea: eaten('aksam') }; }); }
+function ledger(rows) { return `<div class="ledger">${rows.filter(Boolean).map(r => `<div class="lr"><span><span class="n">${r[0]}</span>${r[2] ? `<span class="note">${r[2]}</span>` : ''}</span><b>${r[1]}</b></div>`).join('')}</div>`; }
+const toDiet = () => `<h5 class="sec">Diyetisyenine</h5><section class="card gb"><div class="gr"><span><span class="n">Haftalık rapor</span><span class="note">WhatsApp mesajı olarak</span></span><span class="go">${G.right}</span></div><div class="gr"><span><span class="n">Döküm</span><span class="note">Seçtiğin günler, PDF olarak</span></span><span class="go">${G.right}</span></div></section>`;
+function week(v) { const W = weekData(), nav = `<div class="nav2"><button aria-label="Önceki hafta">${G.left}</button><button aria-label="Sonraki hafta">${G.right}</button></div>`;
+  const nums = [['Uyum', '%98', '3 gün kayıtlı'], st.kc && ['Kalori dengesi', '−250 kcal', 'Günlük ortalama, plandan eksik'], ['Su', '1,8 L', 'Günlük ortalama'], ['Ağırlık antrenmanı', '0 / 3'], ['Yürüyüş', (D.walk ? 1 : 0) + ' / 3']];
+  let h = head('Hafta', '16 – 22 Kasım', nav);
+  if (v === 'A') { const sel = st.wksel == null ? dow() : st.wksel, sd = W[sel];
+    const pl = (x, id, e) => `<button class="${x.i === sel ? 'sel' : ''} ${e ? 'eaten' : ''}" data-act="wk" data-d="${x.i}" aria-label="${DAYNAME[x.i]}, ${IT[id].s || IT[id].n}"><span class="plate">${e ? `<span class="mark">${G.check}</span>` : food(IT[id].i, 32)}</span></button>`;
+    h += `<section class="card"><div class="ct">Ana yemekler</div><div class="wk7">${W.map(x => `<span class="dn ${x.td ? 'td' : ''}">${x.d}</span>`).join('')}
+      <span class="rl">Öğle</span>${W.map(x => pl(x, x.ogle, x.eo)).join('')}<span class="rl">Akşam</span>${W.map(x => pl(x, x.aksam, x.ea)).join('')}</div>
+      <p class="wksel"><b>${DAYNAME[sel]}</b> öğle ${lower(IT[sd.ogle].s || IT[sd.ogle].n)}, akşam ${lower(IT[sd.aksam].s || IT[sd.aksam].n)}</p></section>
+      <h5 class="sec">Bu hafta</h5><section class="card" style="padding:8px 16px">${ledger(nums)}</section>`; }
+  else { h += `<section class="card"><div class="ct" style="padding-bottom:0;font-weight:500;font-size:15px;color:var(--muted)">Ortalama uyum</div><div class="big">%98</div>
+      <div class="bars">${W.map(x => `<div><div class="bt"><i style="height:${x.past ? 98 : x.td ? 45 : 0}%"></i></div><div class="dn ${x.td ? 'td' : ''}">${x.d}</div></div>`).join('')}</div>
+      <div class="n4">${nums.slice(1).map(r => `<div><b>${r[1]}</b><span>${r[0]}</span></div>`).join('')}</div></section>
+      <h5 class="sec">Ana yemekler</h5><section class="card"><div class="mt"><span></span><span class="h">Öğle</span><span class="h">Akşam</span>${W.map(x => `<span class="d ${x.td ? 'td' : ''}">${x.d}</span><span class="${x.eo ? 'pa' : ''}">${IT[x.ogle].s || IT[x.ogle].n}</span><span class="${x.ea ? 'pa' : ''}">${IT[x.aksam].s || IT[x.aksam].n}</span>`).join('')}</div></section>`; }
+  return h + toDiet(); }
+
+/* ---------- İlerleme ---------- */
+function prog(v) { const kilo = `<section class="card"><div class="ct" style="padding-bottom:0;font-weight:500;font-size:15px;color:var(--muted)">Kilo</div><div class="big">83,9 kg</div><p class="note" style="padding:4px 4px 0;font-size:15px;line-height:20px">13 Kasım, diyetisyen ölçümü. Hedef 85 kg, kas ağırlıklı</p><div class="kg"><span class="in">Bugünkü kilo</span><button class="primary">Kaydet</button></div></section>`;
+  if (v === 'A') { const cells = [[9, 'e'], [10, 'e'], [11, 'e'], [12, 'e'], [13, 'f'], [14, 'f'], [15, 'f'], [16, 'f'], [17, 'f'], [18, 'p td'], [19, 'e'], [20, 'e'], [21, 'e'], [22, 'e']];
+    return head('İlerleme', '13 Kasım’dan beri, 6. gün') + `<div class="stack"><section class="card"><div class="ct" style="padding-bottom:0;font-weight:500;font-size:15px;color:var(--muted)">Ortalama uyum</div><div class="big">%98</div>
+      <div class="cal">${DOW.map(d => `<span class="dn">${d}</span>`).join('')}${cells.map(c => `<span class="c ${c[1]}">${c[0]}</span>`).join('')}</div></section>
+      ${kilo}<section class="card" style="padding:8px 16px">${ledger([['Yağ', '%14,5', '12,2 kg'], ['Kas', '68,2 kg'], ['Bel', '86 cm'], ['Su', '2 L', 'Günlük ortalama'], ['Antrenman', '0 / 13', 'Son 30 gün']])}</section></div>`; }
+  let heat = ''; for (let i = 0; i < 53 * 7; i++) { const fromEnd = 53 * 7 - 1 - i - 4; heat += `<i class="${fromEnd === 0 ? 'td' : fromEnd > 0 && fromEnd <= 5 ? 'f' : ''}" ${fromEnd < 0 ? 'style="visibility:hidden"' : ''}></i>`; }
+  return head('İlerleme', 'Son 12 ay') + `<div class="stack"><section class="card"><div class="ct" style="padding-bottom:0;font-weight:500;font-size:15px;color:var(--muted)">Ortalama uyum</div><div class="big">%98</div>
+    <div class="heat">${heat}</div><div class="mon">${['Ara', 'Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas'].map(m => `<span>${m}</span>`).join('')}</div>
+    <div class="n4">${[['%98', 'Uyum, son 30 gün'], ['2 L', 'Su, günlük ortalama'], ['0 / 13', 'Antrenman'], ['6 / 30', 'Kayıtlı gün']].map(r => `<div><b>${r[0]}</b><span>${r[1]}</span></div>`).join('')}</div></section>${kilo}</div>`; }
+
+/* ---------- Durumlar ve boyut sınaması ---------- */
+function spec() { const S6 = [['Bekliyor', 'ekmek', null], ['Yedim', 'yumurta', { s: 'done' }], ['Atladım', 'sebze', { s: 'skip' }], ['Muadil', 'ekmek', { s: 'done', alt: 0 }], ['İsteğe bağlı', 'cay', null], ['İkonsuz', 'bakla', null]];
+  return `<div class="spec-card"><div class="specg">${S6.map(x => `<div><div class="sl">${x[0]}</div>${tile('x', x[1], '', x[2]).replace(/data-act="[^"]*"/g, '')}</div>`).join('')}</div>
+    <div class="specl">${S6.map(x => li('x', x[1], x[2]).replace(/data-act="[^"]*"/g, '')).join('')}</div></div>`; }
+function sizes() { const I = ['haslanmis-yumurta', 'beyaz-peynir', 'tam-bugday-ekmegi', 'avokado', 'izgara-kofte', 'yogurt', 'yesil-salata', 'elma'];
+  const strip = px => `<span class="strip">${I.slice(0, 5).map(i => ico(i, px)).join('')}</span>`;
+  return `<div class="spec-card"><div class="sz">${[20, 28, 40, 64].map(px => `<span class="l">${px} px</span>${I.map(i => `<span>${ico(i, px)}</span>`).join('')}`).join('')}</div>
+    <div class="szu">
+      <div class="row"><span class="tm">11:00</span><span><span class="t">Kahvaltı</span>${strip(20)}</span><span class="st"></span></div>
+      <div class="row"><span class="tm">11:00</span><span><span class="t">Kahvaltı</span>${strip(28)}</span><span class="st"></span></div>
+      ${li('x', 'ekmek', null).replace(/data-act="[^"]*"/g, '')}
+      <div class="table" style="padding:16px 0 0">${['yumurta', 'yag', 'ekmek'].map(id => tile('x', id, '', null).replace(/data-act="[^"]*"/g, '')).join('')}</div>
+    </div></div>`; }
+
+/* ---------- Çizim ---------- */
+const TABS = [['today', 'Bugün'], ['week', 'Hafta'], ['chat', 'Asistan'], ['prog', 'İlerleme'], ['plan', 'Program']];
+function dock(tab) { return `<div class="fadeb"></div><nav class="dock">${TABS.map(t => `<button class="${t[0] === tab ? 'on' : ''}" data-act="tab" data-t="${t[0]}" ${t[0] === tab ? 'aria-current="page"' : ''}>${G[t[0]]}<span>${t[1]}</span></button>`).join('')}</nav>`; }
+function draw(el) { const pid = el.dataset.pid, v = el.dataset.v;
+  if (el.classList.contains('opp')) { el.classList.remove('t-light', 't-dark'); el.classList.add(st.theme === 'dark' ? 't-light' : 't-dark'); }
+  if (el.dataset.screen === 'spec') { el.innerHTML = spec(); return; }
+  if (el.dataset.screen === 'sizes') { el.innerHTML = sizes(); return; }
+  const keep = $$('[data-sc]', el).map(x => [x.dataset.sc, x.scrollTop, x.scrollLeft]), tab = P[pid].tab;
+  const body = tab === 'today' ? today(v) : tab === 'week' ? week(v === 'B' ? 'B' : 'A') : tab === 'prog' ? prog(v === 'B' ? 'B' : 'A') : head(TABS.find(t => t[0] === tab)[1], '&nbsp;') + '<p class="stub">Bu ekran bu çalışmada çizilmedi.</p>';
+  el.innerHTML = `<div class="scr" data-sc="scr">${body}</div>${dock(tab)}${sheetHTML(pid, SH[pid] && SH[pid].pin ? (el.dataset.pin === '2' ? 'B' : 'A') : v === 'B' ? 'B' : 'A')}`;
+  keep.forEach(([k, t, l]) => { const x = $(`[data-sc="${k}"]`, el); if (x) { x.scrollTop = t; x.scrollLeft = l; } }); }
+function snap() { const o = {}; $$('.phone').forEach(ph => { const m = o[ph.dataset.pid] = {}; $$('.scr [data-k]', ph).forEach(x => { const r = x.getBoundingClientRect(), card = x.classList.contains('meal'); m[x.dataset.k] = { t: r.top, l: r.left, w: r.width, h: r.height, card, node: card ? x.cloneNode(true) : null }; }); }); return o; }
+/* Aç ve kapat: kart, satırın yüksekliğinden kendi yüksekliğine açılır (320 ms); kapanırken eski kartın kopyası satırın
+   üstünde aynı eğriyle kısalıp silinir (280 ms). Alttaki satırlar aynı süre ve eğriyle yer değiştirir. */
+const EASE = 'cubic-bezier(.32, .72, 0, 1)';
+function play(before) { $$('.phone').forEach(ph => { const m = before[ph.dataset.pid]; if (!m) return; const els = $$('.scr [data-k]', ph);
+  const opening = els.some(x => x.classList.contains('meal') && m[x.dataset.k] && !m[x.dataset.k].card), dur = opening ? 320 : 280;
+  els.forEach(x => { const a = m[x.dataset.k], r = x.getBoundingClientRect(), isMeal = x.dataset.k.startsWith('m-'), card = x.classList.contains('meal');
+    if (!a) { if (isMeal) x.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' }); return; }
+    const dy = a.t - r.top, dx = a.l - r.left;
+    if (isMeal && card && !a.card) { x.animate([{ clipPath: `inset(0 0 ${r.height - a.h}px 0 round 24px)` }, { clipPath: 'inset(0 0 0 0 round 24px)' }], { duration: dur, easing: EASE });
+      x.animate([{ opacity: .4 }, { opacity: 1, offset: .25 }, { opacity: 1 }], { duration: dur, easing: 'linear' }); return; }
+    if (isMeal && !card && a.card && a.node) { const day = x.parentElement, d = day.getBoundingClientRect(), g = a.node; g.removeAttribute('data-k'); g.classList.add('ghost'); g.inert = true;
+      Object.assign(g.style, { left: a.l - d.left + 'px', top: r.top - d.top + 'px', width: a.w + 'px', height: a.h + 'px' }); day.append(g);
+      const ga = g.animate([{ clipPath: 'inset(0 0 0 0 round 24px)' }, { clipPath: `inset(0 0 ${a.h - r.height}px 0 round 24px)` }], { duration: dur, easing: EASE });
+      g.animate([{ opacity: 1 }, { opacity: 0, offset: .5 }, { opacity: 0 }], { duration: dur, easing: 'linear' });
+      ga.onfinish = () => day.removeChild(g);
+      x.animate([{ opacity: 0 }, { opacity: 0, offset: .5 }, { opacity: 1 }], { duration: dur, easing: 'linear' }); return; }
+    if (Math.abs(dy) > 1 || Math.abs(dx) > 1) x.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: dur, easing: EASE }); }); }); }
+function bar() { const seg = (act, cur, opts) => `<div class="seg" role="group">${opts.map(x => `<button class="${x[0] === cur ? 'on' : ''}" data-act="${act}" data-val="${x[0]}" aria-pressed="${x[0] === cur}">${x[1]}</button>`).join('')}</div>`;
+  $('#bar').innerHTML = seg('scen', st.scen, [['empty', 'Boş 10:40'], ['mid', 'Orta 14:10'], ['done', 'Bitmiş 21:40']])
+    + seg('thu', String(st.thu), [['false', 'Çarşamba'], ['true', 'Perşembe, ikonsuz kalem']])
+    + seg('kc', String(st.kc), [['true', 'Kalori görünür'], ['false', 'Kalori gizli']])
+    + seg('theme', st.both ? 'both' : st.theme, [['light', 'Açık'], ['dark', 'Koyu'], ['both', 'İkisi']]); }
+function render(flip) { const before = flip && !reduce ? snap() : null;
+  document.documentElement.className = 't-' + st.theme + (st.both ? ' both' : '');
+  bar(); $$('[data-screen]').forEach(draw);
+  if (before) play(before); st.just = new Map(); }
+
+/* ---------- Olaylar ---------- */
+const vib = () => { try { if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) navigator.vibrate(8); } catch (e) {} };
+function settle(mid) { clearTimeout(st.tmr); const m = MEALS.find(x => x.id === mid); if (!m || !m.time || !fin(m) || st.open !== mid) return;
+  st.tmr = setTimeout(() => { if (fin(m) && st.open === mid) { st.open = undefined; render(true); } }, 900); }
+function mark(keys) { if (st.open === undefined) st.open = openId(); if (!reduce) st.just = new Map(keys.map((k, i) => [k, i])); vib(); }
+/* Alt sayfa aşağı kayarak kapanır (220 ms, açılıştan hızlı); kapanınca istenen kayıt uygulanır. */
+function closeSheet(pid, then) { const s = SH[pid]; if (!s || s.pin || s.closing) return; const ph = $(`.phone[data-pid="${pid}"]`), done = () => { delete SH[pid]; if (then) then(); else render(false); };
+  if (reduce) return done(); s.closing = true; const o = { duration: 220, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' };
+  $$('.sheet, .sh-foot', ph).forEach(x => x.animate([{ transform: 'none' }, { transform: 'translateY(100%)' }], o)); const sc = $('.scrim', ph); if (sc) sc.animate([{ opacity: 1 }, { opacity: 0 }], o);
+  setTimeout(done, 220); }
+document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b) return; if (Object.values(SH).some(x => x.closing)) return; const d = b.dataset, ph = b.closest('.phone'), pid = ph && ph.dataset.pid, s = pid && SH[pid]; let flip = false;
+  switch (d.act) {
+    case 'scen': st.scen = d.val; preset(); break;
+    case 'thu': st.thu = d.val === 'true'; st.wksel = null; preset(); break;
+    case 'kc': st.kc = d.val === 'true'; break;
+    case 'theme': if (d.val === 'both') st.both = true; else { st.both = false; st.theme = d.val; } break;
+    case 'tab': P[pid].tab = d.t; if (s && !s.pin) delete SH[pid]; break;
+    case 'open': st.open = d.m; flip = true; break;
+    case 'close': st.open = null; flip = true; break;
+    case 'toggle': { const key = d.m + '.' + d.i; mark([key]); if (D.items[key]) delete D.items[key]; else D.items[key] = { s: 'done' }; flip = true; render(true); settle(d.m); return; }
+    case 'all': { const m = MEALS.find(x => x.id === d.m), keys = itemsOf(m).filter(id => !IT[id].optional && !R(m.id, id)).map(id => m.id + '.' + id); mark(keys); keys.forEach(k => D.items[k] = { s: 'done' }); render(true); settle(d.m); return; }
+    case 'menu': SH[pid] = { type: 'menu', m: d.m, fresh: true }; break;
+    case 'skipmeal': { const m = MEALS.find(x => x.id === s.m); closeSheet(pid, () => { const keys = itemsOf(m).filter(id => !IT[id].optional && !R(m.id, id)).map(id => m.id + '.' + id); mark(keys); keys.forEach(k => D.items[k] = { s: 'skip' }); render(true); settle(m.id); }); return; }
+    case 'item': { const r = R(d.m, d.i) || {}; SH[pid] = { type: 'item', m: d.m, id: d.i, alt: r.alt == null ? null : r.alt, lib: r.lib == null ? null : r.lib, q: r.q || 1, fresh: true }; break; }
+    case 'sh-close': closeSheet(pid); return;
+    case 'sh-alt': s.alt = d.a === 'null' ? null : +d.a; s.lib = null; s.q = 1; break;
+    case 'sh-lib': s.lib = s.lib === +d.l ? null : +d.l; s.q = 1; break;
+    case 'sh-q': { const it = IT[s.id], a = s.lib != null ? '' : s.alt != null ? it.alts[s.alt].a : it.a, stp = stepOf(a); s.q = Math.max(stp, Math.min(4, Math.round((s.q + stp * d.d) * 1000) / 1000)); break; }
+    case 'sh-eat': case 'sh-skip': { const key = s.m + '.' + s.id, mid = s.m, rec = d.act === 'sh-skip' ? { s: 'skip' } : { s: 'done', ...(s.lib != null ? { lib: s.lib } : s.alt != null ? { alt: s.alt } : {}), ...(s.q !== 1 ? { q: s.q } : {}) };
+      const go = () => { mark([key]); D.items[key] = rec; render(true); settle(mid); };
+      if (s.pin) go(); else closeSheet(pid, go); return; }
+    case 'w+': D.water = Math.min(20, D.water + 1); break; case 'w-': D.water = Math.max(0, D.water - 1); break;
+    case 'c+': D.coffee = Math.min(COFFEE_MAX, D.coffee + 1); break; case 'c-': D.coffee = Math.max(0, D.coffee - 1); break;
+    case 'walk': D.walk = !D.walk; break;
+    case 'wk': st.wksel = +d.d; break;
+    default: return;
+  }
+  render(flip); });
+
+/* ---------- Kurulum ---------- */
+let pidN = 0;
+$$('.phone').forEach(ph => { const mk = el => { const pid = 'p' + (++pidN); el.dataset.pid = pid; P[pid] = { tab: el.dataset.tab }; if (el.dataset.pin) SH[pid] = { type: 'item', m: 'ogle', id: 'ekmek', alt: null, lib: null, q: 1, pin: true }; };
+  mk(ph); const c = ph.cloneNode(false); c.classList.add('opp'); ph.after(c); mk(c); });
+$$('[data-panels]').forEach(w => { ['', 'opp'].forEach(c => { const p = document.createElement('div'); p.className = 'panel ' + c; p.dataset.screen = w.dataset.panels; w.append(p); }); });
+preset(); render();
+</script>
+</body>
+</html>

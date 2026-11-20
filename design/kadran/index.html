@@ -1,0 +1,202 @@
+<title>Diyet Kadran ve Öğün</title>
+<meta charset="utf-8">
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Yerleşim: iki konu; her birinde yan yana telefon çerçeveleri (dar ekranda yatay kayar). Üstte tema anahtarı. */
+:root {
+  --bg: #f2f2f4; --fg: #0b0b0c; --muted: #6f6f76; --faint: #b9b9c0;
+  --card: #ffffff; --line: rgb(0 0 0 / 7%); --ctl: #f0f0f3; --track: #e6e6eb;
+  --accent: #ff6a1a; --on-accent: #ffffff; --blue: #3b82f6; --bezel: #0b0b0c;
+  --shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 26px -18px rgb(0 0 0 / 18%);
+  --lift: 0 2px 4px rgb(0 0 0 / 5%), 0 18px 40px -20px rgb(0 0 0 / 30%);
+  --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --round: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0a0a0b; --fg: #f5f5f7; --muted: #8f8f97; --faint: #4e4e55;
+  --card: #161618; --line: rgb(255 255 255 / 7%); --ctl: rgb(255 255 255 / 7%); --track: rgb(255 255 255 / 10%);
+  --accent: #ff7a2f; --on-accent: #1c0e04; --blue: #5b9dff; --bezel: #2a2a2e;
+  --shadow: none; --lift: inset 0 0 0 1px rgb(255 255 255 / 10%), 0 18px 40px -16px rgb(0 0 0 / 80%); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0a0a0b; --fg: #f5f5f7; --muted: #8f8f97; --faint: #4e4e55;
+  --card: #161618; --line: rgb(255 255 255 / 7%); --ctl: rgb(255 255 255 / 7%); --track: rgb(255 255 255 / 10%);
+  --accent: #ff7a2f; --on-accent: #1c0e04; --blue: #5b9dff; --bezel: #2a2a2e;
+  --shadow: none; --lift: inset 0 0 0 1px rgb(255 255 255 / 10%), 0 18px 40px -16px rgb(0 0 0 / 80%); color-scheme: dark; }
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.5 var(--sys); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 40px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 52px; }
+h1 { font-size: 34px; line-height: 1.1; letter-spacing: -.022em; text-wrap: balance; }
+h2 { font-size: 22px; line-height: 1.2; letter-spacing: -.02em; text-wrap: balance; }
+h3 { font-size: 17px; line-height: 1.3; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+p, li { max-width: 68ch; }
+.lead { color: var(--muted); font-size: 17px; margin-top: 12px; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+section { display: flex; flex-direction: column; gap: 20px; }
+.sub { color: var(--muted); }
+.tag { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--ctl); color: var(--muted); white-space: nowrap; }
+.tag.pick { background: var(--fg); color: var(--bg); }
+.theme { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--ctl); margin-top: 16px; }
+.theme button { font: 600 13px var(--sys); color: var(--muted); height: 32px; padding: 0 14px; border-radius: 999px; border: 0; background: none; cursor: pointer; }
+.theme button.on { background: var(--card); color: var(--fg); box-shadow: var(--shadow); }
+.theme button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+.alts { display: flex; gap: 20px; overflow-x: auto; padding: 4px 2px 12px; scroll-snap-type: x proximity; }
+.alt { flex: none; width: 282px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 10px; }
+.alt p { font-size: 14px; color: var(--muted); line-height: 1.45; }
+.alt p b { color: var(--fg); font-weight: 600; }
+.phone { width: 282px; height: 430px; border: 8px solid var(--bezel); border-radius: 40px; overflow: hidden; background: var(--bg); position: relative; }
+.phone.tall { height: 610px; }
+.scr { width: 375px; transform: scale(.7093); transform-origin: 0 0; padding: 18px 16px 0; font-size: 17px; line-height: 1.35; }
+.hd { display: flex; justify-content: space-between; align-items: center; padding: 4px 4px 16px; }
+.hd small { display: block; color: var(--muted); font-size: 15px; }
+.hd b { font-size: 34px; font-weight: 700; letter-spacing: -.022em; line-height: 1.08; }
+.c { background: var(--card); border-radius: 20px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); min-width: 0; }
+svg.r { display: block; overflow: visible; }
+svg.r circle { fill: none; }
+svg.r .tk { stroke: var(--track); }
+.v { font-weight: 700; letter-spacing: -.025em; line-height: 1; white-space: nowrap; }
+.v em { font-style: normal; font-size: .62em; font-weight: 600; margin-left: 1px; }
+.lb { font-size: 13px; color: var(--muted); }
+.of { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* K1 · bugünkü */
+.k1 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.k1 .c { padding: 14px 14px 13px; }
+.k1 .top { display: flex; justify-content: space-between; align-items: center; height: 30px; margin-bottom: 10px; }
+.k1 .v { font-size: 24px; display: block; }
+/* K2 · halkanın içinde sayı */
+.k2 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.k2 .c { padding: 14px 8px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.dial { position: relative; width: 84px; height: 84px; }
+.dial > div { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.dial .v { font-size: 21px; }
+.dial .of { font-size: 11px; margin-top: 3px; }
+/* K3 · iç içe halkalar */
+.k3 { padding: 16px 18px; display: grid; grid-template-columns: 128px 1fr; gap: 18px; align-items: center; }
+.k3 ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.k3 li { display: grid; grid-template-columns: 10px 1fr; column-gap: 8px; align-items: baseline; }
+.k3 li i { width: 10px; height: 10px; border-radius: 50%; align-self: center; }
+.k3 li .lb { grid-column: 2; font-size: 12px; }
+.k3 li .v { grid-column: 2; font-size: 22px; }
+.k3 li .v small { font-size: 13px; color: var(--muted); font-weight: 500; letter-spacing: 0; margin-left: 3px; }
+/* K4 · gösterge yayı */
+.k4 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.k4 .c { padding: 14px 8px 10px; display: flex; flex-direction: column; align-items: center; }
+.gauge { position: relative; width: 90px; height: 84px; }
+.gauge > div { position: absolute; inset: 0 0 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.gauge .v { font-size: 21px; margin-top: 4px; }
+.gauge .lb { position: absolute; left: 0; right: 0; bottom: -2px; text-align: center; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.k4 .of { margin-top: 10px; }
+
+/* Öğün listesi parçaları */
+.ev { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; column-gap: 14px; align-items: center; padding-bottom: 18px; position: relative; }
+.node { width: 44px; height: 44px; border-radius: 50%; background: var(--card); box-shadow: var(--shadow), inset 0 0 0 1px var(--line); display: grid; place-items: center; color: var(--muted); }
+.ev.done .node { background: var(--fg); color: var(--bg); box-shadow: none; }
+.ev.now .node { background: var(--accent); color: var(--on-accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 18%, transparent); }
+.ev h4 { font-size: 17px; font-weight: 600; } .ev.done h4 { color: var(--muted); }
+.ev .s { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t { font-size: 15px; color: var(--muted); }
+.hot { display: inline-flex; height: 28px; align-items: center; padding: 0 11px; border-radius: 999px; font-size: 13px; font-weight: 600; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.panel { background: var(--card); border-radius: 22px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); padding: 4px 16px 14px; margin: -6px 0 18px 58px; }
+.row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 0; }
+.row + .row { box-shadow: inset 0 1px 0 var(--track); }
+.chk { width: 26px; height: 26px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--muted); flex: none; display: grid; place-items: center; color: var(--bg); }
+.chk.on { background: var(--fg); box-shadow: none; }
+.row .b { flex: 1; min-width: 0; font-size: 16px; } .row.on .b { color: var(--muted); }
+.amt { height: 28px; padding: 0 10px; border-radius: 999px; background: var(--ctl); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; white-space: nowrap; }
+.btn { height: 50px; border-radius: 17px; background: var(--accent); color: var(--on-accent); font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
+/* O2 · başlık kartın içinde */
+.mcard { background: var(--card); border-radius: 24px; box-shadow: var(--lift); padding: 0 16px 14px; margin-bottom: 18px; }
+.mcard .mh { display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: center; padding: 14px 0 12px; box-shadow: inset 0 -1px 0 var(--track); }
+.mcard .mh .node { box-shadow: none; }
+.mcard .mh h4 { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+.mcard .mh .s { font-size: 14px; color: var(--muted); }
+.prog { height: 4px; border-radius: 2px; background: var(--track); margin: 12px 0 2px; position: relative; overflow: hidden; }
+.prog::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--fg); border-radius: 2px; }
+.dim .ev:not(.keep) { opacity: .38; }
+/* O4 · yapışkan başlık */
+.stick { position: absolute; left: 12px; right: 12px; top: 12px; z-index: 2; display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 10px 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--card) 86%, transparent); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); box-shadow: var(--lift); font-size: 15px; }
+.stick .node { width: 36px; height: 36px; }
+.stick b { flex: 1; } .stick span { color: var(--muted); font-size: 13px; }
+
+.box { background: var(--card); border-radius: 24px; padding: 20px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); display: flex; flex-direction: column; gap: 10px; }
+.box ul { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+.src { font-size: 13px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Diyet · arayüz çalışması, ikinci tur</p>
+  <h1>Kadranlar ve açık öğün</h1>
+  <p class="lead">Geri bildirimindeki iki açık konu. Çerçeveler uygulamanın kendi ölçüsünde (375 px) ve gerçek sayılarla çizildi: 1.408 / 2.080 kcal, 83 / 123 g protein, 1,75 / 2,5 L su.</p>
+  <div class="theme" role="group" aria-label="Tema"><button data-t="" class="on">Sistem</button><button data-t="light">Açık</button><button data-t="dark">Koyu</button></div>
+</header>
+
+<section>
+  <div><p class="eyebrow">1 · Kadranlar</p><h2>Sayı ve halka aynı kutuya nasıl sığar</h2>
+  <p class="sub" style="margin-top:8px">Apple Watch'un üç kalıbı denendi: sayıyı halkanın içine almak (dairesel komplikasyon), üç hedefi iç içe halkalarda birleştirmek (Etkinlik halkaları) ve altı açık gösterge yayı. Watch'ta ortak kural şu: halka tek başına bir şey söylemez, sayı ya halkanın içinde ya hemen yanındadır, etiket en küçük ve en sönük öğedir.</p></div>
+  <div class="alts" id="dials"></div>
+</section>
+
+<section>
+  <div><p class="eyebrow">2 · Açık öğün</p><h2>Hangi öğünün açık olduğu ilk bakışta anlaşılsın</h2>
+  <p class="sub" style="margin-top:8px">Bugün başlık kartın dışında, liste kartın içinde; ikisini birbirine bağlayan tek şey yakınlık. Uzun bir öğünde aşağı kayınca başlık ekrandan çıkıyor ve hangi öğünün içinde olduğun kayboluyor.</p></div>
+  <div class="alts" id="meals"></div>
+</section>
+
+<section>
+  <div><p class="eyebrow">Önerim</p><h2>K2 ve O2 + O4</h2></div>
+  <div class="box"><ul>
+    <li><b>Kadran K2:</b> halka büyüyor, sayı halkanın içine giriyor, etiket ve hedef altta. Ekranda üç kadran bir saat yüzü gibi duruyor ve kutular şimdikinden alçak. K3 daha "Apple" ama su mavisi ile protein turuncusunu aynı yerde topluyor; kalori ile proteinin farkını okumak zorlaşıyor.</li>
+    <li><b>Açık öğün O2:</b> öğünün başlığı kartın içine taşınıyor; kart hafifçe yükseliyor, ilerleme çubuğu kaç kalemin bittiğini gösteriyor. Başka bir öğüne dokununca o kart kapanıp yenisi açılıyor; ikisi aynı anda açık kalmıyor.</li>
+    <li><b>O4 ekleri:</b> açık öğünün başlığı kaydırınca ekranın üstüne yapışıyor; ona dokununca öğün kapanıyor. O3'teki soluklaştırma da işe yarar ama diğer öğünleri okumayı zorlaştırıyor; ayrı tutmayı öneriyorum.</li>
+  </ul></div>
+  <p class="src">Kaynak: Apple Human Interface Guidelines, Complications (dairesel ve köşe kalıpları) ve Activity rings tasarımı; <a href="https://developer.apple.com/design/human-interface-guidelines/complications">developer.apple.com/design/human-interface-guidelines/complications</a></p>
+</section>
+</div>
+
+<script>
+const P = { check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', fork: '<path d="M7 3v18M5 3v4a2 2 0 004 0V3M16.5 3C14.8 4.5 14 7 14 10h3v11"/>', cup: '<path d="M5 9h11v5a4 4 0 01-4 4H9a4 4 0 01-4-4zM16 10h1.5a2 2 0 010 4H16"/>', apple: '<path d="M12 8c-1.5-1.5-5-1.6-6 1.5-1 3 .5 7.5 3 9 1 .6 2 .2 3-.3 1 .5 2 .9 3 .3 2.5-1.5 4-6 3-9-1-3.1-4.5-3-6-1.5zM12 8c0-2 1-3.5 2.5-4"/>', bowl: '<path d="M4 12h16a8 8 0 01-16 0zM9 21h6"/>', down: '<path d="M6 9l6 6 6-6"/>', up: '<path d="M6 15l6-6 6 6"/>', moon: '<path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/>' };
+const ic = n => `<svg class="i" viewBox="0 0 24 24">${P[n]}</svg>`;
+/* Halka: başlangıç tepede, saat yönünde; uç yuvarlak. */
+const ring = (p, size, w, color, start = -90, span = 360) => { const r = (size - w) / 2, C = 2 * Math.PI * r, L = C * span / 360, c = size / 2;
+  return `<svg class="r" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(${start + 90}deg)"><circle class="tk" cx="${c}" cy="${c}" r="${r}" stroke-width="${w}" stroke-dasharray="${L} ${C}" stroke-linecap="round" transform="rotate(-90 ${c} ${c})"/><circle cx="${c}" cy="${c}" r="${r}" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-dasharray="${L * p} ${C}" transform="rotate(-90 ${c} ${c})"/></svg>`; };
+const D = [['Kalori', '1.408', '', '/ 2.080 kcal', 1408 / 2080, 'var(--fg)'], ['Protein', '83', 'g', '/ 123 g', 83 / 123, 'var(--accent)'], ['Su', '1,75', 'L', '/ 2,5 L', .7, 'var(--blue)']];
+const hd = `<div class="hd"><div><small>16 Kasım Pazartesi</small><b>Bugün</b></div><div style="position:relative;width:54px;height:54px">${ring(.38, 54, 5, 'var(--accent)')}<b style="position:absolute;inset:0;display:grid;place-items:center;font-size:13px">%38</b></div></div>`;
+const alt = (title, tag, body, notes, tall) => `<div class="alt"><div class="phone ${tall ? 'tall' : ''}"><div class="scr">${body}</div></div><h3>${title}${tag ? `<span class="tag ${tag === 'Önerim' ? 'pick' : ''}">${tag}</span>` : ''}</h3>${notes.map(n => `<p>${n}</p>`).join('')}</div>`;
+const after = `<div class="ev done" style="margin-top:22px"><span class="node">${ic('check')}</span><div><h4>Kahvaltı</h4><p class="s">Tamam</p></div><span class="t">11:00</span></div><div class="ev now"><span class="node">${ic('fork')}</span><div><h4 style="font-size:22px">Öğle</h4><p class="s">14:00 · 4 kalem</p></div><span class="hot">25 dk</span></div>`;
+
+document.getElementById('dials').innerHTML = [
+  alt('K1 · Bugünkü', 'Şimdiki', hd + `<div class="k1">${D.map(([n, v, u, of, p, c]) => `<div class="c"><div class="top"><span class="lb">${n}</span>${ring(p, 30, 4.5, c)}</div><span class="v">${v}${u ? `<em>${u}</em>` : ''}</span><span class="of">${of}</span></div>`).join('')}</div>` + after,
+    ['<b>Ne:</b> küçük halka sağ üstte, sayı altta.', '<b>Sorun:</b> halka ile sayı ayrı köşelerde; göz ikisini birleştirmek için gidip geliyor. 30 px halka yüzdeyi okutmaya yetmiyor.']),
+  alt('K2 · Sayı halkanın içinde', 'Önerim', hd + `<div class="k2">${D.map(([n, v, u, of, p, c]) => `<div class="c"><div class="dial">${ring(p, 84, 7, c)}<div><span class="v">${v}${u ? `<em>${u}</em>` : ''}</span></div></div><div><span class="lb" style="display:block;font-weight:600;color:var(--fg)">${n}</span><span class="of">${of}</span></div></div>`).join('')}</div>` + after,
+    ['<b>Ne:</b> Watch\'un dairesel komplikasyonu. 84 px halka, 7 px çizgi; sayı ortada 21 pt, etiket ve hedef altta.', '<b>İyi yanı:</b> sayı ile ilerleme tek bakışta okunuyor; üç kadran bir saat yüzü gibi.', '<b>Dikkat:</b> "1.408" halkanın içine 21 pt\'de zor sığıyor; 10.000\'i geçen bir değer olmadığı için yeterli. Kutular K1\'den 12 px uzun.']),
+  alt('K3 · İç içe halkalar', '', hd + `<div class="c k3"><div style="position:relative;width:128px;height:128px">${ring(D[0][4], 128, 14, D[0][5])}<div style="position:absolute;inset:17px">${ring(D[1][4], 94, 14, D[1][5])}</div><div style="position:absolute;inset:34px">${ring(D[2][4], 60, 14, D[2][5])}</div></div>
+    <ul>${D.map(([n, v, u, of, p, c]) => `<li><i style="background:${c}"></i><span class="lb">${n}</span><span class="v">${v}${u ? `<em>${u}</em>` : ''}<small>${of}</small></span></li>`).join('')}</ul></div>` + after,
+    ['<b>Ne:</b> Etkinlik halkaları. Dıştan içe kalori, protein, su; sağda değerler.', '<b>İyi yanı:</b> en tanıdık ve en etkileyici; tek kart, ekranda yer kazandırıyor.', '<b>Sorun:</b> iç halkalar kısa kalıyor, suyun %70\'i ile kalorinin %68\'i aynı görünmüyor. Mavi ve turuncu aynı yerde: "turuncu yalnızca şimdi" kuralı zayıflıyor.']),
+  alt('K4 · Gösterge yayı', '', hd + `<div class="k4">${D.map(([n, v, u, of, p, c]) => `<div class="c"><div class="gauge">${ring(p, 84, 7, c, -135, 270).replace('<svg', '<svg style="margin:0 auto"')}<div><span class="v">${v}${u ? `<em>${u}</em>` : ''}</span></div><span class="lb">${n}</span></div><span class="of">${of}</span></div>`).join('')}</div>` + after,
+    ['<b>Ne:</b> Watch\'un gösterge kadranı. Altı açık 270° yay; etiket yayın açıklığına oturuyor.', '<b>İyi yanı:</b> etiket kadranın parçası oluyor, kutu daha sakin.', '<b>Sorun:</b> yay dolunca "tamam" hissi tam çember kadar güçlü değil; aşılan hedefi göstermek zor.'])
+].join('');
+
+const rows = [['Izgara tavuk', '150 g', 1], ['Bulgur pilavı', '4 yk', 1], ['Yoğurt', '1 kâse', 0], ['Mevsim salata', '', 0], ['Omega 3', '1 kapsül', 0]];
+const list = rows.map(([n, a, on]) => `<div class="row ${on ? 'on' : ''}"><span class="chk ${on ? 'on' : ''}">${on ? ic('check') : ''}</span><span class="b">${n}</span>${a ? `<span class="amt">${a}</span>` : ''}</div>`).join('');
+const done = `<div class="ev done keep"><span class="node">${ic('check')}</span><div><h4>Kahvaltı</h4><p class="s">Tamam</p></div><span class="t">11:00</span></div>`;
+const rest = `<div class="ev"><span class="node">${ic('apple')}</span><div><h4>İkindi</h4><p class="s">Galeta · Meyve</p></div><span class="t">16:00</span></div><div class="ev"><span class="node">${ic('bowl')}</span><div><h4>Akşam</h4><p class="s">Köfte · Yoğurt · Ekmek · Salata</p></div><span class="t">20:00</span></div><div class="ev"><span class="node">${ic('moon')}</span><div><h4>Gece</h4><p class="s">Protein süt · Kabak çekirdeği</p></div><span class="t">21:00</span></div>`;
+const mcard = `<div class="mcard"><div class="mh"><span class="node" style="background:var(--accent);color:var(--on-accent)">${ic('fork')}</span><div><h4>Öğle</h4><p class="s">14:00 · 2 / 5 tamam</p></div><span class="hot">25 dk</span></div><div class="prog" style="--w:40%"></div>${list}<div class="btn">${ic('check')}Kalanını yedim</div></div>`;
+document.getElementById('meals').innerHTML = [
+  alt('O1 · Bugünkü', 'Şimdiki', done + `<div class="ev now"><span class="node">${ic('fork')}</span><div><h4 style="font-size:22px">Öğle</h4><p class="s">14:00 · 5 kalem</p></div><span class="hot">25 dk</span></div><div class="panel">${list}<div class="btn">${ic('check')}Kalanını yedim</div></div>` + rest,
+    ['<b>Ne:</b> başlık zaman çizelgesinde, liste altındaki kartta.', '<b>Sorun:</b> kart ile başlık ayrı nesneler; açık kart diğer öğünlerle aynı ağırlıkta. Turuncu "şimdi" rengi açık olanı değil saati gösteriyor; akşamı açınca bile turuncu öğle kalıyor.'], true),
+  alt('O2 · Başlık kartın içinde', 'Önerim', done + mcard + rest,
+    ['<b>Ne:</b> açılan öğün tek bir kart olur: simge, ad, saat ve ilerleme çubuğu kartın tepesinde. Kart hafifçe yükselir.', '<b>İyi yanı:</b> açık olan, kapalı olanlardan biçimiyle ayrılıyor; renge gerek kalmıyor. Kaç kalemin bittiği çubukta görünüyor.', '<b>Dikkat:</b> kartın içindeki başlığa dokunmak öğünü kapatır.'], true),
+  alt('O3 · Odak', '', `<div class="dim">${done.replace('keep', '')}${mcard.replace('class="mcard"', 'class="mcard ev keep" style="display:block;opacity:1"')}${rest}</div>`,
+    ['<b>Ne:</b> O2 ve öğün açıkken diğerleri soluklaşır.', '<b>İyi yanı:</b> en net odak; açık öğünle karışma ihtimali kalmıyor.', '<b>Sorun:</b> "akşam ne vardı" diye bakmak için soluk metni okumak gerekiyor. Plan boyunca gezinmeyi yavaşlatır.'], true),
+  alt('O4 · Yapışkan başlık', 'O2 ile', `<div class="stick"><span class="node" style="background:var(--accent);color:var(--on-accent)">${ic('fork')}</span><b>Öğle</b><span>2 / 5 · 14:00</span>${ic('up')}</div><div style="margin-top:-96px">${mcard}</div>` + rest,
+    ['<b>Ne:</b> uzun bir öğünde aşağı kayınca öğünün başlığı ekranın tepesine yapışır.', '<b>İyi yanı:</b> listenin ortasındayken bile hangi öğünde olduğun belli; dokununca öğün kapanır ve liste yerine döner.', '<b>Dikkat:</b> yalnızca açık öğünün başlığı yapışır; gün başlığıyla çakışmasın diye gün kaydırması o sırada başlığın kendisinde çalışır.'], true)
+].join('');
+
+document.querySelectorAll('.theme button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.theme button').forEach(x => x.classList.toggle('on', x === b));
+  b.dataset.t ? document.documentElement.setAttribute('data-theme', b.dataset.t) : document.documentElement.removeAttribute('data-theme');
+}));
+</script>

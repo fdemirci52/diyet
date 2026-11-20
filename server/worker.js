@@ -10,7 +10,16 @@
    Uçlar:
    - POST /v1/messages  Anthropic Messages API'nin aynısı (akışlı ya da değil). Authorization: Bearer <kod>.
                         Araç olarak yalnızca istemcinin kendi (custom) araçları geçer.
-   - GET  /v1/me        { name, month, n, usd, budget }: kodun bu ayki kullanımı. */
+   - GET  /v1/me        { name, month, n, usd, budget }: kodun bu ayki kullanımı.
+
+   Hesap ve eşitleme (DB: D1, şema migrations/ içinde). Oturum belirteci Authorization: Bearer <belirteç> ile gelir.
+   - POST   /v1/auth/start   { email } → e-postaya 6 haneli kod gider (RESEND_KEY, MAIL_FROM).
+                             DEV_CODES = "1" iken ve RESEND_KEY yokken kod cevapta döner (yalnızca yerel deneme).
+   - POST   /v1/auth/verify  { email, code } → { token, email }. Hesap yoksa açılır.
+   - POST   /v1/auth/logout  bu oturumu kapatır.
+   - POST   /v1/sync         { since, put: [{ k, v }] } → { rev, docs: [{ k, v }] }. v metin (JSON) ya da null (silindi).
+                             Önce since'ten sonra başka cihazların yazdıkları okunur, sonra put yazılır; aynı işlemde.
+   - DELETE /v1/account      hesabı ve buluttaki bütün kayıtları siler. */
 
 const API = 'https://api.anthropic.com/v1/messages', VERSION = '2026-10-21';
 /* Milyon token başına dolar (girdi, çıktı). Yalnızca bu modellere izin verilir. */
@@ -24,7 +33,7 @@ const cost = (model, u = {}) => { const [pi, po] = PRICE[model] || [0, 0], cw = 
 function cors(req, env) {
   const o = req.headers.get('origin') || '', ok = (env.ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
   return ok.includes(o) ? { 'access-control-allow-origin': o, 'access-control-allow-headers': 'authorization, content-type, anthropic-version',
-    'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-max-age': '86400', vary: 'origin' } : {};
+    'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS', 'access-control-max-age': '86400', vary: 'origin' } : {};
 }
 const json = (body, status, h) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...h } });
 /* Anthropic'in hata biçimiyle, uygulama aynı yoldan okusun. */
@@ -40,10 +49,98 @@ async function account(req, env) {
 }
 const charge = (env, a, model, usage) => env.DIYET.put(a.key, JSON.stringify({ n: a.use.n + 1, usd: Math.round((a.use.usd + cost(model, usage)) * 1e6) / 1e6 }));
 
+/* ---------- Hesap ve eşitleme ---------- */
+const now = () => Date.now();
+const b64u = a => btoa(String.fromCharCode(...a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const sha = async t => b64u(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t))));
+const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
+const OTP_TTL = 10 * 60e3, OTP_GAP = 60e3, OTP_TRIES = 5, DOC_MAX = 1e6, PUT_MAX = 400;
+
+async function sendCode(env, email, code) {
+  if (!env.RESEND_KEY) return env.DEV_CODES === '1' ? { dev: code } : null;
+  const r = await fetch('https://api.resend.com/emails', { method: 'POST',
+    headers: { authorization: 'Bearer ' + env.RESEND_KEY, 'content-type': 'application/json' },
+    body: JSON.stringify({ from: env.MAIL_FROM || 'Diyet <onboarding@resend.dev>', to: [email], subject: `Giriş kodun: ${code}`,
+      text: `Diyet uygulamasına giriş kodun: ${code}\n\nKod 10 dakika geçerli. Bu isteği sen yapmadıysan bu e-postayı yok sayabilirsin.` }) });
+  return r.ok ? {} : null;
+}
+
+async function session(req, env) {
+  const m = (req.headers.get('authorization') || '').match(/^Bearer\s+([A-Za-z0-9_-]{40,64})$/);
+  if (!m) return null;
+  const hash = await sha(m[1]), s = await env.DB.prepare('SELECT s.uid, u.email FROM sessions s JOIN users u ON u.id = s.uid WHERE s.hash = ?').bind(hash).first();
+  if (s) await env.DB.prepare('UPDATE sessions SET seen = ? WHERE hash = ?').bind(now(), hash).run();
+  return s && { uid: s.uid, email: s.email, hash };
+}
+
+async function hesap(req, env, url, h) {
+  const p = url.pathname, body = req.method === 'POST' ? await req.json().catch(() => null) : null;
+  if (req.method === 'POST' && !body) return fail(400, 'invalid_request_error', 'İstek okunamadı.', h);
+
+  if (p === '/v1/auth/start') {
+    const email = String(body.email || '').trim().toLowerCase();
+    if (!EMAIL.test(email)) return fail(400, 'invalid_request_error', 'E-posta adresi geçersiz.', h);
+    const o = await env.DB.prepare('SELECT sent FROM otps WHERE email = ?').bind(email).first();
+    if (o && now() - o.sent < OTP_GAP) return fail(429, 'rate_limit_error', 'Yeni kod için bir dakika bekle.', h);
+    const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1e6).padStart(6, '0');
+    await env.DB.prepare('INSERT OR REPLACE INTO otps (email, hash, exp, tries, sent) VALUES (?, ?, ?, 0, ?)').bind(email, await sha(email + ':' + code), now() + OTP_TTL, now()).run();
+    const r = await sendCode(env, email, code);
+    if (!r) return fail(503, 'api_error', 'Kod e-postası gönderilemedi. Biraz sonra yeniden dene.', h);
+    return json({ ok: true, ...r }, 200, h);
+  }
+  if (p === '/v1/auth/verify') {
+    const email = String(body.email || '').trim().toLowerCase(), code = String(body.code || '').replace(/\D/g, '');
+    const o = await env.DB.prepare('SELECT hash, exp, tries FROM otps WHERE email = ?').bind(email).first();
+    if (!o || o.exp < now() || o.tries >= OTP_TRIES) return fail(400, 'invalid_request_error', 'Kodun süresi doldu. Yeni kod iste.', h);
+    if (code.length !== 6 || await sha(email + ':' + code) !== o.hash) {
+      await env.DB.prepare('UPDATE otps SET tries = tries + 1 WHERE email = ?').bind(email).run();
+      return fail(400, 'invalid_request_error', 'Kod yanlış.', h);
+    }
+    await env.DB.prepare('INSERT OR IGNORE INTO users (email, created) VALUES (?, ?)').bind(email, now()).run();
+    const u = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
+    const token = b64u(crypto.getRandomValues(new Uint8Array(32)));
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM otps WHERE email = ?').bind(email),
+      env.DB.prepare('INSERT INTO sessions (hash, uid, created, seen) VALUES (?, ?, ?, ?)').bind(await sha(token), u.id, now(), now()),
+    ]);
+    return json({ token, email }, 200, h);
+  }
+
+  const s = await session(req, env);
+  if (!s) return fail(401, 'authentication_error', 'Oturum kapandı. Yeniden giriş yap.', h);
+  if (p === '/v1/auth/logout' && req.method === 'POST') {
+    await env.DB.prepare('DELETE FROM sessions WHERE hash = ?').bind(s.hash).run();
+    return json({ ok: true }, 200, h);
+  }
+  if (p === '/v1/account' && req.method === 'DELETE') {
+    await env.DB.batch(['docs', 'sessions'].map(t => env.DB.prepare(`DELETE FROM ${t} WHERE uid = ?`).bind(s.uid))
+      .concat(env.DB.prepare('DELETE FROM users WHERE id = ?').bind(s.uid)));
+    return json({ ok: true }, 200, h);
+  }
+  if (p === '/v1/sync' && req.method === 'POST') {
+    const since = Math.max(0, +body.since || 0), put = Array.isArray(body.put) ? body.put : [];
+    if (put.length > PUT_MAX) return fail(413, 'invalid_request_error', 'Tek seferde çok fazla kayıt.', h);
+    for (const d of put) if (!d || typeof d.k !== 'string' || !d.k || d.k.length > 200 || (d.v !== null && typeof d.v !== 'string') || (d.v && d.v.length > DOC_MAX))
+      return fail(400, 'invalid_request_error', 'Kayıt biçimi tanınmadı.', h);
+    /* Tek işlem: önce başkalarının yazdıkları okunur, sonra sayaç artar ve bu istekteki belgeler yeni sayaçla yazılır. */
+    const q = [env.DB.prepare('SELECT k, v FROM docs WHERE uid = ? AND ts > ? ORDER BY ts').bind(s.uid, since)];
+    if (put.length) q.push(env.DB.prepare('UPDATE users SET rev = rev + 1 WHERE id = ?').bind(s.uid),
+      ...put.map(d => env.DB.prepare('INSERT OR REPLACE INTO docs (uid, k, v, ts) VALUES (?1, ?2, ?3, (SELECT rev FROM users WHERE id = ?1))').bind(s.uid, d.k, d.v)));
+    q.push(env.DB.prepare('SELECT rev FROM users WHERE id = ?').bind(s.uid));
+    const r = await env.DB.batch(q), mine = new Set(put.map(d => d.k));
+    return json({ rev: r[r.length - 1].results[0].rev, email: s.email, docs: r[0].results.filter(d => !mine.has(d.k)) }, 200, h);
+  }
+  return fail(404, 'not_found_error', 'Bulunamadı.', h);
+}
+
 export default {
   async fetch(req, env, ctx) {
     const h = cors(req, env), url = new URL(req.url);
     if (req.method === 'OPTIONS') return new Response(null, { status: h['access-control-allow-origin'] ? 204 : 403, headers: h });
+    if (/^\/v1\/(auth\/|sync$|account$)/.test(url.pathname)) {
+      if (!env.DB) return fail(503, 'api_error', 'Hesaplar henüz açık değil.', h);
+      return hesap(req, env, url, h);
+    }
     const a = await account(req, env);
     if (!a) return fail(401, 'authentication_error', 'Davet kodu geçersiz.', h);
 

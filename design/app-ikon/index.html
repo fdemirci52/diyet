@@ -1,0 +1,137 @@
+<title>Diyet Uygulama İkonu</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Yerleşim: tek sütun; önce önerilenler, sonra yön yön setler (her yön: ilk tur + ikinci tur). Uygulamanın kendi tokenları. */
+:root {
+  --bg: #f2f2f4; --fg: #0b0b0c; --muted: #6f6f76; --faint: #9a9aa2;
+  --card: #ffffff; --line: rgb(0 0 0 / 7%); --ctl: #f0f0f3;
+  --accent: #ff6a1a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 26px -18px rgb(0 0 0 / 18%);
+  --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0a0a0b; --fg: #f5f5f7; --muted: #8f8f97; --faint: #5e5e66;
+  --card: #161618; --line: rgb(255 255 255 / 8%); --ctl: rgb(255 255 255 / 7%);
+  --accent: #ff7a2f; --shadow: none; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0a0a0b; --fg: #f5f5f7; --muted: #8f8f97; --faint: #5e5e66;
+  --card: #161618; --line: rgb(255 255 255 / 8%); --ctl: rgb(255 255 255 / 7%);
+  --accent: #ff7a2f; --shadow: none; color-scheme: dark; }
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.5 var(--sys); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 40px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 56px; }
+h1 { font-size: 34px; line-height: 1.1; letter-spacing: -.022em; text-wrap: balance; }
+h2 { font-size: 22px; line-height: 1.2; letter-spacing: -.02em; text-wrap: balance; }
+h3 { font-size: 17px; line-height: 1.3; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+p, li { max-width: 68ch; }
+.lead { color: var(--muted); font-size: 17px; margin-top: 12px; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+section { display: flex; flex-direction: column; gap: 20px; }
+.sub { color: var(--muted); margin-top: 8px; }
+.tag { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--ctl); color: var(--muted); white-space: nowrap; }
+.tag.pick { background: var(--fg); color: var(--bg); }
+.tag.warn { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.c { background: var(--card); border-radius: 24px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.c img { display: block; width: 100%; height: auto; max-width: 100%; }
+.c .tx { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; }
+.c .tx p { font-size: 14px; color: var(--muted); line-height: 1.45; }
+.c .tx p b { color: var(--fg); font-weight: 600; }
+.meta { font-size: 12px; color: var(--faint); }
+.picks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+.pk { background: var(--card); border-radius: 24px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pk .crop { width: 100%; max-width: 100%; aspect-ratio: 1; border-radius: 18px; background-repeat: no-repeat; background-color: #e9e9ec; }
+.pk p { font-size: 14px; color: var(--muted); line-height: 1.45; }
+.pk .where { font-size: 12px; color: var(--faint); }
+.box { background: var(--card); border-radius: 24px; padding: 20px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); display: flex; flex-direction: column; gap: 10px; }
+.box ul { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+</style>
+<div class="wrap">
+<header>
+  <p class="eyebrow">Diyet · uygulama ikonu · 16 Kasım 2026</p>
+  <h1>Uygulama ikonu denemeleri</h1>
+  <p class="lead">Gemini 3.1 Pro görsel modeliyle beş yönde on set, toplam 90 ikon. Her yönde önce geniş bir tarama, sonra en güçlü fikirlerin inceltildiği ikinci tur var. Bütün setler uygulamanın kendi paletiyle istendi: neredeyse siyah, kırık beyaz ve yalnızca "şimdi" için turuncu.</p>
+</header>
+
+<section>
+  <div><p class="eyebrow">Öne çıkanlar</p><h2>Dört aday</h2>
+  <p class="sub">Ana ekranda 60 px'te, Ayarlar listesinde 29 px'te okunması gerekiyor. Bu dördü küçükte de tek bakışta anlaşılıyor ve uygulamanın içindeki dille aynı şeyi söylüyor.</p></div>
+  <div class="picks">
+    <div class="pk"><div class="crop" style="background-image:url(web/halka-2.jpg);background-size:300%;background-position:0 0"></div>
+      <h3>Halka<span class="tag pick">Önerim</span></h3>
+      <p>Siyah zeminde dörtte üçü dolu kırık beyaz halka, son dilim turuncu. Uygulamadaki gün kadranlarının ve öğün halkalarının aynısı; ikon açılınca gördüğün şeyin özeti.</p>
+      <span class="where">Halka · 2. tur · sol üst</span></div>
+    <div class="pk"><div class="crop" style="background-image:url(web/harf-2.jpg);background-size:300%;background-position:0 0"></div>
+      <h3>Halkalı d</h3>
+      <p>Küçük d harfinin karnı ilerleme halkası. Halkaya ad da ekliyor; ileride diyetisyen paneliyle marka olarak taşınabilir.</p>
+      <span class="where">Harf · 2. tur · sol üst</span></div>
+    <div class="pk"><div class="crop" style="background-image:url(web/duz-2.jpg);background-size:300%;background-position:0 0"></div>
+      <h3>Zaman çizelgesi</h3>
+      <p>Dikey öğün noktaları, şimdiki öğün turuncu. Bugün ekranının kendisi. Halkalar arasında kaybolmaz, en ayırt edici siluet bu.</p>
+      <span class="where">Düz · 2. tur · sol üst</span></div>
+    <div class="pk"><div class="crop" style="background-image:url(web/3d-2.jpg);background-size:300%;background-position:0 0"></div>
+      <h3>3D elma ve halka</h3>
+      <p>Gıda ikonlarında seçtiğin yumuşak 3D dille aynı aile. En sıcak ve en "yemek" olanı; ama halkadaki parlama küçükte bulanıklaşabilir.</p>
+      <span class="where">3D · 2. tur · sol üst</span></div>
+  </div>
+</section>
+
+<section>
+  <div><p class="eyebrow">A · Halka ve kadran</p><h2>Uygulamanın kendi simgesi</h2></div>
+  <div class="grid">
+    <div class="c"><img src="web/halka-1.jpg" alt="Halka yönü, ilk tur: dokuz halka ve kadran ikonu"><div class="tx"><h3>1. tur</h3>
+      <p><b>Güçlü:</b> turuncu dilimli kalın halka, 24 saatlik kadran ve halkadan d. <b>Zayıf:</b> çatallı halka ve iç içe halkalar kalabalık.</p><span class="meta">16:9, 9 ikon</span></div></div>
+    <div class="c"><img src="web/halka-2.jpg" alt="Halka yönü, ikinci tur"><div class="tx"><h3>2. tur<span class="tag pick">Önerim burada</span></h3>
+      <p><b>Güçlü:</b> sol üst ve sağ alt (halkada gezen turuncu nokta) en temizleri. Beş öğün yayına bölünmüş halka uygulamanın mantığını en doğru anlatan. <b>Zayıf:</b> tombul 3D halka ve iç içe iki halka markadan sapıyor.</p><span class="meta">Kare, 9 ikon</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div><p class="eyebrow">B · Yumuşak 3D</p><h2>Gıda ikonlarıyla aynı aile</h2></div>
+  <div class="grid">
+    <div class="c"><img src="web/3d-1.jpg" alt="3D yönü, ilk tur: elma, kâse, tabak, yaprak, yumurta, avokado, mezura, su, saat"><div class="tx"><h3>1. tur</h3>
+      <p><b>Güçlü:</b> halkalı elma tek başına öne çıktı; ikinci tur onun üzerine kuruldu. <b>Zayıf:</b> çatal-kaşık saat ve mezura birer illüstrasyon, ikon değil.</p><span class="meta">16:9, 9 ikon</span></div></div>
+    <div class="c"><img src="web/3d-2.jpg" alt="3D yönü, ikinci tur: halka içinde dokuz gıda"><div class="tx"><h3>2. tur</h3>
+      <p><b>Güçlü:</b> elma, avokado ve yumurta net. Aynı şablonla bir seri ikon (alternatif ikonlar) çıkabilir. <b>Zayıf:</b> ekmekte gözenekli doku var, kaçındığın türden. Ceviz kahverengi bir top gibi okunuyor.</p><span class="meta">Kare, 9 ikon</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div><p class="eyebrow">C · Harf</p><h2>d monogramı</h2></div>
+  <div class="grid">
+    <div class="c"><img src="web/harf-1.jpg" alt="Harf yönü, ilk tur"><div class="tx"><h3>1. tur</h3>
+      <p><b>Güçlü:</b> halka karınlı d ve turuncu noktalı d. <b>Zayıf:</b> "diyet" yazısı 29 px'te okunmaz; şablon d ve tırnaklı D başka bir markaya ait gibi.</p><span class="meta">16:9, 9 ikon</span></div></div>
+    <div class="c"><img src="web/harf-2.jpg" alt="Harf yönü, ikinci tur"><div class="tx"><h3>2. tur</h3>
+      <p><b>Güçlü:</b> üst sıradaki ilk ikisi ve sol alttaki açık zeminli d. <b>Zayıf:</b> "di" gibi okunanlar (sağ üst, sağ orta) karışıklık yaratır; tabak ve çatallı d harfe benzemiyor.</p><span class="meta">Kare, 9 ikon</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div><p class="eyebrow">D · Düz sembol</p><h2>Sistem uygulaması sadeliği</h2></div>
+  <div class="grid">
+    <div class="c"><img src="web/duz-1.jpg" alt="Düz sembol yönü, ilk tur"><div class="tx"><h3>1. tur</h3>
+      <p><b>Güçlü:</b> halkalı tabak ve zaman çizelgesi. <b>Zayıf:</b> ısırılmış elma Apple logosuna fazla benziyor, App Store'da sorun çıkarır. Kalp, terazi ve pano stok ikon gibi.</p><span class="meta">16:9, 9 ikon</span></div></div>
+    <div class="c"><img src="web/duz-2.jpg" alt="Düz sembol yönü, ikinci tur"><div class="tx"><h3>2. tur</h3>
+      <p><b>Güçlü:</b> dikey çizelge (iki temada), gün yayı ve çatal-bıçaklı halkalı tabak. <b>Zayıf:</b> küçük tabaklardan çizelge 29 px'te dağılır.</p><span class="meta">Kare, 9 ikon</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div><p class="eyebrow">E · Malzeme ve soyut</p><h2>Aynı tabak, farklı yüzeyler</h2></div>
+  <div class="grid">
+    <div class="c"><img src="web/malzeme-1.jpg" alt="Malzeme yönü, ilk tur: cam, buzlu cam, kabartma kâğıt, seramik, emaye, kauçuk, alüminyum, neon, risograf"><div class="tx"><h3>1. tur</h3>
+      <p><b>Güçlü:</b> siyah cam (iOS 26 Liquid Glass'a yakın) ve kabartma kâğıt. <b>Zayıf:</b> altın kenarlı emaye ve risograf uygulamanın sakinliğine uymuyor.</p><span class="meta">Kare, 9 ikon</span></div></div>
+    <div class="c"><img src="web/malzeme-2.jpg" alt="Malzeme ve soyut geometri, ikinci tur"><div class="tx"><h3>2. tur: üst sıra malzeme, alt iki sıra soyut</h3>
+      <p><b>Güçlü:</b> güneşli kâse, gün yayı, sabah-öğle-akşam üç daire. <b>Zayıf:</b> çeyrek dilimli daire bir grafik uygulaması gibi; çizgiyle kesilen daire "yasak" işareti çağrıştırıyor.</p><span class="meta">Kare, 9 ikon</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div><p class="eyebrow">Sonraki adım</p><h2>Seçimden sonra</h2></div>
+  <div class="box"><ul>
+    <li>Seçilen fikir Gemini'de tek ikon olarak, 1024 px, köşesiz kare tuvalde yeniden üretilir (iOS köşeyi kendisi keser).</li>
+    <li>Halka, d ya da çizelge seçilirse görsel model yerine elle SVG çizmek daha doğru: geometri kusursuz olur, açık ve koyu sürüm aynı dosyadan çıkar.</li>
+    <li><code>icon-180.png</code> ve <code>icon-512.png</code> değişir, <code>sw.js</code> sürümü artar.</li>
+  </ul></div>
+</section>
+</div>

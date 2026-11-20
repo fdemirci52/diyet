@@ -1,0 +1,146 @@
+<title>Diyet İkon Pilotu</title>
+<meta charset="utf-8">
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Yerleşim: üstte iki temada uygulama görünümü, altında 12 ikonun açık/koyu ızgarası, en altta ham sayfa ve yöntem. */
+:root {
+  --bg: #f2f2f4; --fg: #0b0b0c; --muted: #6f6f76; --faint: #b9b9c0;
+  --card: #ffffff; --line: rgb(0 0 0 / 7%); --ctl: #f0f0f3; --track: #e6e6eb;
+  --shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 26px -18px rgb(0 0 0 / 18%);
+  --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0a0a0b; --fg: #f5f5f7; --muted: #8f8f97; --faint: #4e4e55;
+  --card: #161618; --line: rgb(255 255 255 / 8%); --ctl: rgb(255 255 255 / 7%); --track: rgb(255 255 255 / 10%);
+  --shadow: none; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0a0a0b; --fg: #f5f5f7; --muted: #8f8f97; --faint: #4e4e55;
+  --card: #161618; --line: rgb(255 255 255 / 8%); --ctl: rgb(255 255 255 / 7%); --track: rgb(255 255 255 / 10%);
+  --shadow: none; color-scheme: dark; }
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.5 var(--sys); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 40px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 48px; }
+h1 { font-size: 34px; line-height: 1.1; letter-spacing: -.022em; text-wrap: balance; }
+h2 { font-size: 22px; line-height: 1.2; letter-spacing: -.02em; text-wrap: balance; }
+h3 { font-size: 17px; }
+p, li { max-width: 68ch; }
+.lead { color: var(--muted); font-size: 17px; margin-top: 12px; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+section { display: flex; flex-direction: column; gap: 20px; }
+.sub { color: var(--muted); }
+
+.mock { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.th { border-radius: 28px; padding: 20px 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.th.l { background: #f2f2f4; color: #0b0b0c; --m: #6f6f76; --cd: #ffffff; --tk: #e6e6eb; --pill: #f0f0f3; --tile: #f2f2f4; --now: #ff6a1a; }
+.th.d { background: #0a0a0b; color: #f5f5f7; --m: #8f8f97; --cd: #161618; --tk: rgb(255 255 255 / 10%); --pill: rgb(255 255 255 / 7%); --tile: rgb(255 255 255 / 6%); --now: #ff7a2f; }
+.th small.lb { font-size: 13px; color: var(--m); padding: 0 4px; }
+.th .hd { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px; }
+.th .hd b { font-size: 22px; letter-spacing: -.02em; }
+.th .hot { font-size: 13px; font-weight: 600; color: var(--now); }
+.th .card { background: var(--cd); border-radius: 22px; padding: 4px 14px; }
+.th.l .card, .th.l .tiles div { box-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 10px 26px -18px rgb(0 0 0 / 18%); }
+.th.d .card, .th.d .tiles div { box-shadow: inset 0 0 0 1px rgb(255 255 255 / 6%); }
+.r { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 0; }
+.r + .r { box-shadow: inset 0 1px 0 var(--tk); }
+.r img { width: 44px; height: 44px; flex: none; }
+.r .b { flex: 1; min-width: 0; } .r .b span { display: block; font-size: 16px; } .r .b small { display: block; font-size: 13px; color: var(--m); }
+.amt { height: 28px; padding: 0 10px; border-radius: 999px; background: var(--pill); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; white-space: nowrap; }
+.chk { width: 26px; height: 26px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--m); flex: none; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tiles div { background: var(--cd); border-radius: 18px; padding: 10px 6px 10px; text-align: center; font-size: 13px; }
+.tiles img { width: 64px; height: 64px; display: block; margin: 0 auto 4px; }
+.tiles small { display: block; color: var(--m); font-size: 12px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.grid div { border-radius: 20px; padding: 10px 6px 12px; text-align: center; font-size: 13px; }
+.grid.l div { background: #ffffff; color: #0b0b0c; box-shadow: 0 1px 2px rgb(0 0 0 / 4%); }
+.grid.d { background: #0a0a0b; padding: 12px; border-radius: 26px; }
+.grid.d div { background: #161618; color: #f5f5f7; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 6%); }
+.grid.l { background: #f2f2f4; padding: 12px; border-radius: 26px; }
+.grid img { width: 72px; height: 72px; display: block; margin: 0 auto 6px; }
+.sizes { display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; padding: 16px; border-radius: 26px; background: var(--card); box-shadow: var(--shadow), inset 0 0 0 1px var(--line); }
+.sizes figure { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.sizes figure span { display: flex; gap: 6px; align-items: center; }
+.raw { border-radius: 24px; overflow: hidden; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); }
+.raw img { display: block; width: 100%; height: auto; }
+.box { background: var(--card); border-radius: 24px; padding: 20px; box-shadow: var(--shadow), inset 0 0 0 1px var(--line); display: flex; flex-direction: column; gap: 10px; }
+.box ul, .box ol { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--ctl); padding: 1px 5px; border-radius: 6px; }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Diyet · gıda kütüphanesi · pilot</p>
+  <h1>A1 stilinde 12 ikon, uygulamaya hazır</h1>
+  <p class="lead">Gemini Pro'da üretildi; A1 seti stil referansı olarak verildi. Sonra her ikon kesildi, zemini kaldırıldı ve aynı kare tuvale aynı oranda yerleştirildi. Aşağıdaki her şey o şeffaf dosyalar: açık ve koyu temada aynı dosya kullanılıyor.</p>
+</header>
+
+<section>
+  <div><p class="eyebrow">Uygulamada</p><h2>Öğle öğünü ve muadil seçimi</h2></div>
+  <div class="mock">
+    <div class="th l"><small class="lb">Açık tema</small><div class="hd"><b>Öğle</b><span class="hot">25 dk</span></div>
+      <div class="card">
+        <div class="r"><img src="ikon/tavuk-160.webp" alt=""><span class="b"><span>Izgara tavuk</span><small>2 muadil</small></span><span class="amt">150 g</span><span class="chk"></span></div>
+        <div class="r"><img src="ikon/bulgur-160.webp" alt=""><span class="b"><span>Bulgur pilavı</span><small>veya 2 dilim ekmek</small></span><span class="amt">4 yk</span><span class="chk"></span></div>
+        <div class="r"><img src="ikon/yogurt-160.webp" alt=""><span class="b"><span>Yoğurt</span></span><span class="amt">1 kâse</span><span class="chk"></span></div>
+        <div class="r"><img src="ikon/mercimek-160.webp" alt=""><span class="b"><span>Mercimek çorbası</span><small>Plan dışı · yaklaşık 180 kcal</small></span><span class="chk"></span></div>
+      </div>
+      <small class="lb">Tavuk yerine</small>
+      <div class="tiles"><div><img src="ikon/kofte-160.webp" alt="">Köfte<small>4 adet</small></div><div><img src="ikon/yumurta-160.webp" alt="">Yumurta<small>3 adet</small></div><div><img src="ikon/beyaz-peynir-160.webp" alt="">Peynir<small>3 dilim</small></div></div>
+    </div>
+    <div class="th d"><small class="lb">Koyu tema</small><div class="hd"><b>Öğle</b><span class="hot">25 dk</span></div>
+      <div class="card">
+        <div class="r"><img src="ikon/tavuk-160.webp" alt=""><span class="b"><span>Izgara tavuk</span><small>2 muadil</small></span><span class="amt">150 g</span><span class="chk"></span></div>
+        <div class="r"><img src="ikon/bulgur-160.webp" alt=""><span class="b"><span>Bulgur pilavı</span><small>veya 2 dilim ekmek</small></span><span class="amt">4 yk</span><span class="chk"></span></div>
+        <div class="r"><img src="ikon/yogurt-160.webp" alt=""><span class="b"><span>Yoğurt</span></span><span class="amt">1 kâse</span><span class="chk"></span></div>
+        <div class="r"><img src="ikon/mercimek-160.webp" alt=""><span class="b"><span>Mercimek çorbası</span><small>Plan dışı · yaklaşık 180 kcal</small></span><span class="chk"></span></div>
+      </div>
+      <small class="lb">Tavuk yerine</small>
+      <div class="tiles"><div><img src="ikon/kofte-160.webp" alt="">Köfte<small>4 adet</small></div><div><img src="ikon/yumurta-160.webp" alt="">Yumurta<small>3 adet</small></div><div><img src="ikon/beyaz-peynir-160.webp" alt="">Peynir<small>3 dilim</small></div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div><p class="eyebrow">Set</p><h2>On iki ikon, iki zeminde</h2>
+  <p class="sub" style="margin-top:8px">Kenarlarda beyaz hale ya da kesik kalıp kalmadığını en iyi koyu zemin gösterir.</p></div>
+  <div class="grid l" id="gl"></div>
+  <div class="grid d" id="gd"></div>
+</section>
+
+<section>
+  <div><p class="eyebrow">Boyut</p><h2>Küçükte okunuyor mu</h2></div>
+  <div class="sizes" id="sz"></div>
+</section>
+
+<section>
+  <div><p class="eyebrow">Ham çıktı</p><h2>Gemini'nin verdiği sayfa</h2><p class="sub" style="margin-top:8px">2400 × 1792 px, her hücre yaklaşık 600 px. İlk konsepte göre iki düzeltme istendi: köfte yassı ve ızgara izli, ceviz içi görünen altın renkte. İkisi artık karışmıyor.</p></div>
+  <div class="raw"><img src="sheet-web.jpg" alt="Gemini'nin ürettiği 4x3 ikon sayfası"></div>
+</section>
+
+<section>
+  <div><p class="eyebrow">Yöntem</p><h2>Kalan 155 gıda böyle üretilir</h2></div>
+  <div class="two">
+    <div class="box"><h3>Adımlar</h3><ol>
+      <li>Gıdalar kategoriye göre 12'li sayfalara bölünür (yaklaşık 14 sayfa).</li>
+      <li>Her sayfa için Gemini Pro'ya bu pilot sayfası referans olarak verilir; stil metni hep aynı.</li>
+      <li>Tam boyutlu görsel indirilir, <code>kes.swift</code> hücreleri böler, macOS Vision zemini kaldırır, kare tuvale %84 oranla yerleştirir.</li>
+      <li>160 ve 320 px WebP üretilir; 512 px PNG ana kopya olarak saklanır.</li>
+      <li>Bu sayfanın genişletilmiş hâlinde gözden geçirilir, beğenilmeyen tek tek yeniden üretilir.</li></ol></div>
+    <div class="box"><h3>Ölçüler</h3><ul>
+      <li>160 px WebP: 12 ikon toplam 56 KB, ikon başına yaklaşık 5 KB.</li>
+      <li>320 px WebP: 12 ikon toplam 124 KB.</li>
+      <li>170 gıdanın tamamı: 160 px set 1 MB'ın altında. Telefona görüldükçe iner, hepsi birden değil.</li>
+      <li>Kesim bilgisayarda yapılıyor; ek bir servis ya da ücret yok.</li></ul></div>
+  </div>
+</section>
+</div>
+
+<script>
+const N = [['yumurta', 'Yumurta'], ['beyaz-peynir', 'Beyaz peynir'], ['ekmek', 'Ekmek'], ['avokado', 'Avokado'], ['tavuk', 'Tavuk'], ['bulgur', 'Bulgur'], ['yogurt', 'Yoğurt'], ['sut', 'Süt'], ['elma', 'Elma'], ['kofte', 'Köfte'], ['mercimek', 'Mercimek'], ['ceviz', 'Ceviz']];
+const cell = ([k, n]) => `<div><img src="ikon/${k}-320.webp" alt="">${n}</div>`;
+document.getElementById('gl').innerHTML = N.map(cell).join('');
+document.getElementById('gd').innerHTML = N.map(cell).join('');
+document.getElementById('sz').innerHTML = [24, 32, 44, 64, 96].map(s => `<figure><span>${['kofte', 'ceviz', 'bulgur', 'mercimek'].map(k => `<img src="ikon/${k}-${s > 64 ? 320 : 160}.webp" width="${s}" height="${s}" alt="">`).join('')}</span><figcaption>${s} px</figcaption></figure>`).join('');
+</script>
