@@ -748,7 +748,7 @@ function render() {
 /* ---------- Alt sayfalar ---------- */
 const $sheet = () => document.getElementById('sheet');
 const showSheet = html => { $sheet().innerHTML = '<button class="grab" data-act="close" aria-label="Kapat"></button>' + html; $sheet().scrollTop = 0; document.body.classList.add('sheet-open'); };
-const closeSheet = () => { document.body.classList.remove('sheet-open'); sheet = null; pending = null; afterKey = null; };
+const closeSheet = () => { if (sheet === 'plan' && PL && PL.built) pbClear(); document.body.classList.remove('sheet-open'); sheet = null; pending = null; afterKey = null; };
 /* Sayfa aşağı sürüklenerek kapanır: tutamaçtan her zaman, içerikten yalnızca en üstteyken. Yazı alanları hariç. */
 (() => {
   const sh = $sheet(), sc = document.querySelector('.scrim'); let y0 = null, x0 = 0, dy = 0, t0 = 0, drag = false;
@@ -921,7 +921,7 @@ function shrink(file, max = 1280) {
   return new Promise((ok, no) => { const img = new Image(), url = URL.createObjectURL(file);
     img.onload = () => { const r = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
       c.width = Math.round(img.width * r); c.height = Math.round(img.height * r); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.82).split(',')[1]); };
+      URL.revokeObjectURL(url); const out = c.toDataURL('image/jpeg', 0.82).split(',')[1]; c.width = c.height = 0; ok(out); };
     img.onerror = () => no(new Error('Fotoğraf okunamadı')); img.src = url; });
 }
 async function analyze(mealId, { image, text }) {
@@ -1098,10 +1098,11 @@ function csPaint() {
    ürünlerini (whey, protein bar…) fotoğrafla ya da elle ekler. own: kullanıcı girdi, değerlerinin üstüne yazılmaz.
    img: 160 px kare küçük resim (data URL). */
 let FD = null;   /* düzenlenen gıda: { id, n, u, k, p, img, full, ret, busy, err, note, del } */
+/* file: dosya ya da base64 JPEG (küçültülmüş fotoğraftan kare küçük resim). */
 function thumb(file, size = 160) {
-  return new Promise((ok, no) => { const img = new Image(), url = URL.createObjectURL(file);
+  return new Promise((ok, no) => { const img = new Image(), str = typeof file === 'string', url = str ? 'data:image/jpeg;base64,' + file : URL.createObjectURL(file);
     img.onload = () => { const s = Math.min(img.width, img.height), c = document.createElement('canvas'); c.width = c.height = size;
-      c.getContext('2d').drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size); URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', .72)); };
+      c.getContext('2d').drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size); if (!str) URL.revokeObjectURL(url); const out = c.toDataURL('image/jpeg', .72); c.width = c.height = 0; ok(out); };
     img.onerror = () => no(new Error('Fotoğraf okunamadı')); img.src = url; });
 }
 const tile = f => f.img ? `<img class="th" src="${f.img}" alt="">` : `<span class="th">${esc((f.n || '?').trim()[0].toLocaleUpperCase('tr'))}</span>`;
@@ -1275,15 +1276,39 @@ function welcomeSheet() {
     <div class="group">${o('link', 'link', 'Diyetisyenim bağlantı gönderdi', 'Bağlantıyı yapıştır, program hazır gelir')}${o('photo', 'cam', 'Kâğıttaki programımı aktar', 'Sayfaları çek ya da galeriden seç')}${o('demo', 'list', 'Örnek programla bak', 'Sonra Program sekmesinden değiştirebilirsin')}</div>`);
 }
 const pbSync = () => { const t = document.getElementById('pbtx'); if (t && PB) PB.text = t.value; };
+/* Aktarım yarıda kalırsa kaldığı yerden sürer. iOS ana ekran uygulamasını bellek dolunca ya da arka planda kapatabiliyor;
+   o zaman sayfa sessizce baştan açılırdı. diyet-pb = { at, st: 'pics' | 'busy' | 'done', text, plan, note }:
+   fotoğraflar hazırlanıyor, program okunuyor ya da okundu, yüklenmeyi bekliyor. Fotoğraflar büyük olduğu için saklanmaz. */
+const PBKEY = 'diyet-pb';
+const pbMark = (st, x = {}) => { try { localStorage.setItem(PBKEY, JSON.stringify({ at: Date.now(), st, text: PB ? PB.text : '', ...x })); } catch (e) {} };
+const pbClear = () => { try { localStorage.removeItem(PBKEY); } catch (e) {} };
+function pbResume() {
+  let o = null; try { o = JSON.parse(localStorage.getItem(PBKEY) || 'null'); } catch (e) {}
+  if (!o) return; if (Date.now() - o.at > 3 * 864e5) return pbClear();
+  PB = { pics: [], text: o.text || '' };
+  if (o.st === 'done' && o.plan && !planCheck(o.plan)) { PL = { incoming: o.plan, built: true, note: o.note }; return planSheet(); }
+  PB.err = o.st === 'pics' ? 'Fotoğraflar hazırlanırken uygulama kapandı. Yeniden seç; yine kapanırsa sayfaların ekran görüntüsünü alıp onları seç.'
+    : 'Program okunurken uygulama kapandı. Fotoğrafları yeniden seçip dene; sonuç gelene kadar uygulamada kal.';
+  pbClear(); buildSheet();
+}
+/* Fotoğraflar tek tek hazırlanır: iPhone fotoğrafları büyük, hepsini aynı anda açmak belleği doldurup uygulamayı kapatabiliyor. */
+async function pbAdd(files) {
+  pbSync(); PB.prep = files.length; PB.err = ''; pbMark('pics'); if (sheet === 'build') buildSheet();
+  try { for (const f of files) { const full = await shrink(f, 1600), img = await thumb(full, 200); PB.pics.push({ img, full }); PB.prep--; if (sheet === 'build') { pbSync(); buildSheet(); } } }
+  catch (x) { PB.err = x.message; }
+  PB.prep = 0; pbClear(); if (sheet === 'build') { pbSync(); buildSheet(); }
+}
 function buildSheet() {
   sheet = 'build'; if (!PB) PB = { pics: [], text: '' };
-  if (PB.busy) return showSheet(`<div class="busy"><div class="spin"></div>Programı okuyorum… Birkaç sayfa bir dakikayı bulabilir.</div>`);
+  if (PB.busy) return showSheet(`<div class="busy"><div class="spin"></div>Programı okuyorum… Birkaç sayfa bir dakikayı bulabilir.<br>Bu sırada uygulamadan çıkma.</div>`);
+  const prep = PB.prep || 0, room = 6 - PB.pics.length - prep;
   showSheet(`<h2>Programını aktar</h2><p class="lead">Diyetisyeninin verdiği programın her sayfasını çek ya da galeriden seç. Kâğıtta olmayanları ya da değişenleri altına yaz.</p>
     <div class="pages">${PB.pics.map((p, i) => `<button class="pg" data-act="pbx" data-i="${i}" aria-label="Sayfayı çıkar"><img src="${p.img}" alt=""><i>${ic('x')}</i></button>`).join('')}
-      ${PB.pics.length < 6 ? `<button class="pg add" data-act="pbadd" aria-label="Sayfa ekle">${ic('cam')}<small>${PB.pics.length ? 'Sayfa ekle' : 'Fotoğraf ekle'}</small></button>` : ''}</div>
+      ${Array.from({ length: prep }, () => `<span class="pg add"><span class="spin"></span><small>Hazırlanıyor</small></span>`).join('')}
+      ${room > 0 && !prep ? `<button class="pg add" data-act="pbadd" aria-label="Sayfa ekle">${ic('cam')}<small>${PB.pics.length ? 'Sayfa ekle' : 'Fotoğraf ekle'}</small></button>` : ''}</div>
     <textarea id="pbtx" placeholder="Ek açıklama (isteğe bağlı) · örn. kahvaltı 09:00, öğle 13:00; hafta sonu bir saat geç. Hedefim 80 kg. Ara öğünde muz yemiyorum.">${esc(PB.text)}</textarea>
     ${PB.err ? `<p class="err">${esc(PB.err)}</p>` : ''}${aiCode() && PB.err ? `<button class="textbtn" data-act="pbcode">Davet kodunu değiştir</button>` : ''}
-    <button class="primary" data-act="pbgo" ${PB.pics.length || PB.text.trim() ? '' : 'disabled'}>${ic('check')}Programı oluştur</button>
+    <button class="primary" data-act="pbgo" ${!prep && (PB.pics.length || PB.text.trim()) ? '' : 'disabled'}>${ic('check')}Programı oluştur</button>
     <p class="note" style="padding-top:12px;text-align:center">Yapay zekâ okur; yüklemeden önce sonucu kontrol edersin. Kalori ve protein değerleri tahmindir.</p>`);
 }
 const PB_SCHEMA = { type: 'object', additionalProperties: false, required: ['dietitian', 'cycle', 'day1', 'meals', 'rules', 'swaps', 'goal', 'water', 'note'], properties: {
@@ -1347,14 +1372,19 @@ function toPlan(R) {
     training: { perWeek: 0, time: '', after: '', lead: '', notes: {}, days: {} }, tune: { protein: [], cuts: [] } };
 }
 async function buildAI() {
-  PB.busy = true; PB.err = ''; buildSheet();
+  PB.busy = true; PB.err = ''; buildSheet(); pbMark('busy');
+  /* Beklerken ekran kilitlenirse iOS isteği keser; ekran açık tutulur. */
+  let wake = null; try { if (navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); } catch (e) {}
   const content = PB.pics.map(p => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: p.full } }));
   content.push({ type: 'text', text: (PB.pics.length ? `Programın ${PB.pics.length} sayfası yukarıda.` : 'Fotoğraf yok; program yalnızca açıklamada.') + (PB.text.trim() ? `\n\nKullanıcının açıklaması:\n${PB.text.trim()}` : '') });
   try {
     const R = await aiJSON({ model: AI_MODEL, max_tokens: 16000, system: PB_SYSTEM, messages: [{ role: 'user', content }], output_config: { format: { type: 'json_schema', schema: PB_SCHEMA } } }, 'Program okunamadı.');
     const p = toPlan(R), err = planCheck(p); if (err) throw new Error(err + ' Sayfaları daha net çekip yeniden dene.');
-    PB.busy = false; PL = { incoming: p, built: true, note: R.note }; planSheet();
-  } catch (e) { PB.busy = false; PB.err = e.message || 'Bağlantı kurulamadı.'; if (sheet === 'build') buildSheet(); }
+    PB.busy = false; PL = { incoming: p, built: true, note: R.note }; pbMark('done', { plan: p, note: R.note }); planSheet();
+  } catch (e) { PB.busy = false; pbClear();
+    PB.err = /load failed|failed to fetch|network/i.test(e.message || '') ? 'Bağlantı kesildi. İnternet açıkken yeniden dene ve sonuç gelene kadar uygulamada kal.' : e.message || 'Bağlantı kurulamadı.';
+    buildSheet(); }   /* sayfa kapatıldıysa da hata görünsün */
+  finally { if (wake) wake.release().catch(() => {}); }
 }
 
 /* ---------- Haftalık rapor ----------
@@ -1859,7 +1889,7 @@ document.addEventListener('click', e => {
     case 'pbadd': pbSync(); if (PB.pics.length < 6) document.getElementById('pages').click(); return;
     case 'pbx': pbSync(); PB.pics.splice(+el.dataset.i, 1); return buildSheet();
     case 'pbgo': pbSync(); if (!PB.pics.length && !PB.text.trim()) return; if (aiReady(buildAI)) buildAI(); return;
-    case 'pbback': PL = null; return buildSheet();
+    case 'pbback': PL = null; pbClear(); return buildSheet();
     case 'cyctoday': { const p2 = JSON.parse(JSON.stringify(PLAN)); p2.cycle.start = addDays(today, -+el.dataset.i);
       try { localStorage.setItem(PLANKEY, JSON.stringify(p2)); } catch (x) { return; } reloadClean(); return; }
     case 'pld': PL.day = +el.dataset.i; return planSheet();
@@ -1867,7 +1897,7 @@ document.addEventListener('click', e => {
     case 'prog': if (el.dataset.p === 'gidalar') return foodsSheet(); if (el.dataset.p === 'takviye') return supsSheet(); if (el.dataset.p === 'baglanti') { PL = {}; return planSheet(); } progSheet(el.dataset.p); if (el.dataset.p === 'ai' && aiCode()) loadMe().then(() => { if (sheet === 'ai') progSheet('ai'); }); return;
     case 'planpaste': { const v = document.getElementById('plink').value.trim(); if (!v) return;
       unpackPlan(v).then(p2 => { PL = { incoming: p2 }; planSheet(); }).catch(x => { PL = { err: x.message || 'Bağlantı okunamadı.' }; planSheet(); }); return; }
-    case 'planload': try { localStorage.setItem(PLANKEY, JSON.stringify(PL.incoming)); } catch (x) { PL = { err: 'Program kaydedilemedi.' }; return planSheet(); } setupDone(); reloadClean(); return;
+    case 'planload': try { localStorage.setItem(PLANKEY, JSON.stringify(PL.incoming)); } catch (x) { PL = { err: 'Program kaydedilemedi.' }; return planSheet(); } pbClear(); setupDone(); reloadClean(); return;
     case 'plannot': PL = null; history.replaceState(null, '', location.pathname + location.search); closeSheet(); return;
     case 'pswi': plSync(); PL.set[el.dataset.k] = !PL.set[el.dataset.k]; PL.dirty = true; planSheet(); return;
     case 'pset': { plSync(); const p2 = JSON.parse(JSON.stringify(PLAN));
@@ -1967,9 +1997,7 @@ document.addEventListener('change', e => {
     Promise.all([thumb(f), shrink(f)]).then(([img, full]) => { FD.img = img; FD.full = full; FD.err = ''; if (sheet !== 'food') return; if (aiAuth() && aiOk()) foodAI(); else foodForm(); })
       .catch(x => { FD.err = x.message; foodForm(); }); return; }
   if (e.target.id === 'cam') { e.target.value = ''; shrink(f).then(full => { PH = { meal: camMeal, full }; photoSheet(); }).catch(() => {}); }
-  if (e.target.id === 'pages' && PB) { const fs = [...e.target.files].slice(0, 6 - PB.pics.length); e.target.value = '';
-    Promise.all(fs.map(x => Promise.all([thumb(x, 200), shrink(x, 1600)]))).then(r => { r.forEach(([img, full]) => PB.pics.push({ img, full })); PB.err = ''; if (sheet === 'build') buildSheet(); })
-      .catch(x => { PB.err = x.message; if (sheet === 'build') buildSheet(); }); return; }
+  if (e.target.id === 'pages' && PB) { const fs = [...e.target.files].slice(0, 6 - PB.pics.length); e.target.value = ''; pbAdd(fs); return; }
   if (e.target.id === 'file') f.text().then(t => { const o = JSON.parse(t); if (!o || !o.days) return;
     /* Yedekte bağlantıyla yüklenmiş bir program varsa o da geri gelir. */
     const p2 = o.plan; delete o.plan; S = o; save();
@@ -2016,6 +2044,8 @@ planFromHash();
 window.addEventListener('hashchange', planFromHash);
 /* İlk açılış: kayıt, yüklenmiş program ve gelen bağlantı yoksa nasıl başlanacağını sor. */
 try { if (!localStorage.getItem(KEY) && !localStorage.getItem(PLANKEY) && !localStorage.getItem(SETUPKEY) && !location.hash.startsWith('#plan=')) welcomeSheet(); } catch (e) {}
+/* Yarıda kalan program aktarımı: okunmuş program gözden geçirmeye, yarım kalan iş nedeniyle birlikte aktarma sayfasına döner. */
+if (!location.hash.startsWith('#plan=')) pbResume();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   /* Yeni sürüm devreye girince sayfayı bir kez yenile. */
   const had = !!navigator.serviceWorker.controller; let done = false;
