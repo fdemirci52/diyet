@@ -16,6 +16,7 @@ Diyetisyen planını takip eden kişisel PWA. iPhone'da ana ekrana eklenip uygul
 | `sw.js` | Service worker, önce ağ; önbellek yalnızca çevrimdışıyken |
 | `server/` | Yapay zekâ vekili (Cloudflare Worker): `worker.js`, `wrangler.toml`, kurulum ve davet kodu komutları `README.md`'de |
 | `manifest.json`, `icon-*.png` | PWA kimliği |
+| `ios/` | Yerel iOS uygulaması (SwiftUI), web'in yerini alacak; ayrıntısı aşağıda "iOS uygulaması" bölümünde |
 
 ## Çalıştırma ve yayın
 
@@ -38,6 +39,16 @@ Diyetisyen ayarları planın içinde: `PLAN.prefs.kcal` (`KC`: danışan kalori 
 Planı ya da motoru yeniden düzenlerken davranışın değişmediğini, aynı rastgele durumlar için eski ve yeni kodun tüm görünümlerini karşılaştırarak doğrula (vm içinde çalıştırılan bir anlık görüntü betiğiyle).
 
 Şema değişirse eski `diyet-v1` kayıtlarını bozma: kullanıcının telefonunda gerçek veri var. Yeni alanlara varsayılan değer ver.
+
+## iOS uygulaması (geçiş sürüyor)
+
+Karar (21 Kasım 2026): web uygulaması bırakılıp telefonda yerel SwiftUI uygulaması kullanılacak; geliştirme bundan sonra orada. Kullanıcı önce tam SwiftUI'ı seçti (web'i bir kabukta çalıştırmak yerine): ekranlar ve motor Swift'e taşınana kadar günlük kullanım web'de sürüyor.
+
+- `ios/project.yml` (XcodeGen): `xcodegen generate` ile `Diyet.xcodeproj` üretilir. Gıda ikonları `img/f` klasörü olarak pakete girer. Hedef iOS 17, kimlik `com.fdemirci.diyet`.
+- `ios/DiyetKit` (Swift paketi, macOS'ta `swift test`): `Plan` (plan.js sözleşmesi, `recipes`, `dtime`, `drop` dahil), `DiyetState` (`diyet-v1` ile aynı biçim, tanınmayan alanlar korunur; `scans` vücut ölçümleri), `Engine` (app.js motorunun birebir karşılığı: `mainFor`, `itemsOf`, `ateOf`, `guess`, `Groups`, `balance`, `dayScore`, `ledger`, `adjust`), `Scan`/`BodyStory` (Ben ekranı), `Recipe` (malzeme ayrıştırma, adımlar).
+- **Motor sözleşmesi:** `ios/scripts/engine-golden.mjs` app.js'i Node'da 21 Kasım 13:00'e sabit saatle çalıştırıp iki program × 15 rastgele kayıt için cevaplarını `Tests/DiyetKitTests/golden/` altına yazar; `EngineGoldenTests` Swift motorunu bunlarla karşılaştırır. app.js'te motor değişirse betiği çalıştır, testi geçir. Yuvarlama `jsRound` (Math.round), sıralama kararlı, kota gruplarının sırası mains'teki ilk görülme sırası.
+- `ios/Diyet/UI`: Sofra tasarım dilinin bileşenleri (`Theme` belirteçleri web ile aynı). Alt çubuk Bugün · Hafta · Asistan · Tarifler · Ben; İlerleme kalktı, Program ve ayarlar Ben'in altında. Ben (`Ben.swift`) ve Tarifler (`Recipes.swift`) "Ben ve Tarifler" tuvalindeki A · Gövde ve 1 · Tezgâh kararına göre. DEBUG derlemesi açılışta `SofraGallery`'yi (örnek veriyle kabuk) gösterir.
+- **Sırada:** `Store`'u `Engine`'e bağlayıp ekranları gerçek kayda geçirmek (Bugün, Hafta, kalem sayfası, hızlı kayıt), yapay zekâ istemcisi (vekil + davet kodu), asistan, fotoğraftan program ve öğün, web yedeğinden veri aktarma (telefondaki gerçek kayıtlar web'in localStorage'ında), sonra telefona kurulum.
 
 ## Yapay zekâ çağrısı
 
