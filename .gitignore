@@ -1,0 +1,8 @@
+.claude/skills/
+server/.dev.vars
+server/.wrangler/
+.build/
+xcuserdata/
+DerivedData/
+.DS_Store
+programlar/
