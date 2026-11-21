@@ -15,10 +15,12 @@ function planCheck(p) {
   /* Döngü (isteğe bağlı): program n günde bir tekrar eder, start 1. günün tarihi; öğünün days[i] listesi i+1. günün kalemleri. */
   if (p.cycle) { const c = p.cycle;
     if (!(c.n >= 2 && c.n <= 14) || !/^\d{4}-\d\d-\d\d$/.test(c.start || '')) return 'Programın gün döngüsü tanınmadı.';
-    for (const m of p.meals) if (m.days && (!Array.isArray(m.days) || m.days.length !== c.n || m.days.some(x => !Array.isArray(x)))) return `"${m.title}" öğününün günleri eksik.`; }
-  else for (const m of p.meals) delete m.days;
+    for (const m of p.meals) if (m.days && (!Array.isArray(m.days) || m.days.length !== c.n || m.days.some(x => !Array.isArray(x)))) return `"${m.title}" öğününün günleri eksik.`;
+    for (const m of p.meals) if (m.dtime && (!Array.isArray(m.dtime) || m.dtime.length !== c.n)) delete m.dtime; }
+  else for (const m of p.meals) { delete m.days; delete m.dtime; }
   for (const m of p.meals) {
-    for (const id of [...(m.items || []), ...(m.alt || []), ...(m.days || []).flat()]) if (!p.items[id]) return `"${m.title}" öğünündeki "${id}" kalemi katalogda yok.`;
+    /* Gün listelerindeki "ana", ana yemekli öğünde o gün ana yemeğin yer tuttuğunu gösterir. */
+    for (const id of [...(m.items || []), ...(m.alt || []), ...(m.days || []).flat().filter(id => !(m.main && id === 'ana'))]) if (!p.items[id]) return `"${m.title}" öğünündeki "${id}" kalemi katalogda yok.`;
     if (m.main) { if (!p.mains.length) return 'Ana yemek listesi boş.';
       const r = p.rota[m.id]; if (!r || r.length !== 7 || r.some(id => !p.mains.some(x => x.id === id))) return `"${m.title}" için haftalık dağılım eksik.`; }
   }
@@ -73,14 +75,22 @@ const EMPTY = () => ({ items: {}, main: {}, mode: {}, extras: [], water: 0, coff
 const day = k => { const d = S.days[k] || (S.days[k] = EMPTY()); d.extras = d.extras || []; return d; };
 const peek = k => S.days[k] || EMPTY();
 const mainById = id => MAINS.find(m => m.id === id);
+/* Öğünde o gün ana yemek var mı. Gün gün değişen programda yalnızca listesinde "ana" yer tutucusu olan günler
+   (ör. haftanın iki hafif gününde ana yemek yok); döngüsüz programda ana yemekli öğünün her günü. */
+const hasMain = (meal, k) => !!meal.main && (!meal.days || meal.days[cycleIdx(k)].some(i => i.id === 'ana'));
+/* Ana yemek seçilince öğünden çıkan kalemler (ör. salatası içinde olan yemekte bol salata). */
+/* Öğünün ikinci biçimi (ör. protein bar) gün gün değişen programda yalnızca öğünün asıl kalemlerinin olduğu günlerde seçilir. */
+const modesOn = (meal, k) => !!meal.modes && (!meal.days || meal.days[cycleIdx(k)].map(i => i.id).join() === meal.items.map(i => i.id).join());
+const dropOf = m => m.drop || (m.noSalad ? ['salata'] : []);
 
 /* Haftanın geri kalanı: seçilmemiş günlere, kalan kotaya göre ana yemek dağıtılır. */
 function mainFor(k, mealId) {
+  const meal = MAIN_MEALS.find(x => x.id === mealId); if (!meal || !hasMain(meal, k)) return null;
   const own = peek(k).main[mealId]; if (own) return mainById(own);
   const wk = weekOf(k), pool = {}; Object.entries(GROUPS).forEach(([g, x]) => pool[g] = x.perWeek);
   wk.forEach(x => { const m = mainById(peek(x).main[mealId]); if (m) pool[m.g]--; });
   for (let i = 0; i < 7; i++) {
-    if (peek(wk[i]).main[mealId]) continue;
+    if (peek(wk[i]).main[mealId] || !hasMain(meal, wk[i])) continue;
     let m = mainById(ROTA[mealId][i]);
     /* Aynı gün iki öğüne aynı ana yemek düşmesin: öncekilerin dağıtılmış, sonrakilerin seçilmiş yemeği dolu sayılır. */
     const av = new Set(), at = MAIN_MEALS.findIndex(x => x.id === mealId);
@@ -96,13 +106,13 @@ function mainFor(k, mealId) {
 }
 function itemsOf(meal, k) {
   const d = peek(k);
-  if (meal.modes && d.mode[meal.id] === 1) return meal.alt;
-  if (meal.days) return meal.days[cycleIdx(k)];
-  if (!meal.main) return meal.items;
-  const m = mainFor(k, meal.id);
-  return [{ ...m, id: 'ana' }, ...meal.items.filter(i => !(m.noSalad && i.id === 'salata'))];
+  if (modesOn(meal, k) && d.mode[meal.id] === 1) return meal.alt;
+  const L = meal.days ? meal.days[cycleIdx(k)] : meal.items;
+  if (!hasMain(meal, k)) return meal.main ? L.filter(i => i.id !== 'ana') : L;
+  const m = mainFor(k, meal.id), drop = dropOf(m);
+  return [{ ...m, id: 'ana' }, ...L.filter(i => i.id !== 'ana' && !drop.includes(i.id))];
 }
-const lockMain = (k, meal) => { if (meal.main && !day(k).main[meal.id]) day(k).main[meal.id] = mainFor(k, meal.id).id; };
+const lockMain = (k, meal) => { if (hasMain(meal, k) && !day(k).main[meal.id]) day(k).main[meal.id] = mainFor(k, meal.id).id; };
 const stOf = (d, meal, it) => d.items[meal.id + '.' + it.id];
 function mealStat(meal, k) {
   const d = peek(k), its = itemsOf(meal, k).filter(i => !i.optional);
@@ -149,7 +159,8 @@ const dayFill = k => { const s = dayScore(k); return s ? Math.round(s.pct * s.co
 function quotaUsed(k, mealId, g) {
   return weekOf(k).filter(x => { const m = mainById(peek(x).main[mealId]); return m && m.g === g; }).length;
 }
-const timeOf = (meal, k) => meal.time ? (isWknd(k) ? meal.wknd : meal.time) : '';
+/* dtime: gün gün değişen programda o güne özel saat (ör. hafif günlerde akşam 18:00); boşsa hafta içi / hafta sonu saati. */
+const timeOf = (meal, k) => !meal.time ? '' : (meal.dtime && meal.dtime[cycleIdx(k)]) || (isWknd(k) ? meal.wknd : meal.time);
 const minsTo = (meal, k) => { const [h, m] = timeOf(meal, k).split(':').map(Number), n = new Date(); return h * 60 + m - n.getHours() * 60 - n.getMinutes(); };
 function isLate(meal, k) {
   if (k !== today || !meal.time) return false;
@@ -420,7 +431,7 @@ function mealPanel(meal, k, A, st) {
   let h = `<div class="psum">${ps('Kalem', M.ok, M.n, '')}${KC ? ps('Kalori', num(M.ek), num(M.pk), ' kcal') : ''}${ps('Protein', num(M.ep), num(M.pp), ' g')}</div>`;
   h += cap ? `<p class="cap">${cap}</p>` : '';
   if (note) h += `<button class="mnote" data-act="note" data-meal="${meal.id}">${ic('pen')}<span>${esc(note)}</span></button>`;
-  if (meal.modes) h += `<div class="seg">${meal.modes.map((m, i) => `<button class="${(d.mode[meal.id] || 0) === i ? 'on' : ''}" data-act="mode" data-meal="${meal.id}" data-i="${i}">${m}</button>`).join('')}</div>`;
+  if (modesOn(meal, k)) h += `<div class="seg">${meal.modes.map((m, i) => `<button class="${(d.mode[meal.id] || 0) === i ? 'on' : ''}" data-act="mode" data-meal="${meal.id}" data-i="${i}">${esc(m)}</button>`).join('')}</div>`;
   h += itemsOf(meal, k).map(it => rowHTML(meal, it, d, A.over[meal.id + '.' + it.id])).join('');
   /* Telafi önerisi: dokununca kabul edilir; sağdaki çarpı "gerek yok" der, satır üstü çizili kalır, dokununca geri gelir. */
   h += A.adds.filter(a => a.meal === meal.id).map(a => { const i = A.adds.indexOf(a), on = a.xi >= 0, no = !on && a.off;
@@ -578,7 +589,7 @@ function todayView() {
   /* Kadran: sayı halkanın içinde, ad ve hedef altta (Apple Watch dairesel komplikasyonu). */
   const tile = (name, val, unit, of, pct, color) => `<div class="tile dial"><div class="dr">${ring(pct, 76, 6.5, color)}<strong><span>${val}${unit ? `<em>${unit}</em>` : ''}</span></strong></div><b>${name}</b><small>${of}</small></div>`;
   const walks = wk.filter(x => peek(x).walk).length, gyms = wk.filter(x => peek(x).gym).length;
-  return `<header class="head" id="dayhead"><div><p>${fmtLong(sel)}${CYCLE ? ` · ${cycleName(sel)}` : ''}</p><h1>${dayTitle(sel)}</h1></div>
+  return `<header class="head" id="dayhead"><div><p>${fmtLong(sel)}${CYCLE && CYCLE.n !== 7 ? ` · ${cycleName(sel)}` : ''}</p><h1>${dayTitle(sel)}</h1></div>
       <div class="hright">${sel !== today ? `<button class="pill" data-act="gotoday">Bugüne dön</button>` : `<button class="dayring" data-act="score" aria-label="Uyum puanı">${ring(fillPct / 100, 54, 5, 'var(--accent)')}<b>%${fillPct}</b></button>`}</div></header>
     ${sample() ? `<section class="card"><div class="row goto" data-act="setup" role="button"><span class="b"><span class="n">Örnek programı görüyorsun</span><span class="m">Diyetisyeninin verdiği programı ekle</span></span>${ic('right')}</div></section>` : ''}
     <div class="tiles dials">${KC ? tile('Kalori', num(B.ek), '', `/ ${num(B.tk)} kcal`, B.ek / B.tk, 'var(--fg)') : (() => { const ms = MEALS.filter(m => m.time), r = ms.filter(m => mealStat(m, sel).resolved).length; return tile('Öğün', r, '', `/ ${ms.length} öğün`, r / ms.length, 'var(--fg)'); })()}${tile('Protein', num(B.ep), 'g', `/ ${num(B.tp)} g`, B.ep / B.tp, 'var(--accent)')}${tile('Su', litres, 'L', `/ ${WATER_L} L`, d.water / WATER_GOAL, 'var(--blue)')}</div>
@@ -617,7 +628,7 @@ function weekView() {
       ${WALK_GOAL ? `<div class="kv"><span>Yürüyüş</span><span style="display:flex;align-items:center;gap:10px">${walks} / ${WALK_GOAL}${dots(walks)}</span></div>` : ''}</section>` : ''}
     ${MAIN_MEALS.length ? `<div class="sect">Haftanın ana yemekleri</div>
     <section class="card" style="padding:10px 8px"><div class="menu h"><span></span>${MAIN_MEALS.map(m => `<span>${m.title}</span>`).join('')}</div>
-      ${wk.map(k => `<button class="menu ${k === today ? 'today' : k < today ? 'past' : ''}" data-act="day" data-k="${k}" data-go="1"><b>${DOW[parse(k).getDay()]}</b>${MAIN_MEALS.map(m => `<span>${mainFor(k, m.id).chip}</span>`).join('')}</button>`).join('')}</section>
+      ${wk.map(k => `<button class="menu ${k === today ? 'today' : k < today ? 'past' : ''}" data-act="day" data-k="${k}" data-go="1"><b>${DOW[parse(k).getDay()]}</b>${MAIN_MEALS.map(m => `<span>${esc((mainFor(k, m.id) || { chip: '—' }).chip)}</span>`).join('')}</button>`).join('')}</section>
     <p class="note">Bir gün farklı yersen kalan günler kotaya göre yeniden dağıtılır.</p>` : ''}
     <div class="sect">Diyetisyenine</div>
     <section class="card"><button class="nav-row" data-act="report"><span class="ic">${ic('chat')}</span><span class="b"><span class="n">Haftalık rapor</span><span class="m">Kısa özet, WhatsApp mesajı olarak</span></span>${ic('right')}</button>
@@ -964,7 +975,7 @@ function resultSheet(meal) {
 }
 function applyAI() {
   const { meal: mealId, R, its, note } = pending, d = day(sel), meal = MEALS.find(m => m.id === mealId);
-  if (meal.main) d.main[mealId] = R.main || mainFor(sel, mealId).id;
+  if (hasMain(meal, sel)) d.main[mealId] = R.main || mainFor(sel, mealId).id;
   /* Fotoğrafa yazılan açıklama öğünün notu olur (varsa eskisinin yerine geçmez). */
   if (note) { const n = d.notes || (d.notes = {}); if (!n[mealId]) n[mealId] = note; }
   its.forEach(it => { const x = R.items.find(a => a.id === it.id) || { status: 'skip' }, id = mealId + '.' + it.id;
@@ -1197,17 +1208,23 @@ function planSheet() {
   if (P2 && PL.built) {
     /* Fotoğraftan oluşturulan: yüklemeden önce öğün öğün gözden geçirilir. */
     /* Döngülü programda gün gün gezilir; 1. günün haftanın hangi gününe denk geldiği buradan seçilir. */
-    const C = P2.cycle, di = C ? Math.min(PL.day || 0, C.n - 1) : 0, idsOf = m => C ? m.days[di] : m.items;
-    const tk = P2.meals.reduce((t, m) => t + idsOf(m).reduce((a, id) => a + (P2.items[id].optional ? 0 : P2.items[id].k), 0), 0);
-    const tp = P2.meals.reduce((t, m) => t + idsOf(m).reduce((a, id) => a + (P2.items[id].optional ? 0 : P2.items[id].p), 0), 0);
+    const C = P2.cycle, di = C ? Math.min(PL.day || 0, C.n - 1) : 0, idsOf = m => C ? m.days[di] : m.main ? ['ana', ...m.items] : m.items;
+    /* Ana yemek: haftalık gruplar; toplamda grupların ilk yemeğinin kotaya göre ortalaması sayılır. */
+    const MG = Object.entries(P2.groups).map(([g, G]) => ({ G, ds: P2.mains.filter(x => x.g === g) })).filter(x => x.ds.length), wsum = MG.reduce((a, x) => a + x.G.perWeek, 0) || 1;
+    const avg = f => MG.reduce((a, x) => a + x.G.perWeek * f(x.ds[0]), 0) / wsum, val = (id, f) => id === 'ana' ? avg(f) : P2.items[id].optional ? 0 : f(P2.items[id]);
+    const tk = P2.meals.reduce((t, m) => t + idsOf(m).reduce((a, id) => a + val(id, x => x.k), 0), 0);
+    const tp = P2.meals.reduce((t, m) => t + idsOf(m).reduce((a, id) => a + val(id, x => x.p), 0), 0);
+    const iname = id => P2.items[id] ? lc(P2.items[id].chip || P2.items[id].name) : id;
+    const mainRows = () => MG.map(({ G, ds }) => `<div class="opt"><span>${esc(ds.map(d => d.name).join(' veya '))}<small>${esc([`Haftada ${G.perWeek} gün`, ds[0].drop ? [...new Set(ds[0].drop.map(iname))].join(', ') + ' yok' : ''].filter(Boolean).join(' · '))}</small></span><small>${num(ds[0].k)} kcal</small></div>`).join('');
+    const tOf = m => (C && m.dtime && m.dtime[di]) || m.time;
     const w1 = C ? parse(C.start).getDay() : 0;
     const cyc = C ? `<div class="sect">${C.n} günlük program · 1. gün hangi gün?</div>
       <div class="chips pick">${[6, 0, 1, 2, 3, 4, 5].map(w => `<button class="${w === w1 ? 'on' : ''}" data-act="pl1" data-w="${w}">${DAYNAME[w]}</button>`).join('')}</div>
       <div class="sect">Gün</div><div class="chips pick">${Array.from({ length: C.n }, (_, i) => `<button class="${i === di ? 'on' : ''}" data-act="pld" data-i="${i}">${i + 1}. gün<small> · ${DOW[(w1 + i) % 7]}</small></button>`).join('')}</div>` : '';
     return showSheet(`<h2>Programın hazır</h2><p class="lead">Okuduklarım aşağıda. Yanlış ya da eksik bir şey varsa geri dönüp açıklamaya yaz, yeniden oluşturayım.</p>
       ${PL.note ? `<p class="note" style="padding:0 6px 14px">${esc(PL.note)}</p>` : ''}
-      ${cyc}${P2.meals.filter(m => idsOf(m).length).map(m => `<div class="sect">${esc(m.title)}${m.time ? ' · ' + m.time + (m.wknd !== m.time ? ` (hafta sonu ${m.wknd})` : '') : ''}</div><div class="group">${idsOf(m).map(id => { const it = P2.items[id], alts = [...(it.opts || []).slice(1), ...(it.subs || [])], sg = it.sugg || [];
-        return `<div class="opt"><span>${esc(it.opts ? it.opts[0] : it.name)}<small>${esc([alts.length ? 'veya ' + alts.join(', ') : '', sg.length ? 'önerilen: ' + sg.join(', ') : '', it.optional ? 'isteğe bağlı' : ''].filter(Boolean).join(' · '))}</small></span><small>${num(it.k)} kcal</small></div>`; }).join('')}</div>`).join('')}
+      ${cyc}${P2.meals.filter(m => idsOf(m).length).map(m => `<div class="sect">${esc(m.title)}${m.time ? ' · ' + tOf(m) + (m.wknd !== m.time && !(C && m.dtime && m.dtime[di]) ? ` (hafta sonu ${m.wknd})` : '') : ''}</div>${idsOf(m).includes('ana') ? `<div class="sect" style="padding-top:0">Her gün birini seç</div><div class="group">${mainRows()}</div><div class="sect" style="padding-top:0">Yanında</div>` : ''}<div class="group">${idsOf(m).filter(id => id !== 'ana').map(id => { const it = P2.items[id], alts = [...(it.opts || []).slice(1), ...(it.subs || [])], sg = it.sugg || [];
+        return `<div class="opt"><span>${esc(it.opts ? it.opts[0] : it.name)}<small>${esc([alts.length ? 'veya ' + alts.join(', ') : '', sg.length ? 'önerilen: ' + sg.join(', ') : '', it.optional ? 'isteğe bağlı' : ''].filter(Boolean).join(' · '))}</small></span><small>${num(it.k)} kcal</small></div>`; }).join('')}${m.alt && (!C || m.days[di].join() === m.items.join()) ? m.alt.map(id => `<div class="opt"><span>${esc(P2.items[id].name)}<small>${esc(m.modes[0])} yerine</small></span><small>${num(P2.items[id].k)} kcal</small></div>`).join('') : ''}</div>`).join('')}
       <div class="group"><div class="kv"><span>${C ? `${di + 1}. gün toplamı` : 'Günlük toplam'}</span><span>yaklaşık ${num(tk)} kcal · ${num(tp)} g protein</span></div>${P2.goal.kg ? `<div class="kv"><span>Hedef</span><span>${P2.goal.kg} kg</span></div>` : ''}
         <div class="kv"><span>Kurallar</span><span>${P2.rules.length} madde</span></div><div class="kv"><span>Su</span><span>${P2.daily.water.goal} bardak</span></div></div>
       <p class="note">Değerler tahmindir. Programı yükleyince kayıtların ve gıdaların silinmez.</p>
@@ -1311,63 +1328,126 @@ function buildSheet() {
     <button class="primary" data-act="pbgo" ${!prep && (PB.pics.length || PB.text.trim()) ? '' : 'disabled'}>${ic('check')}Programı oluştur</button>
     <p class="note" style="padding-top:12px;text-align:center">Yapay zekâ okur; yüklemeden önce sonucu kontrol edersin. Kalori ve protein değerleri tahmindir.</p>`);
 }
-const PB_SCHEMA = { type: 'object', additionalProperties: false, required: ['dietitian', 'cycle', 'day1', 'meals', 'rules', 'swaps', 'goal', 'water', 'note'], properties: {
+const PB_DISH = { type: 'object', additionalProperties: false, required: ['name', 'chip', 'meta', 'subs', 'kcal', 'protein'], properties: {
+  name: { type: 'string' }, chip: { type: 'string' }, meta: { type: 'string' }, subs: { type: 'array', items: { type: 'string' } }, kcal: { type: 'number' }, protein: { type: 'number' } } };
+const PB_SCHEMA = { type: 'object', additionalProperties: false, required: ['dietitian', 'cycle', 'day1', 'meals', 'rules', 'swaps', 'recipes', 'body', 'goal', 'water', 'note'], properties: {
   dietitian: { type: 'string' }, cycle: { type: 'integer' }, day1: { type: 'string', enum: ['', ...DAYNAME] },
-  meals: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['title', 'time', 'wknd', 'items'], properties: {
+  meals: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['title', 'time', 'wknd', 'dayTimes', 'items', 'mains', 'mainDays'], properties: {
     title: { type: 'string' }, time: { type: 'string' }, wknd: { type: 'string' },
-    items: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'chip', 'opts', 'subs', 'sugg', 'meta', 'kcal', 'protein', 'optional', 'days'], properties: {
-      days: { type: 'array', items: { type: 'integer' } },
+    dayTimes: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['days', 'time'], properties: { days: { type: 'array', items: { type: 'integer' } }, time: { type: 'string' } } } },
+    items: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'chip', 'opts', 'subs', 'sugg', 'meta', 'kcal', 'protein', 'optional', 'whole', 'days'], properties: {
+      whole: { type: 'boolean' }, days: { type: 'array', items: { type: 'integer' } },
       name: { type: 'string' }, chip: { type: 'string' }, opts: { type: 'array', items: { type: 'string' } }, subs: { type: 'array', items: { type: 'string' } },
-      sugg: { type: 'array', items: { type: 'string' } }, meta: { type: 'string' }, kcal: { type: 'number' }, protein: { type: 'number' }, optional: { type: 'boolean' } } } } } } },
+      sugg: { type: 'array', items: { type: 'string' } }, meta: { type: 'string' }, kcal: { type: 'number' }, protein: { type: 'number' }, optional: { type: 'boolean' } } } },
+    mains: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'perWeek', 'dishes', 'skip'], properties: {
+      name: { type: 'string' }, perWeek: { type: 'integer' }, dishes: { type: 'array', items: PB_DISH }, skip: { type: 'array', items: { type: 'integer' } } } } },
+    mainDays: { type: 'array', items: { type: 'integer' } } } } },
   rules: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['text', 'note'], properties: { text: { type: 'string' }, note: { type: 'string' } } } },
   swaps: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['from', 'to'], properties: { from: { type: 'string' }, to: { type: 'string' } } } },
+  recipes: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'kcal', 'serving', 'ingredients', 'steps'], properties: {
+    name: { type: 'string' }, kcal: { type: 'number' }, serving: { type: 'string' }, ingredients: { type: 'array', items: { type: 'string' } }, steps: { type: 'string' } } } },
+  body: { type: 'object', additionalProperties: false, required: ['date', 'rows'], properties: { date: { type: 'string' },
+    rows: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['label', 'value'], properties: { label: { type: 'string' }, value: { type: 'string' } } } } } },
   goal: { type: 'object', additionalProperties: false, required: ['kg', 'text'], properties: { kg: { type: 'number' }, text: { type: 'string' } } },
   water: { type: 'number' }, note: { type: 'string' } } };
 const PB_SYSTEM = `Bir diyet takip uygulamasına diyetisyen programı aktarılıyor. Programın sayfalarının fotoğrafları ve/veya kullanıcının açıklaması verilir. Programı uygulamanın biçimine çıkar. Programda olmayan öğün ya da yiyecek uydurma. Kullanıcının açıklaması programla çelişirse açıklamayı esas al.
 
-- cycle: program her gün aynıysa 1. Gün gün değişen bir programsa ("1. gün", "2. gün"… sütunları ya da Pazartesi, Salı… başlıkları) toplam gün sayısı (ör. 7). Bir sütun birden çok gün içeriyorsa ("1. GÜN 2. GÜN", "4.GÜN 5.GÜN") o günlerin hepsini say.
+Diyetisyen programları çoğu zaman düzensiz yazılır: notlar öğünlerin arasına, seçenekler cümlelerin içine, saatler sayfanın sonuna dağılır. Hepsini okuyup her bilgiyi aşağıdaki yerlerden birine koy; hiçbirini kaybetme, hiçbirini iki kez yazma.
+
+Ana yemek (en önemli kural):
+- Öğle ya da akşamda "Haftada 2 gün …", "Haftada 1 gün …" gibi satırlar varsa bunlar o öğünün haftalık dönen ana yemekleridir: her gün bu satırlardan YALNIZCA BİRİ yenir. Bunları asla öğünün ayrı kalemleri yapma; mains'e yaz.
+- mains: her "Haftada N gün" satırı bir grup. perWeek N. name grubun 2-4 kelimelik adı ("Nohut / lor salatası", "Musakka / köfte", "Sote / balık"). dishes o satırda "veya" ile verilen yemekler; her biri ayrı, miktarıyla ("8 yk patlıcan musakka", "4 ızgara köfte", "250 g ızgara balık"), kendi kcal ve protein'iyle. Yemeğin pişirme seçenekleri ("ızgara/buğulama/fırında") meta'ya.
+- Grupların yanındaki eşlik edenler ("+ 6 yk yoğurt (1 çk keten tohumu) + 2 dilim tam buğday ekmeği + bol salata") öğünün items'ına bir kez yazılır. Bir eşlik eden bazı gruplarda yoksa (ör. bol salata yalnızca iki grupta yazıyorsa) skip, o grupta olmayan items sıralarını verir (0'dan sayılır). Hepsinde varsa skip boş.
+- Öğle ve akşamda aynı gruplar yazıyorsa ikisine de aynısını yaz. "Haftada N gün" yoksa mains boş.
+- mainDays: ana yemeğin olduğu program günleri (aşağıdaki hafif günler dışındakiler). Her gün varsa ya da mains boşsa boş.
+
+Haftanın bazı günleri farklıysa:
+- Programın bir bölümü haftanın belli günlerinde uygulanıyorsa ("son 2 gün (Çarşamba-Perşembe) veya istediğimiz 2 gün", "hafif günler"), cycle 7 ve day1 "Pazartesi" olur; program günleri 1 Pazartesi … 7 Pazar. O bölümün kalemleri days ile o günlere ([3, 4] Çarşamba-Perşembe), asıl programın kalemleri kalan günlere ([1, 2, 5, 6, 7]) yazılır. Aynı adlı öğünleri birleştir: o günlerin Kahvaltı'sı asıl Kahvaltı öğününe days ile girer, ayrı öğün açılmaz. Gün adı verilmemişse son günleri kullan ve note'ta söyle.
+- dayTimes: öğünün saati o günlerde farklıysa ({days: [3, 4], time: "18:00"}); yoksa boş.
+- "1. gün, 2. gün…" sütunları ya da Pazartesi, Salı… başlıkları olan gün gün değişen programda cycle toplam gün sayısı (ör. 7); bir sütun birden çok gün içeriyorsa ("1. GÜN 2. GÜN") o günlerin hepsini say. Program her gün aynıysa cycle 1, days ve mainDays boş.
 - day1: programın 1. günü haftanın hangi gününe denk geliyor; sayfada el yazısıyla ya da başlıkta yazıyorsa ("Cumartesi-Pazar" 1-2. günün üstünde ise Cumartesi), ya da açıklamada söylendiyse. Gün adları Türkçe ve büyük harfle başlar ("Cumartesi"). Bilinmiyorsa boş.
-- meals: öğünler günün sırasıyla. title kısa ve Türkçe ("Kahvaltı", "Ara öğün", "Öğle", "İkindi", "Akşam", "Gece"); aynı adı iki kez kullanma. time hafta içi saati "SS:DD"; programda yoksa açıklamadan al, o da yoksa öğünün olağan saatini tahmin et. Yalnızca uyanınca içilen su gibi tek kalemli bir adımın time'ı boş olabilir. wknd hafta sonu saati; farklı değilse time ile aynı.
+
+Öğünler ve kalemler:
+- meals: öğünler günün sırasıyla. title kısa ve Türkçe ("Uyanınca", "Kahvaltı", "Ara öğün", "Öğle", "İkindi", "Akşam", "Gece"); aynı adı iki kez kullanma. Sabah uyanınca içilen limonlu su gibi bir adım saatsiz "Uyanınca" öğünüdür.
+- time hafta içi saati "SS:DD", aralık verilmişse başlangıcı. El yazısıyla düzeltilmiş saat basılı saatin yerine geçer. Saat yoksa açıklamadan al, o da yoksa öğünün olağan saatini tahmin et; yalnızca "Uyanınca" gibi tek kalemli adımın time'ı boş olabilir.
+- wknd hafta sonu saati; programda hafta sonu saatleri ayrıca yazıyorsa oradan, yoksa time ile aynı. Hafta sonu saat listesinde programda kalemi olmayan bir öğün geçiyorsa (ör. "ara öğün 12.00") o öğünü ekleme.
 - items: öğündeki her ayrı yiyecek bir kalem. Gün gün değişen programda öğünün bütün günlerdeki kalemlerini ver; aynı kalem birden çok günde aynıysa bir kez yaz.
-- days: kalemin yer aldığı program günleri (1'den başlar; ör. [1, 2] ya da [3]). Her gün aynıysa ya da cycle 1 ise boş. "Her sabah" gibi her gün geçerli kalemler için de boş. name programda yazdığı gibi miktarıyla başlasın ("2 dilim tam buğday ekmeği", "150 g tavuk", "1 su bardağı ayran").
-- opts: programda "veya / ya da" ile verilen eşdeğer seçenekler, programın yazdığı sırayla, her biri miktarıyla. Seçenek varsa name grubun kısa adı olsun ("Peynir"); yoksa opts boş.
-- subs: programda "yerine", "muadil", "değişim" diye verilen alternatifler, miktarıyla. Yoksa boş.
+- days: kalemin yer aldığı program günleri (1'den başlar; ör. [1, 2] ya da [3]). Her gün geçerliyse ya da cycle 1 ise boş.
+- name programda yazdığı gibi miktarıyla başlasın ("2 dilim tam buğday ekmeği (50 g)", "6 yk yoğurt", "20 g çiğ kabak çekirdeği").
+- opts: programda "veya / ya da" ile verilen eşdeğer seçenekler, programın yazdığı sırayla, her biri miktarıyla. Seçenek varsa name grubun kısa adı olsun ("Peynir"); yoksa opts boş. Öğündeki kalemlerin hepsinin birden yerine geçen bir seçenek ("VEYA 1 tane protein bar") ayrı bir kalem olur ve whole true; diğer kalemlerde whole false.
+- subs: programın başka bir yerinde verilen alternatifler: "yerine", "muadil", "değişim", "tüketebiliriz" diyen notlar ("2 dilim ekmek yerine 4 yk bulgur pilavı" → ekmek kaleminin subs'u, her öğünde). Miktarıyla. Yoksa boş.
+- meta: kalemin yanındaki kısa not ("tuzsuz", "yağsız", "1 çk keten tohumu ile"). Bir seçenek başka bir kalemin hakkını kullanıyorsa (ör. "yağla omlet ya da menemen yaparsak zeytin hakkını kullanmayız") bunu iki kalemin meta'sına da kısaca yaz ("yağlı omlet/menemende zeytin yok"). Yoksa boş.
 - sugg: kalemde programın verdiği hiçbir alternatif yoksa ve kalem yaygın bir besin grubundansa (ekmek ve tahıl, et-tavuk-balık-yumurta, peynir, süt ve yoğurt, meyve, yağlı tohum) aynı gruptan 2-4 yaygın yaklaşık eşdeğer, miktarıyla. Programda yazanı buraya koyma; emin değilsen boş bırak.
 - chip: 1-2 kelimelik kısa ad ("Ekmek", "Yumurta").
-- meta: kalemin yanındaki kısa not ("tuzsuz", "yağsız"); yoksa boş.
-- kcal ve protein: kalemin bir porsiyonu için Türkiye'deki tipik ürünlere göre gerçekçi tahmin; opts varsa ilk seçeneğin değeri.
+- kcal ve protein: bir porsiyon için Türkiye'deki tipik ürünlere göre gerçekçi tahmin; opts varsa ilk seçeneğin değeri. Tarif sayfasında kalori yazıyorsa onu kullan.
 - optional: programda isteğe bağlı denmişse ya da kalorisiz içecekse (şekersiz çay, sade kahve, su) true.
-- rules: programdaki genel kurallar ve notlar; text kısa kural, note açıklaması ya da boş.
+
+Diğerleri:
+- rules: programdaki genel kurallar ve notlar (çay, kahve, su, ara öğün, tartılma, yürüyüş, öğle-akşam yer değiştirme, detoks suyu tarifi…); text kısa kural, note açıklaması ya da boş. Bir kalemin subs'una ya da meta'sına yazdığın notu burada da kısaca tut.
 - swaps: programda ayrı bir değişim ya da muadil tablosu varsa satırları (from → to); yoksa boş.
+- recipes: tarif sayfaları. name, kcal (yazıyorsa, yoksa 0), serving (bir öğünlük miktar, ör. "8 yemek kaşığı"), ingredients miktarlarıyla, steps yapılışı düz metin. Tarif yoksa boş.
+- body: tartı ya da vücut analizi sayfası varsa ölçüm tarihi "YYYY-AA-GG" ve başlıca değerler (Kilo, Boy, BMI, Yağ oranı ve kg, Kas, Yağsız kütle, Sıvı, İç yağlanma, Bazal metabolizma, Metabolik yaş, Bel, Fit puanı), label Türkçe, value birimiyle ("82,3 kg", "%14,1 · 11,6 kg"). Yoksa tarih boş, rows boş. Bu sayfadaki hiçbir şeyi öğün yapma.
 - goal: hedef kilo yazıyorsa kg, yoksa 0; text kısa hedef cümlesi ya da boş.
-- water: günlük su hedefi, bardak (250 ml) olarak; yoksa 10.
+- water: günlük su hedefi, 250 ml bardak olarak; litre aralığı verilmişse üst sınır (2-2,5 litre → 10); yoksa 10.
 - dietitian: diyetisyenin adı yazıyorsa; yoksa boş.
 - note: okunamayan, emin olmadığın ya da tahmin ettiğin önemli bir şey varsa bir-iki cümleyle; yoksa boş.`;
 /* Yapay zekânın çıktısını plan biçimine çevirir; kimlikler addan türetilir. */
 function toPlan(R) {
   const used = new Set(['ana', 'yat', 'gym']), uid = (s, pre) => { const b = fold(s).replace(/ /g, '-').slice(0, 18) || pre; let x = b, i = 2; while (used.has(x)) x = b + '-' + i++; used.add(x); return x; };
-  const items = {}, meals = []; let prev = '';
-  /* Gün gün değişen program: n günlük döngü; 1. gün, verilen haftanın gününe denk gelen en yakın geçmiş tarih. */
-  const n = Math.round(R.cycle) >= 2 && Math.round(R.cycle) <= 14 ? Math.round(R.cycle) : 1;
-  const inDay = (x, i) => !x.days || !x.days.length || x.days.includes(i + 1);
-  R.meals.filter(m => m.items.length).forEach((m, mi) => {
+  const items = {}, meals = [], mains = [], groups = {}, sigs = {}; let prev = '';
+  /* Döngü: verilen gün sayısı; verilmemiş ama kalemlerde gün varsa haftalık (7) sayılır. */
+  const maxd = Math.max(0, ...R.meals.flatMap(m => [...m.items.flatMap(x => x.days), ...(m.mainDays || [])]));
+  const n = Math.round(R.cycle) >= 2 && Math.round(R.cycle) <= 14 ? Math.round(R.cycle) : maxd >= 2 && maxd <= 14 ? Math.max(7, maxd) : 1;
+  const inDay = (days, i) => !days || !days.length || days.includes(i + 1);
+  const val = (x, f) => Math.max(0, f(x) || 0);
+  R.meals.forEach(m => { m.mains = (m.mains || []).filter(G => G.dishes.length); });
+  R.meals.filter(m => m.items.length || m.mains.length).forEach((m, mi) => {
     let time = isHM(m.time) ? m.time : '';
     /* Saatsiz çok kalemli öğün zaman çizelgesinde düzgün çalışmaz: öncekinin 2,5 saat sonrasına yerleşir. */
-    if (!time && (m.items.length > 1 || mi > 0)) { const t = prev ? hm(prev) + 150 : 8 * 60; time = `${pad(Math.floor(t / 60) % 24)}:${pad(t % 60)}`; }
+    if (!time && (m.items.length > 1 || m.mains.length || mi > 0)) { const t = prev ? hm(prev) + 150 : 8 * 60; time = `${pad(Math.floor(t / 60) % 24)}:${pad(t % 60)}`; }
     if (time) prev = time;
     const ids = m.items.map(x => { const id = uid(x.chip || x.name, 'kalem'), opts = x.opts.filter(Boolean);
-      items[id] = { k: Math.max(0, Math.round(x.kcal) || 0), p: Math.max(0, r1(x.protein) || 0), name: x.name.trim(), ...(x.chip ? { chip: x.chip } : {}), ...(opts.length > 1 ? { opts } : {}),
+      items[id] = { k: val(x.kcal, Math.round), p: val(x.protein, r1), name: x.name.trim(), ...(x.chip ? { chip: x.chip } : {}), ...(opts.length > 1 ? { opts } : {}),
         ...(x.meta ? { meta: x.meta } : {}), ...(x.subs.length ? { subs: x.subs } : {}), ...(x.sugg.length ? { sugg: x.sugg } : {}), ...(x.optional ? { optional: true } : {}) };
       return id; });
-    const days = n > 1 ? Array.from({ length: n }, (_, i) => ids.filter((_, j) => inDay(m.items[j], i))) : null;
-    meals.push({ id: uid(m.title, 'ogun'), title: m.title.trim(), ...(time ? { time, wknd: isHM(m.wknd) ? m.wknd : time } : {}), items: days ? days[0] : ids,
-      ...(days && days.some(d => d.join() !== days[0].join()) ? { days } : {}) });
+    /* "Haftada N gün" satırları: ana yemek grupları. Öğle ve akşamda aynı grup bir kez tanımlanır, kotası her öğün için ayrı sayılır. */
+    m.mains.forEach(G => {
+      const drop = G.skip.filter(j => ids[j]).map(j => ids[j]), sig = fold(G.dishes.map(d => d.name).join('|'));
+      if (sigs[sig]) return mains.filter(x => x.g === sigs[sig]).forEach(x => { x.drop = [...new Set([...(x.drop || []), ...drop])]; if (!x.drop.length) delete x.drop; });
+      const g = sigs[sig] = uid(G.name || G.dishes[0].name, 'grup');
+      groups[g] = { name: (G.name || G.dishes.map(d => d.chip || d.name).join(' / ')).trim(), perWeek: Math.min(7, Math.max(1, Math.round(G.perWeek) || 1)) };
+      G.dishes.forEach(D => mains.push({ id: uid(D.chip || D.name, 'yemek'), g, k: val(D.kcal, Math.round), p: val(D.protein, r1), name: D.name.trim(), chip: D.chip || D.name,
+        ...(D.meta ? { meta: D.meta } : {}), ...(D.subs.length ? { subs: D.subs } : {}), ...(drop.length ? { drop } : {}) }));
+    });
+    const main = m.mains.length > 0;
+    const days = n > 1 ? Array.from({ length: n }, (_, i) => [...(main && inDay(m.mainDays, i) ? ['ana'] : []), ...ids.filter((_, j) => inDay(m.items[j].days, i))]) : null;
+    const dtime = n > 1 && time ? Array.from({ length: n }, (_, i) => { const t = (m.dayTimes || []).find(x => x.days.includes(i + 1) && isHM(x.time) && x.time !== time); return t ? t.time : ''; }) : null;
+    /* Bütün öğünün yerine geçen seçenek (ör. galeta + meyve yerine protein bar): öğünün ikinci biçimi. */
+    const whole = ids.filter((_, j) => m.items[j].whole), rest = j => !m.items[j].whole, chips = L => L.map(id => items[id].chip || items[id].name).join(' + ');
+    const mode = whole.length && whole.length < ids.length && !main ? { modes: [chips(ids.filter((id, j) => rest(j) && !items[id].optional && inDay(m.items[j].days, 0))), chips(whole)], alt: whole } : null;
+    const keep = j => !mode || rest(j);
+    if (days) days.forEach((L, i) => { days[i] = L.filter(id => id === 'ana' || keep(ids.indexOf(id))); });
+    meals.push({ id: uid(m.title, 'ogun'), title: m.title.trim(), ...(time ? { time, wknd: isHM(m.wknd) ? m.wknd : time } : {}), ...(main ? { main: true } : {}), ...(mode || {}),
+      items: ids.filter((_, j) => keep(j) && (!days || inDay(m.items[j].days, 0))), _d: days, _t: dtime });
   });
-  const cyc = meals.some(m => m.days) ? { n, start: R.day1 ? addDays(today, -((parse(today).getDay() - DAYNAME.indexOf(R.day1) + 7) % 7)) : today } : null;
-  if (cyc) meals.forEach(m => { if (!m.days) m.days = Array.from({ length: n }, () => m.items); });
+  /* Günler arasında fark varsa döngü kurulur; 1. gün, verilen haftanın gününe denk gelen en yakın geçmiş tarih. */
+  const differs = meals.some(m => (m._d && m._d.some(d => d.join() !== m._d[0].join())) || (m._t && m._t.some(Boolean)));
+  const cyc = differs ? { n, start: R.day1 ? addDays(today, -((parse(today).getDay() - DAYNAME.indexOf(R.day1) + 7) % 7)) : today } : null;
+  meals.forEach(m => { if (cyc) { m.days = m._d; m.items = m._d[0].filter(id => id !== 'ana'); if (m._t && m._t.some(Boolean)) m.dtime = m._t; } delete m._d; delete m._t; });
+  /* Haftalık dağılım: gruplar sırayla dönüşümlü dizilir, ikinci ana öğün bir adım kaydırılır (aynı gün aynı grup gelmesin).
+     Ana yemeksiz günler (hafif günler) atlanır; kesin dağılımı uygulama kalan kotaya göre her hafta yeniden yapar. */
+  const rota = {}, gs = Object.keys(groups), seq = [], left = Object.fromEntries(gs.map(g => [g, groups[g].perWeek]));
+  while (gs.some(g => left[g] > 0)) gs.forEach(g => { if (left[g] > 0) { seq.push(g); left[g]--; } });
+  const firstOf = g => mains.find(x => x.g === g).id, wk = weekOf(today);
+  meals.filter(m => m.main).forEach((m, j) => { let c = j;
+    rota[m.id] = wk.map(k => { const on = !m.days || m.days[((dayDiff(cyc.start, k) % n) + n) % n].includes('ana'); return firstOf(seq[(on ? c++ : 0) % seq.length]); }); });
+  const bd = /^\d{4}-\d\d-\d\d$/.test(R.body.date) ? R.body.date : today, rows = R.body.rows.filter(r => r.label && r.value).map(r => [r.label.trim(), r.value.trim()]);
+  const fat = (rows.find(r => /yağ/i.test(r[0]) && /%/.test(r[1])) || [])[1];
   return { v: 1, id: 'plan-' + today, date: today, src: 'foto', dietitian: { name: R.dietitian || '', phone: '' }, prefs: { kcal: true, tune: false }, client: { name: '' },
-    goal: { kg: R.goal.kg > 30 ? R.goal.kg : 0, text: R.goal.text || '' }, items, mains: [], groups: {}, rota: {}, meals,
-    ...(cyc ? { cycle: cyc } : {}), rules: R.rules.map(r => [r.text, r.note]), swaps: R.swaps.map(s => [s.from, s.to]), body: { date: today, fat: '', rows: [] },
+    goal: { kg: R.goal.kg > 30 ? R.goal.kg : 0, text: R.goal.text || '' }, items, mains, groups, rota, meals,
+    ...(cyc ? { cycle: cyc } : {}), rules: R.rules.map(r => [r.text, r.note]), swaps: R.swaps.map(s => [s.from, s.to]),
+    recipes: R.recipes.filter(r => r.name && (r.ingredients.length || r.steps)).map(r => ({ name: r.name.trim(), k: Math.max(0, Math.round(r.kcal) || 0), serve: r.serving || '', ings: r.ingredients, steps: r.steps || '' })),
+    body: { date: bd, fat: fat ? (fat.match(/%\s?[\d,.]+/) || [''])[0].replace(/\s/g, '') : '', rows },
     daily: { water: { goal: Math.round(R.water) > 0 ? Math.round(R.water) : 10, ml: 250 }, coffee: { max: 2, note: '' }, walk: { perWeek: 0, name: 'Yürüyüş' } },
     training: { perWeek: 0, time: '', after: '', lead: '', notes: {}, days: {} }, tune: { protein: [], cuts: [] } };
 }
@@ -1579,6 +1659,7 @@ ${KC ? `- Kalori ve protein söylerken <durum>daki değerleri kullan. Kendin tah
 - Takviyeler, görünüm, öğün saatleri, su hedefi ve döngü günü kullanıcının kendi ayarıdır; istenince doğrudan öner. Yeni bir takviyeye başlıyorsa diyetisyenine haber vermesini bir cümleyle hatırlatabilirsin.
 - Program kalemlerini eklemek, çıkarmak, miktarını ya da kalorisini değiştirmek ve kalori görünürlüğü diyetisyenin programına müdahaledir. Kullanıcı açıkça isterse aracı çağır ama cevabında bunun diyetisyenin planını değiştirdiğini ve ona danışmasının iyi olacağını kısaca söyle. Kaloriyi belirgin biçimde düşüren ya da proteini azaltan isteklerde açıkça uyar.
 - Yenen bir şeyi kaydedemezsin. Kullanıcı bir şey yediğini söylerse uygulamada nasıl kaydedeceğini kısaca hatırlat: öğüne dokununca kalemler açılır; "Hepsini yedim" hepsini işaretler; satırın sağındaki miktar düğmesi porsiyonu değiştirir ve muadil seçtirir; kalem düğmesi yenen şeyi aratır ya da yazdırır; kamera fotoğraftan kaydeder. Plandan sapınca kalan öğünlere telafi satırları kendiliğinden eklenir.
+- Programın yapısı: mains haftalık dönen ana yemeklerdir (g kota grubu; groups[g].perWeek haftada kaç gün). main true olan öğüne her gün bunlardan biri düşer; gün listelerinde (meals[].days) "ana" o gün ana yemeğin yeridir, olmadığı günde ana yemek yoktur. drop, o yemek seçilince öğünden çıkan kalemlerdir. dtime o güne özel öğün saatidir. recipes diyetisyenin tarifleridir.
 
 Program:
 ${JSON.stringify(PLAN)}`;
@@ -1660,8 +1741,8 @@ function planApply(p, t) {
     case 'program_kalemi': {
       const g = dayList(x.gunler), all = !p.cycle || !g.length;
       /* Belirli günlere dokunulacaksa öğün gün gün listeye açılır. */
-      if (!all && !m.days) m.days = Array.from({ length: p.cycle.n }, () => [...m.items]);
-      const each = fn => { if (m.days) m.days = m.days.map((L, i) => all || g.includes(i + 1) ? fn(L) : L); else m.items = fn(m.items); if (m.days) m.items = [...m.days[0]]; };
+      if (!all && !m.days) m.days = Array.from({ length: p.cycle.n }, () => [...(m.main ? ['ana'] : []), ...m.items]);
+      const each = fn => { if (m.days) m.days = m.days.map((L, i) => all || g.includes(i + 1) ? fn(L) : L); else m.items = fn(m.items); if (m.days) m.items = m.days[0].filter(id => id !== 'ana'); };
       if (x.islem === 'ekle') {
         let id = fold(x.ad).replace(/ /g, '-').slice(0, 18) || 'kalem', i = 2; const b = id; while (p.items[id]) id = b + '-' + i++;
         p.items[id] = { k: Math.max(0, +x.kcal || 0), p: Math.max(0, +x.protein || 0), name: x.ad.trim(), chip: (x.ad.replace(/^[\d.,/-]+\s*\S*\s*/, '').split(/[(,]/)[0].trim().slice(0, 24) || x.ad).replace(/^./, c => c.toLocaleUpperCase('tr')) };
