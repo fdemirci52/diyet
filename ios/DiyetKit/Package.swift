@@ -8,6 +8,6 @@ let package = Package(
     products: [.library(name: "DiyetKit", targets: ["DiyetKit"])],
     targets: [
         .target(name: "DiyetKit"),
-        .testTarget(name: "DiyetKitTests", dependencies: ["DiyetKit"], resources: [.copy("plan.json")]),
+        .testTarget(name: "DiyetKitTests", dependencies: ["DiyetKit"], resources: [.copy("plan.json"), .copy("plan-weekly.json"), .copy("foods.json"), .copy("golden")]),
     ]
 )
