@@ -1,0 +1,29 @@
+name: Diyet
+options:
+  bundleIdPrefix: com.fdemirci
+  deploymentTarget: { iOS: "17.0" }
+  developmentLanguage: tr
+packages:
+  DiyetKit: { path: DiyetKit }
+targets:
+  Diyet:
+    type: application
+    platform: iOS
+    sources:
+      - path: Diyet
+      - path: ../img/f
+        type: folder
+        buildPhase: resources
+    dependencies: [{ package: DiyetKit }]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fdemirci.diyet
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Diyet
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
