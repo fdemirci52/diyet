@@ -40,9 +40,11 @@ public struct Plan: Decodable, Sendable {
         public var alt: [String]?
         public var days: [[String]]?
         public var main: Bool
-        public var modes: JSON?
+        public var modes: [String]?
+        /// Döngülü programda o güne özel saat ('' = hafta içi / hafta sonu saati).
+        public var dtime: [String]?
 
-        enum CodingKeys: String, CodingKey { case id, title, time, wknd, items, alt, days, main, modes }
+        enum CodingKeys: String, CodingKey { case id, title, time, wknd, items, alt, days, main, modes, dtime }
         public init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
             id = try c.decode(String.self, forKey: .id)
@@ -53,11 +55,17 @@ public struct Plan: Decodable, Sendable {
             alt = try c.decodeIfPresent([String].self, forKey: .alt)
             days = try c.decodeIfPresent([[String]].self, forKey: .days)
             main = (try? c.decodeIfPresent(Bool.self, forKey: .main)) ?? false
-            modes = try c.decodeIfPresent(JSON.self, forKey: .modes)
+            modes = try? c.decodeIfPresent([String].self, forKey: .modes)
+            dtime = try? c.decodeIfPresent([String].self, forKey: .dtime)
         }
     }
 
-    public struct Main: Decodable, Sendable { public var id, g, name: String; public var k, p: Double; public var chip, meta, ai: String?; public var subs: [String]? }
+    public struct Main: Decodable, Sendable {
+        public var id, g, name: String; public var k, p: Double; public var chip, meta, ai: String?; public var subs: [String]?
+        /// Bu yemek seçilince öğünden çıkan kalemler; eski noSalad = ["salata"].
+        public var drop: [String]?; public var noSalad: Bool?
+        public var dropped: [String] { drop ?? (noSalad == true ? ["salata"] : []) }
+    }
     public struct Group: Decodable, Sendable { public var name: String; public var perWeek: Int }
     public struct Cycle: Decodable, Sendable { public var n: Int; public var start: String }
     public struct Dietitian: Decodable, Sendable { public var name = ""; public var phone = "" }
@@ -82,8 +90,9 @@ public struct Plan: Decodable, Sendable {
     public var daily: JSON?
     public var training: JSON?
     public var tune: JSON?
+    public var recipes: [Recipe]
 
-    enum CodingKeys: String, CodingKey { case v, id, date, dietitian, prefs, goal, items, meals, mains, groups, rota, rules, swaps, cycle, body, daily, training, tune }
+    enum CodingKeys: String, CodingKey { case v, id, date, dietitian, prefs, goal, items, meals, mains, groups, rota, rules, swaps, cycle, body, daily, training, tune, recipes }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         v = try c.decode(Int.self, forKey: .v)
@@ -105,6 +114,7 @@ public struct Plan: Decodable, Sendable {
         daily = try c.decodeIfPresent(JSON.self, forKey: .daily)
         training = try c.decodeIfPresent(JSON.self, forKey: .training)
         tune = try c.decodeIfPresent(JSON.self, forKey: .tune)
+        recipes = (try? c.decodeIfPresent([Recipe].self, forKey: .recipes)) ?? []
         if let e = check() { throw PlanError.invalid(e) }
     }
 
@@ -116,7 +126,7 @@ public struct Plan: Decodable, Sendable {
             for m in meals { if let ds = m.days, ds.count != c.n { return "\"\(m.title)\" öğününün günleri eksik." } }
         }
         for m in meals {
-            for id in m.items + (m.alt ?? []) + (m.days ?? []).flatMap({ $0 }) where items[id] == nil {
+            for id in m.items + (m.alt ?? []) + (m.days ?? []).flatMap({ $0 }).filter({ !(m.main && $0 == "ana") }) where items[id] == nil {
                 return "\"\(m.title)\" öğünündeki \"\(id)\" kalemi katalogda yok."
             }
             if m.main {

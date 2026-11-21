@@ -12,6 +12,8 @@
 		29B958B82274C9D7C8F6CA8B /* SofraGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8106B15842844E18F451222E /* SofraGallery.swift */; };
 		4C9654C9091E64BC15D996B1 /* Supplements.swift in Sources */ = {isa = PBXBuildFile; fileRef = D36CD98EE9DB2BA66F7AF965 /* Supplements.swift */; };
 		556B2CBC4289C867AA5D6968 /* Program.swift in Sources */ = {isa = PBXBuildFile; fileRef = A580E6668AA56FA576A7DDC0 /* Program.swift */; };
+		55D6691B0600BAE564A6250F /* Recipes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 155F8EFAFAEB6597BDE83110 /* Recipes.swift */; };
+		6E3387236250D85CC6D7DC33 /* Ben.swift in Sources */ = {isa = PBXBuildFile; fileRef = E837E6A3FA14A9659D144767 /* Ben.swift */; };
 		7EE2B15C32CF46C4A1C1913A /* Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6A418DA97385993ED03CB8 /* Chat.swift */; };
 		ACEE29BFE12BD04B26C1A759 /* DiyetApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9CDDA343CA9BA6260C7FA50 /* DiyetApp.swift */; };
 		AD1AC3FB12ED268BD8F17773 /* DiyetKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1D18A277BB89C5AA15E346EA /* DiyetKit */; };
@@ -26,6 +28,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		155F8EFAFAEB6597BDE83110 /* Recipes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recipes.swift; sourceTree = "<group>"; };
 		28D92AF9960450FF0229DB26 /* f */ = {isa = PBXFileReference; lastKnownFileType = folder; name = f; path = ../img/f; sourceTree = SOURCE_ROOT; };
 		2B2E13626E3AF55ABEE25CB1 /* Plate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plate.swift; sourceTree = "<group>"; };
 		3C1631F7994AD017DF8BFB84 /* Foods.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Foods.swift; sourceTree = "<group>"; };
@@ -42,6 +45,7 @@
 		C15D98806BD2BCB91D29C7BA /* Progress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Progress.swift; sourceTree = "<group>"; };
 		D36CD98EE9DB2BA66F7AF965 /* Supplements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Supplements.swift; sourceTree = "<group>"; };
 		E596EBC39D7D15D5CBAC4158 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		E837E6A3FA14A9659D144767 /* Ben.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ben.swift; sourceTree = "<group>"; };
 		EE665D5E09BC12AAFB2EAF31 /* Today.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Today.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -60,11 +64,13 @@
 		014DCA81238F6CF558B2726D /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				E837E6A3FA14A9659D144767 /* Ben.swift */,
 				AE6A418DA97385993ED03CB8 /* Chat.swift */,
 				3C1631F7994AD017DF8BFB84 /* Foods.swift */,
 				2B2E13626E3AF55ABEE25CB1 /* Plate.swift */,
 				A580E6668AA56FA576A7DDC0 /* Program.swift */,
 				C15D98806BD2BCB91D29C7BA /* Progress.swift */,
+				155F8EFAFAEB6597BDE83110 /* Recipes.swift */,
 				6E6843B1161FD5ADC74166CE /* Sofra.swift */,
 				8106B15842844E18F451222E /* SofraGallery.swift */,
 				D36CD98EE9DB2BA66F7AF965 /* Supplements.swift */,
@@ -188,12 +194,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6E3387236250D85CC6D7DC33 /* Ben.swift in Sources */,
 				7EE2B15C32CF46C4A1C1913A /* Chat.swift in Sources */,
 				ACEE29BFE12BD04B26C1A759 /* DiyetApp.swift in Sources */,
 				F9257539A3BD433B1BE63E30 /* Foods.swift in Sources */,
 				292BB46961BB3F76287A1AF6 /* Plate.swift in Sources */,
 				556B2CBC4289C867AA5D6968 /* Program.swift in Sources */,
 				D9DB41D037302D51FFF37271 /* Progress.swift in Sources */,
+				55D6691B0600BAE564A6250F /* Recipes.swift in Sources */,
 				F81FDD027EA7AC32BBE4EDF3 /* Sofra.swift in Sources */,
 				29B958B82274C9D7C8F6CA8B /* SofraGallery.swift in Sources */,
 				F681FF35D7D608A1756EC6BA /* Store.swift in Sources */,

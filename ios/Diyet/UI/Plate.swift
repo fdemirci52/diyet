@@ -31,6 +31,8 @@ struct PlateView: View {
     var size: CGFloat = Theme.Size.plate
     /// "Hepsini yedim"de sıra: hareket bu kadar adım gecikir.
     var order: Int = 0
+    /// İkon yokken çatal çizilsin mi; malzeme tabağı yerine baş harfi koyar.
+    var glyph = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -53,7 +55,7 @@ struct PlateView: View {
             Group {
                 if let img = FoodIcon.image(icon) {
                     Image(uiImage: img).resizable().interpolation(.high).scaledToFit()
-                } else {
+                } else if glyph {
                     ForkGlyph().stroke(Theme.Palette.muted, style: StrokeStyle(lineWidth: size >= 112 ? 2 : 1.75, lineCap: .round, lineJoin: .round))
                         .frame(width: size >= 112 ? 40 : markSize, height: size >= 112 ? 40 : markSize)
                 }

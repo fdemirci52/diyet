@@ -25,6 +25,8 @@ enum Theme {
         static let muted = Color(light: 0x6A6A71, dark: 0x8F8F97)
         /// Yazı olmayan soluk öğeler: boş onay halkası, tutamaç.
         static let faint = Color(light: 0xB9B9C0, dark: 0x4E4E55)
+        /// Grafikte ikinci ton: yağ, diğer. Yazı için kullanılmaz.
+        static let mid = Color(light: 0x8E8E96, dark: 0x6C6C74)
 
         /// Kontrol zemini: hap, ikincil düğme, sayaç.
         static let ctl = Color(light: 0xF0F0F3, dark: 0xFFFFFF, darkAlpha: 0.07)

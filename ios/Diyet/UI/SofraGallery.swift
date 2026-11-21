@@ -1,5 +1,6 @@
 #if DEBUG
 import SwiftUI
+import DiyetKit
 
 /// Bileşenlerin bir arada, dokunulabilir örneği: beş sekmeli kabuk, Bugün ve Hafta. Veri plan.js'teki Çarşamba günü,
 /// gün ortası (14:10). Gerçek ekran DiyetKit'e bağlanınca bu dosya yalnızca önizleme için kalır (DEBUG).
@@ -10,8 +11,8 @@ struct SofraGallery: View {
             DemoToday().tabItem { Label("Bugün", systemImage: "checkmark.circle") }
             DemoWeek().tabItem { Label("Hafta", systemImage: "chart.bar") }
             DemoChat().tabItem { Label("Asistan", systemImage: "bubble.left") }
-            DemoProgress().tabItem { Label("İlerleme", systemImage: "square.grid.3x3") }
-            DemoProgram().tabItem { Label("Program", systemImage: "list.bullet") }
+            DemoRecipes().tabItem { Label("Tarifler", systemImage: "frying.pan") }
+            DemoBen().tabItem { Label("Ben", systemImage: "person") }
         }
         .tint(Theme.Palette.fg)
         .preferredColorScheme(theme == "light" ? .light : theme == "dark" ? .dark : nil)
@@ -375,6 +376,8 @@ struct DemoProgress: View {
 
 struct DemoProgram: View {
     enum Page: String, Hashable { case kurallar, saatler, muadil, gidalar, takviye, gorunum, antrenman, vucut, ai, baglanti, veri }
+    /// Ben sekmesinin içinden açılınca kendi gezinme yığınını kurmaz, sistem geri düğmesi görünür.
+    var embedded = false
     @AppStorage("diyet-theme") private var theme = ""
     @State private var path: [Page] = []
     @State private var foods = DemoData.foods
@@ -388,7 +391,10 @@ struct DemoProgram: View {
     ]
 
     var body: some View {
-        NavigationStack(path: $path) {
+        if embedded { content } else { NavigationStack(path: $path) { content } }
+    }
+
+    private var content: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -422,9 +428,9 @@ struct DemoProgram: View {
             }
             .background(Theme.Palette.bg.ignoresSafeArea())
             .navigationTitle("Program")   // çubuk gizli; alt ekranın geri düğmesi bu adı taşır
-            .toolbar(.hidden, for: .navigationBar)
+            .toolbar(embedded ? .visible : .hidden, for: .navigationBar)
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Page.self) { page($0) }
-        }
     }
 
     @ViewBuilder private func page(_ p: Page) -> some View {
@@ -464,9 +470,85 @@ struct DemoProgram: View {
     }
 }
 
+// MARK: - Ben
+
+/// Ben sekmesi: kullanıcının iki Tanita ölçümü (13 ve 20 Kasım 2026, kâğıttan aynen).
+struct DemoBen: View {
+    enum Route: Hashable { case program, gidalar, takviye, gorunum }
+    @State private var scans = DemoData.scans
+    @State private var detail: Scan?
+    @State private var review: Scan?
+    @AppStorage("diyet-theme") private var theme = ""
+
+    var body: some View {
+        NavigationStack {
+            BenScreen(scans: scans, goal: "önce bel çevresindeki yağ", next: "27 Kasım, Cuma",
+                      onAddScan: { review = scans.last }, onOpenScan: { detail = $0 }) {
+                NavigationLink(value: Route.program) { PlainRow(title: "Program", subtitle: "13 Kasım") }.buttonStyle(.plain)
+                NavigationLink(value: Route.gidalar) { PlainRow(title: "Gıdalarım") }.buttonStyle(.plain)
+                NavigationLink(value: Route.takviye) { PlainRow(title: "Takviyeler") }.buttonStyle(.plain)
+                NavigationLink(value: Route.gorunum) { PlainRow(title: "Görünüm", subtitle: theme == "light" ? "Açık" : theme == "dark" ? "Koyu" : "Sistemle aynı") }.buttonStyle(.plain)
+            }
+            .navigationTitle("Ben").toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: Route.self) { r in
+                switch r {
+                case .program: DemoProgram(embedded: true)
+                case .gidalar: FoodsScreen(foods: DemoData.foods, onSave: { _ in }, onDelete: { _ in })
+                case .takviye: SupplementsScreen(supplements: DemoStore.shared.supps, meals: DemoData.meals.map { ($0.id, $0.title) }, onSave: { _ in }, onDelete: { _ in })
+                case .gorunum:
+                    DetailPage(title: "Görünüm", lead: "Açık ya da koyu tema. Sistemle aynı seçiliyken telefonun ayarını izler.") {
+                        ChoiceCard(options: [("", "Sistemle aynı"), ("light", "Açık"), ("dark", "Koyu")], selection: $theme)
+                    }
+                }
+            }
+        }
+        .sheet(item: $detail) { s in ScanDetailSheet(scans: scans, selected: s.d) }
+        .sheet(item: $review) { s in
+            ScanReviewSheet(scan: s, count: 31, unsure: ["waist"], onSave: { _ in review = nil }, onRetake: { review = nil })
+        }
+    }
+}
+
+// MARK: - Tarifler
+
+/// Bu haftanın programındaki iki tarif (20 Kasım 2026): musakka ve nohut salatası.
+struct DemoRecipes: View {
+    @State private var path: [Recipe] = []
+    var body: some View {
+        NavigationStack(path: $path) {
+            RecipesScreen(today: [.init(recipe: DemoData.recipes[1], icon: nil, when: "Öğle, 14.00", now: true)],
+                          week: [.init(recipe: DemoData.recipes[0], icon: nil, note: "Sal öğle, Cmt akşam"), .init(recipe: DemoData.recipes[1], icon: nil, note: "Pzt öğle, Cum akşam, Cmt öğle")],
+                          others: [], dayName: "Cumartesi", onOpen: { path.append($0) })
+                .navigationTitle("Tarifler").toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: Recipe.self) { r in
+                    RecipeScreen(recipe: r, icon: nil, context: r.name.hasPrefix("Nohut") ? "Ana yemek, bu hafta 2 gün öğle, 1 gün akşam" : "Ana yemek, bu hafta Salı öğle ve Cumartesi akşam")
+                }
+        }
+    }
+}
+
 // MARK: - Örnek veri (plan.js, PLAN_DEFAULT)
 
 enum DemoData {
+    static var scans: [Scan] {
+        func s(_ d: String, _ at: String, kg: Double, fat: Double, fp: Double, kas: Double, lean: Double, su: Double, sp: Double, pr: Double, mn: Double, bel: Double, bmr: Double, seg: [Scan.Region]) -> Scan {
+            var x = Scan(d: d); x.kg = kg; x.fat = fat; x.fatPct = fp; x.muscle = kas; x.lean = lean; x.water = su; x.waterPct = sp; x.protein = pr; x.mineral = mn
+            x.visceral = 3; x.waist = bel; x.height = 188; x.bmr = bmr; x.metaAge = 24; x.seg = seg; x.at = at; x.src = "Tanita MC-780MA"
+            x.rng = ["fatPct": [14, 23], "waterPct": [55, 66], "visceral": [1, 13]]; return x
+        }
+        return [
+            s("2026-11-13", "16.15", kg: 83.9, fat: 12.2, fp: 14.54, kas: 68.2, lean: 71.7, su: 50.9, sp: 60.67, pr: 15.57, mn: 5.23, bel: 86, bmr: 2093,
+              seg: [.init("Gövde", 37.3, 7.2), .init("Sağ kol", 4.0, 0.7), .init("Sol kol", 4.2, 0.7), .init("Sağ bacak", 11.5, 1.8), .init("Sol bacak", 11.2, 1.8)]),
+            s("2026-11-20", "14.41", kg: 82.3, fat: 11.6, fp: 14.09, kas: 67.2, lean: 70.7, su: 50.0, sp: 60.75, pr: 15.54, mn: 5.16, bel: 85, bmr: 2060,
+              seg: [.init("Gövde", 36.8, 6.7), .init("Sağ kol", 4.1, 0.6), .init("Sol kol", 4.0, 0.7), .init("Sağ bacak", 11.3, 1.8), .init("Sol bacak", 11.0, 1.8)]),
+        ]
+    }
+    static let recipes: [Recipe] = [
+        Recipe(name: "Patlıcan musakka", serve: "8 yemek kaşığı", ings: ["2 adet domates", "500 gram kıyma", "3 adet patlıcan", "Soğan", "1 adet kırmızı biber", "1 adet yeşil biber", "Tuz", "Karabiber"],
+               steps: "Patlıcanları alacalı soyup 10 dakika tuzlu suda beklet. Küçük doğrayıp 200 derece fırında yağlı kâğıdın üzerinde 15 dakika pişir. Tencerenin dibini ıslatacak kadar zeytinyağıyla soğanları ve kıymayı kavur. Fırından çıkan patlıcanları karışımın üzerine ekle ve domatesleri ilave et."),
+        Recipe(name: "Nohut salatası", k: 200, serve: "8 yemek kaşığı", ings: ["1 su bardağı nohut", "Yarım limon", "1 adet havuç rendesi", "1 yemek kaşığı zeytinyağı", "Tuz"],
+               steps: "Malzemeleri derince bir kaba al. Limon suyu, zeytinyağı ve tuzu ekleyip karıştır. Servis tabağına al."),
+    ]
     static func t(_ id: String, _ name: String, _ amount: String, _ icon: String?, _ state: FoodState = .pending, caption: String? = nil, note: String? = nil) -> FoodTileModel {
         FoodTileModel(id: id, name: name, amount: amount, caption: caption, note: note, icon: icon, state: state)
     }
